@@ -63,9 +63,16 @@
       padding: 0;
     }
 
-    /* Transform all English text to UPPERCASE throughout the page */
+        /* Universal Uppercase: transforms all English/Latin characters to UPPERCASE while preserving Thai script */
+    *, *::before, *::after {
+      text-transform: uppercase;
+    }
     body, h1, h2, h3, h4, h5, h6, p, span, a, button, input, select, textarea, table, th, td, label, strong, b, div {
       text-transform: uppercase;
+    }
+    /* Exclude raw technical code from uppercase */
+    #firebaseConfigInput, #shareLinkInput {
+      
     }
 
     html, body {
@@ -333,7 +340,7 @@
       color: #334155;
       transition: all 0.2s ease;
       white-space: nowrap;
-      text-transform: none !important;
+      
     }
     .btn-cloud-status:hover {
       transform: translateY(-1px);
@@ -404,7 +411,7 @@
       cursor: pointer;
       transition: all 0.2s ease;
       white-space: nowrap;
-      text-transform: none !important;
+      
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -457,7 +464,7 @@
       align-items: center;
       gap: 4px;
       white-space: nowrap;
-      text-transform: none !important;
+      
     }
     .pm-btn-check:hover {
       background: #1d4ed8;
@@ -770,7 +777,7 @@
       margin-bottom: 28px;
       box-shadow: var(--shadow-sm);
       display: grid;
-      grid-template-columns: repeat(3, minmax(150px, 1fr)) 2fr auto;
+      grid-template-columns: repeat(4, minmax(130px, 1fr)) 1.8fr auto;
       gap: 14px;
       align-items: flex-end;
     }
@@ -1069,7 +1076,7 @@
 
     .chart-canvas-box {
       position: relative;
-      height: 310px;
+      height: 340px;
       width: 100%;
     }
 
@@ -2106,6 +2113,11 @@
       transition: all 0.2s;
     }
 
+    .tag-metric-item.active {
+      outline: 2px solid #0284c7;
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.25);
+      transform: translateY(-2px);
+    }
     .tag-metric-item:hover {
       transform: translateY(-1px);
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
@@ -2631,6 +2643,16 @@
           </select>
         </div>
 
+                <div class="filter-item">
+          <label>สถานะงาน (STATUS)</label>
+          <select id="filterStatus" class="filter-control" onchange="applyFilters()">
+            <option value="">ทั้งหมด (ALL STATUSES)</option>
+            <option value="FINISHED">FINISHED (เสร็จสิ้น)</option>
+            <option value="IN PROGRESS">IN PROGRESS (กำลังซ่อม)</option>
+            <option value="NOT STARTED">OPEN / NOT STARTED (ยังไม่เริ่ม)</option>
+          </select>
+        </div>
+
         <div class="filter-item filter-search">
           <label>ค้นหาเร็ว (SEARCH MACHINE / PROBLEM / JOB NO.)</label>
           <input type="text" id="searchInput" class="filter-control" placeholder="พิมพ์ชื่อเครื่อง, อาการเสีย หรือเลขที่งาน เช่น JR001..." oninput="applyFilters()">
@@ -2955,7 +2977,7 @@
                 <div class="chart-panel-sub">จัดกลุ่มสาเหตุความสูญเสียตามแนวคิด TPM เชิงปริมาณ (ชั่วโมง)</div>
               </div>
             </div>
-            <div class="chart-canvas-box" style="height: 290px;">
+            <div class="chart-canvas-box" style="height: 320px;">
               <canvas id="sixLossesChart"></canvas>
             </div>
             <div class="six-losses-legend">
@@ -3071,6 +3093,9 @@
               </div>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn-cta-primary" style="padding: 7px 16px; font-size: 12.5px;" onclick="openAddMachineModal()" title="เพิ่มเครื่องจักรใหม่เข้าสู่แผน PM">
+                ➕ เพิ่มเครื่องจักร (ADD MACHINE)
+              </button>
               <button type="button" class="btn-cta-secondary" style="padding: 7px 14px; font-size: 12.5px;" onclick="exportPMToCSV()">
                 📥 ส่งออก Excel/CSV
               </button>
@@ -3169,7 +3194,7 @@
               <div class="chart-panel-sub">นับรวมทั้งช่างหลักและผู้ช่วย (MAIN + SUPPORT)</div>
             </div>
           </div>
-          <div class="chart-canvas-box" style="height: 250px;">
+          <div class="chart-canvas-box" style="height: 320px;">
             <canvas id="techJobsChart"></canvas>
           </div>
         </div>
@@ -3182,7 +3207,7 @@
               <div class="chart-panel-sub">สัดส่วนจำนวนงานและชั่วโมง DOWNTIME ใน FACTORY A, B, C, D, E</div>
             </div>
           </div>
-          <div class="chart-canvas-box" style="height: 250px;">
+          <div class="chart-canvas-box" style="height: 320px;">
             <canvas id="plantChart"></canvas>
           </div>
         </div>
@@ -3458,7 +3483,7 @@
             <span class="cloud-dot" style="width: 12px; height: 12px; background: #f59e0b;" id="modalStatusDot"></span>
             <div>
               <div style="font-size: 14px; font-weight: 700; color: #0f172a;" id="modalStatusTitle">สถานะ: โหมดใช้งานในเครื่อง (ยังไม่ได้เชื่อมต่อ Firebase)</div>
-              <div style="font-size: 12px; color: #64748b; text-transform: none;" id="modalStatusDesc">กรุณากรอก Firebase Config ด้านล่างเพื่อเริ่มการซิงค์ข้อมูลร่วมกัน</div>
+              <div style="font-size: 12px; color: #64748b; id="modalStatusDesc">กรุณากรอก Firebase Config ด้านล่างเพื่อเริ่มการซิงค์ข้อมูลร่วมกัน</div>
             </div>
           </div>
           <span id="modalStatusBadge" style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 6px; background: #fef3c7; color: #b45309;">OFFLINE</span>
@@ -3537,61 +3562,91 @@
        PM QUICK CHECK & LOG MODAL (สำหรับบันทึกผลการบำรุงรักษา)
        ======================================================== -->
   <div class="modal-overlay" id="pmCheckModal">
-    <div class="modal-card" style="max-width: 580px;">
+    <div class="modal-card" style="max-width: 680px;">
       <div class="modal-header-bar" style="background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%); color: #fff; padding: 16px 22px;">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 22px;">✏️</span>
+          <span style="font-size: 22px;">⚙️</span>
           <div>
-            <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0;">บันทึกผลการบำรุงรักษาเชิงป้องกัน (LOG PM)</h3>
-            <p style="font-size: 12px; color: #e0f2fe; margin: 2px 0 0 0; text-transform: none;" id="pmModalSubTitle">เครื่องจักร: -</p>
+            <h3 id="pmModalTitle" style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0;">แก้ไขข้อมูลเครื่องจักรและแผนบำรุงรักษา (EDIT PM & MACHINE)</h3>
+            <p style="font-size: 12px; color: #e0f2fe; margin: 2px 0 0 0;" id="pmModalSubTitle">เครื่องจักร: -</p>
           </div>
         </div>
-        <button style="background: none; border: none; font-size: 24px; cursor: pointer; color: #ffffff;" onclick="closePMCheckModal()">&times;</button>
+        <button type="button" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #ffffff;" onclick="closePMCheckModal()">&times;</button>
       </div>
 
       <form id="pmCheckForm" onsubmit="handleSavePMCheck(event)">
-        <div class="modal-form-grid" style="padding: 20px;">
+        <div class="modal-form-grid" style="padding: 20px; max-height: 65vh; overflow-y: auto;">
           <input type="hidden" id="pmModalMachineId">
           <input type="hidden" id="pmModalMonth">
 
-          <div class="form-group-item">
-            <label>แผนก (DEPARTMENT)</label>
-            <input type="text" id="pmModalDept" class="form-input" readonly style="background: #f8fafc; font-weight: 700;">
-          </div>
-          <div class="form-group-item">
-            <label>รหัสเครื่อง (M/C CODE)</label>
-            <input type="text" id="pmModalCode" class="form-input" readonly style="background: #f8fafc; font-weight: 800; color: #0284c7;">
-          </div>
-          <div class="form-group-item full-width">
-            <label>ชื่อเครื่องจักร & รุ่น (MACHINE & MODEL)</label>
-            <input type="text" id="pmModalMachineName" class="form-input" readonly style="background: #f8fafc; font-weight: 700;">
-          </div>
-          <div class="form-group-item">
-            <label>กระบวนการ (PROCESS)</label>
-            <input type="text" id="pmModalProcess" class="form-input" readonly style="background: #f8fafc;">
-          </div>
-          <div class="form-group-item">
-            <label>เอกสาร WI-TPM NO.</label>
-            <input type="text" id="pmModalWI" class="form-input" readonly style="background: #f8fafc; font-family: 'JetBrains Mono', monospace;">
+          <div style="grid-column: span 2; font-size: 13px; font-weight: 700; color: #0284c7; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-top: 4px;">
+            🏭 ข้อมูลหลักเครื่องจักร (MACHINE MASTER DATA)
           </div>
 
           <div class="form-group-item">
-            <label>สถานะการตรวจ (STATUS)</label>
-            <select id="pmModalStatus" class="form-input" required style="font-weight: 700;">
-              <option value="COMPLETED" selected>✅ ตรวจแล้วเสร็จ (COMPLETED)</option>
-              <option value="SCHEDULED">📅 อยู่ในแผนงาน (SCHEDULED)</option>
-              <option value="OVERDUE">⚠️ เกินกำหนด (OVERDUE)</option>
-              <option value="ON-DEMAND">⚙️ ตามรอบความถี่ (ON-DEMAND)</option>
+            <label>แผนก (DEPARTMENT) *</label>
+            <select id="pmModalDept" class="form-input" required>
+              <option value="MOTOR">MOTOR (MOTOR PRODUCTION)</option>
+              <option value="FERRULE">FERRULE (FERRULE PRODUCTION)</option>
+              <option value="OPTICAL">OPTICAL (OPTICAL PRODUCTION)</option>
             </select>
           </div>
           <div class="form-group-item">
-            <label>วันที่ตรวจจริง (ACTUAL DAY 1-31)</label>
-            <input type="number" id="pmModalActualDay" class="form-input" min="1" max="31" placeholder="ระบุวันที่ (เช่น 3, 15)">
+            <label>รหัสเครื่อง (M/C CODE) *</label>
+            <input type="text" id="pmModalCode" class="form-input" placeholder="เช่น ALW-002, CNC-010" required style="font-weight: 800; color: #0284c7;">
+          </div>
+          <div class="form-group-item">
+            <label>ชื่อเครื่องจักร (MACHINE NAME) *</label>
+            <input type="text" id="pmModalMachineName" class="form-input" placeholder="เช่น ALKALINE WATER MACHINE" required style="font-weight: 700;">
+          </div>
+          <div class="form-group-item">
+            <label>รุ่นเครื่องจักร (MODEL)</label>
+            <input type="text" id="pmModalModel" class="form-input" placeholder="เช่น FW-3000N / AMANO">
+          </div>
+          <div class="form-group-item">
+            <label>กระบวนการ (PROCESS)</label>
+            <input type="text" id="pmModalProcess" class="form-input" placeholder="เช่น PRODUCTION, CHAMFERING">
+          </div>
+          <div class="form-group-item">
+            <label>เอกสาร WI-TPM NO.</label>
+            <input type="text" id="pmModalWI" class="form-input" placeholder="เช่น WI-MOT-ML-014" style="font-family: 'JetBrains Mono', monospace;">
+          </div>
+          <div class="form-group-item">
+            <label>ความถี่การบำรุงรักษา (FREQUENCY)</label>
+            <select id="pmModalFreq" class="form-input">
+              <option value="1M">1M (ทุก 1 เดือน)</option>
+              <option value="2M">2M (ทุก 2 เดือน)</option>
+              <option value="3M">3M (ทุก 3 เดือน)</option>
+              <option value="6M">6M (ทุก 6 เดือน)</option>
+              <option value="1Y">1Y (ทุก 1 ปี)</option>
+              <option value="ON-DEMAND">ON-DEMAND (ตามรอบความถี่)</option>
+            </select>
+          </div>
+          <div class="form-group-item">
+            <label>แผนตรวจรอบเดือนนี้ (PLAN DAYS เช่น 1 หรือ 1, 16)</label>
+            <input type="text" id="pmModalPlanDays" class="form-input" placeholder="ระบุวันที่ตามแผน เช่น 1 หรือ 1, 16">
+          </div>
+
+          <div style="grid-column: span 2; font-size: 13px; font-weight: 700; color: #10b981; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-top: 12px;">
+            📋 ผลการตรวจเช็คประจำเดือน (PM CHECK & LOGGING)
           </div>
 
           <div class="form-group-item">
+            <label>สถานะการตรวจ (STATUS) *</label>
+            <select id="pmModalStatus" class="form-input" required style="font-weight: 700;">
+              <option value="COMPLETED">✅ ตรวจแล้วเสร็จ (COMPLETED)</option>
+              <option value="SCHEDULED">📅 อยู่ในแผนงาน (SCHEDULED)</option>
+              <option value="ON-DEMAND">⚙️ ตามรอบความถี่ (ON-DEMAND)</option>
+              <option value="OVERDUE">⚠️ เกินกำหนด (OVERDUE)</option>
+            </select>
+          </div>
+          <div class="form-group-item">
+            <label>วันที่ตรวจจริง (ACTUAL DAYS เช่น 3 หรือ 3, 16)</label>
+            <input type="text" id="pmModalActualDays" class="form-input" placeholder="ระบุวันที่ตรวจจริง เช่น 3 หรือ 3, 16">
+          </div>
+          <div class="form-group-item">
             <label>เวลาที่ใช้ตรวจ (MINUTES)</label>
-            <input type="number" id="pmModalTime" class="form-input" step="0.1" min="0" placeholder="เวลาเป็นนาที เช่น 5, 10">
+            <input type="number" id="pmModalTime" class="form-input" step="0.1" min="0" placeholder="เวลาเป็นนาที เช่น 5, 18.5">
           </div>
           <div class="form-group-item">
             <label>ผู้ตรวจเช็ค (INSPECTOR / PIC)</label>
@@ -3601,9 +3656,9 @@
               <option value="NAWAPON M.">NAWAPON M.</option>
               <option value="SUTTHINAN K.">SUTTHINAN K.</option>
               <option value="SARAWUT I.">SARAWUT I.</option>
+              <option value="OPERATOR">OPERATOR (ผู้ควบคุมเครื่อง)</option>
             </select>
           </div>
-
           <div class="form-group-item full-width">
             <label>หมายเหตุ / อาการที่พบ (NOTES)</label>
             <input type="text" id="pmModalNotes" class="form-input" placeholder="ระบุสิ่งที่พบระหว่างตรวจเช็ค (ถ้ามี)">
@@ -3611,18 +3666,20 @@
         </div>
 
         <div class="modal-actions-bar" style="padding: 14px 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-          <!-- Quick problem shortcuts -->
           <div style="display: flex; gap: 8px;">
             <button type="button" class="btn-cta-secondary" style="padding: 7px 12px; font-size: 12px; color: #ef4444; border-color: #fca5a5;" onclick="triggerRedTagFromPM()" title="พบสิ่งผิดปกติ ติดป้ายแดงทันที">
-              🏷️ ออกป้ายแดง (RED TAG)
+              🏷️ ออกป้ายแดง
             </button>
             <button type="button" class="btn-cta-secondary" style="padding: 7px 12px; font-size: 12px; color: #0284c7; border-color: #bae6fd;" onclick="triggerJobFromPM()" title="เครื่องเสีย เปิดใบแจ้งซ่อมทันที">
               ➕ เปิดใบแจ้งซ่อม
             </button>
+            <button type="button" id="btnDeletePM" class="btn-reset-data" style="padding: 7px 12px; font-size: 12px; color: #dc2626; border-color: #fecaca; display: none;" onclick="handleDeletePM()">
+              🗑️ ลบเครื่องนี้
+            </button>
           </div>
           <div style="display: flex; gap: 8px;">
             <button type="button" class="btn-cta-secondary" style="padding: 7px 16px; font-size: 13px;" onclick="closePMCheckModal()">ยกเลิก</button>
-            <button type="submit" class="btn-cta-primary" style="padding: 7px 22px; font-size: 13px;">💾 บันทึกผลตรวจ</button>
+            <button type="submit" id="btnSubmitPM" class="btn-cta-primary" style="padding: 7px 22px; font-size: 13px;">💾 บันทึกข้อมูล (SAVE)</button>
           </div>
         </div>
       </form>
@@ -4112,12 +4169,13 @@
           }
 
           const statusUpper = (item.status || "").toUpperCase();
-          let statusBadgeHtml = `<span class="badge-finished">${statusUpper}</span>`;
-          if (statusUpper.includes("NOT STARTED")) {
-            statusBadgeHtml = `<span class="badge-notstarted">${statusUpper}</span>`;
+          let statusBadgeClass = "badge-finished";
+          if (statusUpper.includes("NOT STARTED") || statusUpper.includes("OPEN")) {
+            statusBadgeClass = "badge-notstarted";
           } else if (statusUpper.includes("IN PROGRESS")) {
-            statusBadgeHtml = `<span class="badge-inprogress">${statusUpper}</span>`;
+            statusBadgeClass = "badge-inprogress";
           }
+          const statusBadgeHtml = `<span class="${statusBadgeClass}" style="cursor: pointer; user-select: none;" onclick="cycleJobStatus('${item.jobNo}')" title="คลิกเพื่อสลับสถานะ: FINISHED ↔ IN PROGRESS ↔ NOT STARTED">${statusUpper} ⟳</span>`;
 
           tr.innerHTML = `
             <td style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#475569;">${item.date}</td>
@@ -4176,12 +4234,13 @@
           const isCrit = (item.mins || 0) >= 180;
 
           const statusUpper = (item.status || "").toUpperCase();
-          let statusBadgeHtml = `<span class="badge-finished">${statusUpper}</span>`;
-          if (statusUpper.includes("NOT STARTED")) {
-            statusBadgeHtml = `<span class="badge-notstarted">${statusUpper}</span>`;
+          let statusBadgeClass = "badge-finished";
+          if (statusUpper.includes("NOT STARTED") || statusUpper.includes("OPEN")) {
+            statusBadgeClass = "badge-notstarted";
           } else if (statusUpper.includes("IN PROGRESS")) {
-            statusBadgeHtml = `<span class="badge-inprogress">${statusUpper}</span>`;
+            statusBadgeClass = "badge-inprogress";
           }
+          const statusBadgeHtml = `<span class="${statusBadgeClass}" style="cursor: pointer; user-select: none;" onclick="cycleJobStatus('${item.jobNo}')" title="คลิกเพื่อสลับสถานะ: FINISHED ↔ IN PROGRESS ↔ NOT STARTED">${statusUpper} ⟳</span>`;
 
           tr.innerHTML = `
             <td style="font-family:'JetBrains Mono', monospace; font-size:12.5px; color:#475569;">${item.date}</td>
@@ -4606,12 +4665,14 @@
 
       const plant = (document.getElementById("filterPlant")?.value || "").toUpperCase();
       const priority = (document.getElementById("filterPriority")?.value || "").toUpperCase();
+      const status = (document.getElementById("filterStatus")?.value || "").toUpperCase();
       const tech = (document.getElementById("filterTech")?.value || "").toUpperCase();
       const query = (document.getElementById("searchInput")?.value || "").toUpperCase().trim();
 
       currentJobs = initialJobs.filter(job => {
         const matchPlant = !plant || (job.plant || "").toUpperCase() === plant;
         const matchPriority = !priority || (job.priority || "").toUpperCase().includes(priority);
+        const matchStatus = !status || (job.status || "").toUpperCase().includes(status);
         const matchTech = !tech || (job.techs && job.techs.some(t => t.toUpperCase() === tech));
         const matchQuery = !query || 
           (job.machine || "").toUpperCase().includes(query) ||
@@ -4620,7 +4681,7 @@
           (job.mainTech || "").toUpperCase().includes(query) ||
           (job.techs && job.techs.some(t => t.toUpperCase().includes(query)));
 
-        return matchPlant && matchPriority && matchTech && matchQuery;
+        return matchPlant && matchPriority && matchStatus && matchTech && matchQuery;
       });
 
       // Maintain active column sort order
@@ -4642,6 +4703,7 @@
     function resetFilters() {
       if (document.getElementById("filterPlant")) document.getElementById("filterPlant").value = "";
       if (document.getElementById("filterPriority")) document.getElementById("filterPriority").value = "";
+      if (document.getElementById("filterStatus")) document.getElementById("filterStatus").value = "";
       if (document.getElementById("filterTech")) document.getElementById("filterTech").value = "";
       if (document.getElementById("searchInput")) document.getElementById("searchInput").value = "";
       applyFilters();
@@ -4657,6 +4719,27 @@
       }
       applyFilters();
     }
+
+    // Fast status cycling on click: FINISHED -> IN PROGRESS -> NOT STARTED -> FINISHED
+    function cycleJobStatus(jobNo) {
+      if (!initialJobs || !Array.isArray(initialJobs)) return;
+      const job = initialJobs.find(j => j.jobNo.toUpperCase() === jobNo.toUpperCase());
+      if (!job) return;
+      const current = (job.status || "FINISHED").toUpperCase();
+      let nextStatus = "IN PROGRESS";
+      if (current.includes("IN PROGRESS")) {
+        nextStatus = "NOT STARTED";
+      } else if (current.includes("NOT STARTED") || current.includes("OPEN")) {
+        nextStatus = "FINISHED";
+      } else {
+        nextStatus = "IN PROGRESS";
+      }
+      job.status = nextStatus;
+      saveJobsToStorage();
+      applyFilters();
+      showToast(`⚡ ปรับสถานะงาน [${job.jobNo}] เป็น ${nextStatus} เรียบร้อยแล้ว`, 'info');
+    }
+    window.handleQuickStatus = cycleJobStatus;
 
     // Modal Control: Add New Job & Edit Existing Record
     function openAddModal() {
@@ -5036,6 +5119,28 @@
         status: "PASS",
         inspector: "NATHAPONG S.",
         notes: "ขันล็อกได้ระนาบมาตรฐาน"
+      },
+      {
+        id: "AM-09",
+        pillar: "I",
+        pillarName: "INSPECT",
+        machine: "INER DIAMETER",
+        plant: "A",
+        checkItem: "ตรวจเช็คความแม่นยำหัววัดขนาดรูในและเข็มวัด DIAL GAUGE",
+        status: "PASS",
+        inspector: "SOMSAK P.",
+        notes: "ค่าความละเอียดตามสเปก 0.001 มม."
+      },
+      {
+        id: "AM-10",
+        pillar: "C",
+        pillarName: "CLEAN",
+        machine: "INER DIAMETER",
+        plant: "A",
+        checkItem: "ทำความสะอาดฝุ่นผงเจียรและรางเลื่อน SLIDE GUIDE",
+        status: "PASS",
+        inspector: "SOMSAK P.",
+        notes: "ทำความสะอาดและเป่าลมเรียบร้อย"
       }
     ];
 
@@ -5205,7 +5310,15 @@
         const raw = localStorage.getItem(STORAGE_KEY_TPM_AM);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const existingIds = new Set(parsed.map(p => p.id));
+            DEFAULT_AM_CHECKS.forEach(defItem => {
+              if (!existingIds.has(defItem.id)) {
+                parsed.push(defItem);
+              }
+            });
+            return parsed;
+          }
         }
       } catch (e) {}
       return JSON.parse(JSON.stringify(DEFAULT_AM_CHECKS));
@@ -5616,13 +5729,18 @@
 
     function filterTags(type) {
       currentTagFilter = type;
+      document.querySelectorAll('.tag-metric-item').forEach(el => {
+        const fn = el.getAttribute('onclick') || '';
+        el.classList.toggle('active', fn.includes(`'${type}'`));
+      });
       renderTPMTags();
     }
 
     function openTPMTagModal() {
       const modal = document.getElementById('tpmTagModal');
       if (!modal) return;
-      modal.classList.add('show');
+      modal.classList.add('active');
+      modal.style.display = 'flex';
       const dateInp = document.getElementById('tagDateInput');
       if (dateInp && !dateInp.value) {
         dateInp.value = new Date().toISOString().slice(0, 10);
@@ -5631,7 +5749,10 @@
 
     function closeTPMTagModal() {
       const modal = document.getElementById('tpmTagModal');
-      if (modal) modal.classList.remove('show');
+      if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      }
     }
 
     function handleSaveTPMTag(e) {
@@ -5964,7 +6085,7 @@
             <td>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <span class="dept-badge ${deptClass}">${item.dept || 'M/C'}</span>
-                <strong style="color: #0f172a; font-family: 'JetBrains Mono', monospace; font-size: 13px;">${item.mcCode || (item.machine ? item.machine.substring(0, 8) : '-')}</strong>
+                <strong style="color: #0f172a; font-family: 'JetBrains Mono', monospace; font-size: 13px; cursor: pointer;" onclick="openPMCheckModal('${item.id}')" title="คลิกเพื่อแก้ไขเครื่องจักรนี้">${item.mcCode || (item.machine ? item.machine.substring(0, 8) : '-')}</strong>
               </div>
             </td>
             <td>
@@ -5985,11 +6106,11 @@
               ${actualHtml}
             </td>
             <td style="text-align: center;">
-              <span class="pm-badge ${badgeClass}">${sched.status}</span>
+              <span class="pm-badge ${badgeClass}" style="cursor: pointer; user-select: none;" onclick="cyclePMStatus('${item.id}')" title="คลิกเพื่อสลับสถานะ: SCHEDULED ↔ COMPLETED ↔ ON-DEMAND">${sched.status} ⟳</span>
             </td>
             <td style="text-align: center;">
-              <button type="button" class="pm-btn-check" onclick="openPMCheckModal('${item.id}')" title="บันทึกผลการตรวจเช็ค">
-                ✏️ บันทึกผล
+              <button type="button" class="pm-btn-check" onclick="openPMCheckModal('${item.id}')" title="แก้ไขข้อมูลเครื่องจักรและผลตรวจ PM">
+                ✏️ แก้ไขข้อมูล
               </button>
             </td>
           </tr>
@@ -6000,6 +6121,102 @@
     // Modal Control Functions for PM Check
     let activeEditingMachineId = null;
 
+    // Fast status cycle on PM table badge click
+    function cyclePMStatus(machineId) {
+      if (!tpmPMSchedule || !Array.isArray(tpmPMSchedule)) return;
+      const machine = tpmPMSchedule.find(m => m.id === machineId);
+      if (!machine) return;
+
+      if (!machine.schedules) machine.schedules = {};
+      if (!machine.schedules[currentTPMMonth]) {
+        machine.schedules[currentTPMMonth] = { planDays: [], actualDays: [], timeMins: 0, status: 'SCHEDULED' };
+      }
+
+      const sched = machine.schedules[currentTPMMonth];
+      const current = (sched.status || 'SCHEDULED').toUpperCase();
+      let nextStatus = 'COMPLETED';
+
+      if (current === 'SCHEDULED') {
+        nextStatus = 'COMPLETED';
+        if (!sched.actualDays || sched.actualDays.length === 0) {
+          sched.actualDays = [new Date().getDate()];
+          if (!sched.timeMins) sched.timeMins = 15;
+        }
+      } else if (current === 'COMPLETED') {
+        nextStatus = 'ON-DEMAND';
+      } else {
+        nextStatus = 'SCHEDULED';
+      }
+
+      sched.status = nextStatus;
+      savePMScheduleToStorage();
+      renderTPMKPIs();
+      renderPMSchedule();
+      showToast(`⚡ ปรับสถานะเครื่อง [${machine.mcCode}] เป็น ${nextStatus} เรียบร้อยแล้ว`, 'info');
+    }
+
+    // Open Modal to Add New Machine
+    function openAddMachineModal() {
+      activeEditingMachineId = null;
+      const modal = document.getElementById('pmCheckModal');
+      if (!modal) return;
+
+      const titleEl = document.getElementById('pmModalTitle');
+      if (titleEl) titleEl.innerText = '➕ เพิ่มเครื่องจักรใหม่ในระบบ PM (ADD NEW MACHINE)';
+      const subTitle = document.getElementById('pmModalSubTitle');
+      if (subTitle) subTitle.innerText = 'กรอกข้อมูลเครื่องจักรและกำหนดแผนบำรุงรักษาเชิงป้องกัน';
+
+      const btnDel = document.getElementById('btnDeletePM');
+      if (btnDel) btnDel.style.display = 'none';
+
+      const btnSubmit = document.getElementById('btnSubmitPM');
+      if (btnSubmit) btnSubmit.innerText = '💾 บันทึกเครื่องจักรใหม่ (SAVE)';
+
+      const defDept = currentTPMDept !== 'ALL' ? currentTPMDept : 'MOTOR';
+      const elDept = document.getElementById('pmModalDept');
+      if (elDept) elDept.value = defDept;
+
+      const elCode = document.getElementById('pmModalCode');
+      if (elCode) elCode.value = '';
+
+      const elName = document.getElementById('pmModalMachineName');
+      if (elName) elName.value = '';
+
+      const elModel = document.getElementById('pmModalModel');
+      if (elModel) elModel.value = '';
+
+      const elProc = document.getElementById('pmModalProcess');
+      if (elProc) elProc.value = '';
+
+      const elWI = document.getElementById('pmModalWI');
+      if (elWI) elWI.value = '';
+
+      const elFreq = document.getElementById('pmModalFreq');
+      if (elFreq) elFreq.value = '1M';
+
+      const elPlan = document.getElementById('pmModalPlanDays');
+      if (elPlan) elPlan.value = '1';
+
+      const elStatus = document.getElementById('pmModalStatus');
+      if (elStatus) elStatus.value = 'SCHEDULED';
+
+      const elActual = document.getElementById('pmModalActualDays');
+      if (elActual) elActual.value = '';
+
+      const elTime = document.getElementById('pmModalTime');
+      if (elTime) elTime.value = '0';
+
+      const elPIC = document.getElementById('pmModalPIC');
+      if (elPIC) elPIC.value = 'VORAVIT C.';
+
+      const elNotes = document.getElementById('pmModalNotes');
+      if (elNotes) elNotes.value = '';
+
+      modal.classList.add('active');
+      modal.style.display = 'flex';
+    }
+
+    // Open Modal to Edit Existing Machine & PM Check
     function openPMCheckModal(machineId) {
       const machine = tpmPMSchedule.find(m => m.id === machineId);
       if (!machine) return;
@@ -6012,92 +6229,201 @@
         status: 'SCHEDULED'
       };
 
+      const titleEl = document.getElementById('pmModalTitle');
+      if (titleEl) titleEl.innerText = `✏️ แก้ไขข้อมูลเครื่องจักรและแผน PM (${(machine.mcCode || '').toUpperCase()})`;
+      const subTitle = document.getElementById('pmModalSubTitle');
+      if (subTitle) subTitle.innerText = `เครื่องจักร: [${(machine.dept || '').toUpperCase()}] ${(machine.mcCode || '').toUpperCase()} • ${(machine.machine || '').toUpperCase()}`;
+
+      const btnDel = document.getElementById('btnDeletePM');
+      if (btnDel) btnDel.style.display = 'inline-flex';
+
+      const btnSubmit = document.getElementById('btnSubmitPM');
+      if (btnSubmit) btnSubmit.innerText = '💾 บันทึกการแก้ไข (UPDATE)';
+
       const elId = document.getElementById('pmModalMachineId');
       if (elId) elId.value = machine.id;
       const elMonth = document.getElementById('pmModalMonth');
       if (elMonth) elMonth.value = currentTPMMonth;
 
-      const subTitle = document.getElementById('pmModalSubTitle');
-      if (subTitle) subTitle.innerText = `เครื่องจักร: [${machine.dept}] ${machine.mcCode} • ${machine.machine}`;
-
       const elDept = document.getElementById('pmModalDept');
-      if (elDept) elDept.value = `${machine.dept} (${machine.deptName || ''})`;
+      if (elDept) elDept.value = machine.dept || 'MOTOR';
 
       const elCode = document.getElementById('pmModalCode');
-      if (elCode) elCode.value = machine.mcCode;
+      if (elCode) elCode.value = machine.mcCode || '';
 
       const elName = document.getElementById('pmModalMachineName');
-      if (elName) elName.value = `${machine.machine} (${machine.model || '-'})`;
+      if (elName) elName.value = machine.machine || '';
+
+      const elModel = document.getElementById('pmModalModel');
+      if (elModel) elModel.value = machine.model || '';
 
       const elProc = document.getElementById('pmModalProcess');
-      if (elProc) elProc.value = machine.process || '-';
+      if (elProc) elProc.value = machine.process || '';
 
       const elWI = document.getElementById('pmModalWI');
-      if (elWI) elWI.value = machine.wi || '-';
+      if (elWI) elWI.value = machine.wi || '';
 
-      const statusSelect = document.getElementById('pmModalStatus');
-      if (statusSelect) statusSelect.value = sched.status || 'COMPLETED';
+      const elFreq = document.getElementById('pmModalFreq');
+      if (elFreq) elFreq.value = machine.freq || '1M';
 
-      const actualDayInp = document.getElementById('pmModalActualDay');
-      if (actualDayInp) {
-        actualDayInp.value = (sched.actualDays && sched.actualDays.length > 0) ? sched.actualDays[0] : new Date().getDate();
-      }
+      const elPlan = document.getElementById('pmModalPlanDays');
+      if (elPlan) elPlan.value = (sched.planDays && sched.planDays.length > 0) ? sched.planDays.join(', ') : '';
 
-      const timeInp = document.getElementById('pmModalTime');
-      if (timeInp) {
-        timeInp.value = sched.timeMins || 5;
-      }
+      const elStatus = document.getElementById('pmModalStatus');
+      if (elStatus) elStatus.value = sched.status || 'SCHEDULED';
 
-      const picSelect = document.getElementById('pmModalPIC');
-      if (picSelect) picSelect.value = machine.pic || 'VORAVIT C.';
+      const elActual = document.getElementById('pmModalActualDays');
+      if (elActual) elActual.value = (sched.actualDays && sched.actualDays.length > 0) ? sched.actualDays.join(', ') : '';
 
-      const notesInp = document.getElementById('pmModalNotes');
-      if (notesInp) notesInp.value = sched.notes || '';
+      const elTime = document.getElementById('pmModalTime');
+      if (elTime) elTime.value = sched.timeMins || 0;
+
+      const elPIC = document.getElementById('pmModalPIC');
+      if (elPIC) elPIC.value = sched.pic || machine.pic || 'VORAVIT C.';
+
+      const elNotes = document.getElementById('pmModalNotes');
+      if (elNotes) elNotes.value = sched.notes || '';
 
       const modal = document.getElementById('pmCheckModal');
-      if (modal) modal.style.display = 'flex';
+      if (modal) {
+        modal.classList.add('active');
+        modal.style.display = 'flex';
+      }
     }
 
     function closePMCheckModal() {
       const modal = document.getElementById('pmCheckModal');
-      if (modal) modal.style.display = 'none';
+      if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      }
       activeEditingMachineId = null;
     }
 
+    // Save Handlers for PM Matrix
     function handleSavePMCheck(e) {
       if (e) e.preventDefault();
+
+      const dept = (document.getElementById('pmModalDept')?.value || 'MOTOR').trim().toUpperCase();
+      const mcCode = (document.getElementById('pmModalCode')?.value || '').trim().toUpperCase();
+      const machineName = (document.getElementById('pmModalMachineName')?.value || '').trim().toUpperCase();
+      const model = (document.getElementById('pmModalModel')?.value || '').trim().toUpperCase();
+      const process = (document.getElementById('pmModalProcess')?.value || '').trim().toUpperCase();
+      const wi = (document.getElementById('pmModalWI')?.value || '').trim().toUpperCase();
+      const freq = (document.getElementById('pmModalFreq')?.value || '1M').trim().toUpperCase();
+
+      const newStatus = (document.getElementById('pmModalStatus')?.value || 'SCHEDULED').trim().toUpperCase();
+      const planDaysStr = (document.getElementById('pmModalPlanDays')?.value || '').trim();
+      const actualDaysStr = (document.getElementById('pmModalActualDays')?.value || '').trim();
+      const timeMins = parseFloat(document.getElementById('pmModalTime')?.value) || 0;
+      const pic = (document.getElementById('pmModalPIC')?.value || 'VORAVIT C.').trim().toUpperCase();
+      const notes = (document.getElementById('pmModalNotes')?.value || '').trim();
+
+      if (!mcCode || !machineName) {
+        alert('กรุณาระบุรหัสเครื่อง (M/C CODE) และชื่อเครื่องจักร');
+        return;
+      }
+
+      const parseDays = (str) => {
+        if (!str) return [];
+        return str.split(/[,;\s]+/)
+          .map(s => parseInt(s.trim(), 10))
+          .filter(n => !isNaN(n) && n >= 1 && n <= 31);
+      };
+
+      const planDays = parseDays(planDaysStr);
+      const actualDays = parseDays(actualDaysStr);
+
+      if (activeEditingMachineId) {
+        // Edit Existing Machine
+        const target = tpmPMSchedule.find(m => m.id === activeEditingMachineId);
+        if (!target) return;
+
+        target.dept = dept;
+        target.mcCode = mcCode;
+        target.machine = machineName;
+        target.model = model;
+        target.process = process;
+        target.wi = wi;
+        target.freq = freq;
+        target.pic = pic;
+
+        if (!target.schedules) target.schedules = {};
+        if (!target.schedules[currentTPMMonth]) {
+          target.schedules[currentTPMMonth] = { planDays: [], actualDays: [], timeMins: 0, status: 'SCHEDULED' };
+        }
+
+        const sched = target.schedules[currentTPMMonth];
+        sched.planDays = planDays;
+        sched.actualDays = actualDays;
+        sched.timeMins = timeMins;
+        sched.status = newStatus;
+        sched.pic = pic;
+        sched.notes = notes;
+
+        savePMScheduleToStorage();
+        closePMCheckModal();
+        populateMachineDatalist();
+        renderTPMKPIs();
+        renderPMSchedule();
+        showToast(`💾 บันทึกการแก้ไขข้อมูลเครื่องจักร [${mcCode}] เรียบร้อยแล้ว`, 'success');
+      } else {
+        // Add New Machine
+        const newId = `MTR-CUST-${Date.now()}`;
+        const newMachine = {
+          id: newId,
+          dept,
+          mcCode,
+          machine: machineName,
+          model,
+          process,
+          wi,
+          freq,
+          plant: dept === 'MOTOR' ? 'A' : (dept === 'FERRULE' ? 'B' : 'E'),
+          pic,
+          schedules: {
+            [currentTPMMonth]: {
+              planDays,
+              actualDays,
+              timeMins,
+              status: newStatus,
+              pic,
+              notes
+            }
+          }
+        };
+
+        tpmPMSchedule.unshift(newMachine);
+        savePMScheduleToStorage();
+        closePMCheckModal();
+        populateMachineDatalist();
+        renderTPMKPIs();
+        renderPMSchedule();
+        showToast(`➕ เพิ่มเครื่องจักรใหม่ [${mcCode}] ${machineName} เรียบร้อยแล้ว`, 'success');
+      }
+    }
+
+    // Delete Machine from PM Matrix
+    function handleDeletePM() {
       if (!activeEditingMachineId) return;
+      const target = tpmPMSchedule.find(m => m.id === activeEditingMachineId);
+      if (!target) return;
 
-      const targetMachine = tpmPMSchedule.find(m => m.id === activeEditingMachineId);
-      if (!targetMachine) return;
-
-      const newStatus = document.getElementById('pmModalStatus').value;
-      const actualDay = parseInt(document.getElementById('pmModalActualDay').value, 10);
-      const timeMins = parseFloat(document.getElementById('pmModalTime').value) || 0;
-      const pic = document.getElementById('pmModalPIC').value;
-      const notes = document.getElementById('pmModalNotes').value.trim();
-
-      if (!targetMachine.schedules) targetMachine.schedules = {};
-      if (!targetMachine.schedules[currentTPMMonth]) {
-        targetMachine.schedules[currentTPMMonth] = { planDays: [], actualDays: [], timeMins: 0, status: 'SCHEDULED' };
+      if (!confirm(`คุณต้องการลบเครื่องจักร [${target.mcCode}] ${target.machine} ออกจากระบบบำรุงรักษาเชิงป้องกันใช่หรือไม่?`)) {
+        return;
       }
 
-      const mSched = targetMachine.schedules[currentTPMMonth];
-      mSched.status = newStatus;
-      if (!isNaN(actualDay) && actualDay >= 1 && actualDay <= 31) {
-        mSched.actualDays = [actualDay];
+      const idx = tpmPMSchedule.findIndex(m => m.id === activeEditingMachineId);
+      if (idx >= 0) {
+        tpmPMSchedule.splice(idx, 1);
       }
-      mSched.timeMins = timeMins;
-      mSched.pic = pic;
-      mSched.notes = notes;
-      targetMachine.pic = pic;
 
       savePMScheduleToStorage();
       closePMCheckModal();
+      populateMachineDatalist();
       renderTPMKPIs();
       renderPMSchedule();
-
-      showToast(`💾 บันทึกผลตรวจเช็ค [${targetMachine.mcCode}] เรียบร้อยแล้ว (ซิงค์ข้ามเครื่องแล้ว)`, 'success');
+      showToast(`🗑️ ลบเครื่องจักร [${target.mcCode}] เรียบร้อยแล้ว`, 'warning');
     }
 
     function triggerRedTagFromPM() {
