@@ -2582,6 +2582,16 @@
       font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', 'Leelawadee UI', sans-serif;
       color: #000000;
       position: relative;
+    }
+
+    .cs-paper,
+    .cs-paper *,
+    .cs-paper *::before,
+    .cs-paper *::after,
+    #checksheetSection .cs-paper,
+    #checksheetSection .cs-paper *,
+    #checksheetSection .cs-paper *::before,
+    #checksheetSection .cs-paper *::after {
       text-transform: none !important;
     }
 
@@ -2609,27 +2619,49 @@
       font-family: 'Calibri', sans-serif;
       color: #000000;
       margin: 0 0 5px 0;
-      text-transform: uppercase;
+      text-transform: uppercase !important;
       letter-spacing: 0.4px;
       text-align: center;
     }
 
-    /* Meta Table (Header Box matching Image 2 & Preview) */
-    .cs-meta-table {
+    /* 3-Box Meta Header matching Excel and Image 2 */
+    .cs-meta-grid {
+      display: flex;
+      justify-content: space-between;
+      align-items: stretch;
+      gap: 12px;
+      margin-bottom: 5px;
       width: 100%;
+    }
+
+    .cs-meta-box {
       border-collapse: collapse;
       border: 1.5px solid #000000;
-      margin-bottom: 5px;
-      table-layout: fixed;
+      background: #ffffff;
       font-family: 'Calibri', sans-serif;
     }
 
-    .cs-meta-table td, .cs-meta-table th {
+    .cs-meta-box td, .cs-meta-box th {
       border: 1px solid #000000;
       padding: 2px 5px;
-      font-size: 9px;
+      font-size: 8.5px;
       line-height: 1.25;
       vertical-align: middle;
+      color: #000000;
+    }
+
+    .cs-meta-box-1 {
+      width: 380px;
+      min-width: 380px;
+    }
+
+    .cs-meta-box-2 {
+      flex: 1;
+    }
+
+    .cs-meta-box-3 {
+      width: 125px;
+      min-width: 125px;
     }
 
     .cs-meta-label {
@@ -2637,14 +2669,14 @@
       color: #000000;
       background: #ffffff;
       white-space: nowrap;
-      font-size: 8.5px;
+      font-size: 8px;
       font-family: 'Calibri', sans-serif;
     }
 
     .cs-meta-val {
       font-weight: normal;
       color: #000000;
-      font-size: 9px;
+      font-size: 8.5px;
       font-family: 'Calibri', sans-serif;
     }
 
@@ -2654,28 +2686,31 @@
       color: #000000;
       background: #ffffff;
       white-space: nowrap;
-      font-size: 8.5px;
+      font-size: 8px;
       font-family: 'Calibri', sans-serif;
+      height: 18px;
     }
 
     .cs-meta-center-val {
       text-align: center;
       vertical-align: middle;
-      font-size: 10px;
+      font-size: 9.5px;
       font-weight: normal;
       color: #000000;
       padding: 2px;
       font-family: 'Calibri', sans-serif;
+      height: 30px;
     }
 
     .cs-meta-check-cell {
       text-align: center;
       vertical-align: bottom;
       padding: 2px;
+      height: 30px;
     }
 
     .cs-check-sub {
-      font-size: 8px;
+      font-size: 7.5px;
       font-weight: normal;
       color: #000000;
       border-top: 1px solid #000000;
@@ -2697,8 +2732,8 @@
 
     .cs-table th, .cs-table td {
       border: 1px solid #000000;
-      padding: 1.5px 2px;
-      font-size: 9px;
+      padding: 1px 2px;
+      font-size: 8.5px;
       line-height: 1.2;
       color: #000000;
       text-transform: none !important;
@@ -2721,26 +2756,26 @@
     .cs-sec-row td {
       background: #e5e7eb;
       font-weight: bold;
-      padding: 2px 5px;
+      padding: 1px 5px;
       color: #000000;
-      font-size: 9px;
-      height: 18px;
+      font-size: 8.5px;
+      height: 17px;
       font-family: 'Calibri', 'Cordia New', 'Sarabun', sans-serif;
     }
 
     .cs-item-tr td {
-      height: 19px;
+      height: 18px;
       font-family: 'Calibri', 'Cordia New', 'Sarabun', sans-serif;
     }
 
     .cs-empty-row td {
-      height: 18px;
+      height: 16px;
       background: #ffffff;
     }
 
     /* Square Day Check Cell */
     .cs-day-cell {
-      height: 19px;
+      height: 18px;
       text-align: center;
       vertical-align: middle;
       cursor: pointer;
@@ -2763,7 +2798,7 @@
     /* PASS State (✔) */
     .cs-day-cell.status-pass {
       color: #15803d;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 900;
       background: #ffffff;
     }
@@ -2771,7 +2806,7 @@
     /* FAIL State (✘) */
     .cs-day-cell.status-fail {
       color: #dc2626;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 900;
       background: #ffffff;
     }
@@ -2779,7 +2814,7 @@
     /* Skip / No-check State (−) */
     .cs-day-cell.status-skip {
       color: #334155;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 900;
       background: #ffffff;
     }
@@ -2804,12 +2839,12 @@
 
     /* By Team Table Row matching Excel Row 19 */
     .cs-byteam-tr {
-      height: 48px;
+      height: 44px;
     }
 
     .cs-byteam-td {
       vertical-align: middle;
-      padding: 4px 8px !important;
+      padding: 3px 6px !important;
       background: #ffffff;
       font-family: 'Calibri', sans-serif;
     }
@@ -2822,7 +2857,7 @@
 
     .cs-byteam-label {
       font-weight: normal;
-      font-size: 9.5px;
+      font-size: 9px;
       font-family: 'Calibri', sans-serif;
       color: #000000;
       white-space: nowrap;
@@ -2832,7 +2867,7 @@
       border: none;
       border-bottom: 1px solid #000000;
       font-family: 'Calibri', 'Cordia New', 'Sarabun', sans-serif;
-      font-size: 9.5px;
+      font-size: 9px;
       flex: 1;
       padding: 1px 4px;
       background: transparent;
@@ -2845,60 +2880,61 @@
     }
 
     .cs-byteam-day-cell {
-      height: 48px;
+      height: 44px;
       background: #ffffff;
     }
 
     /* Bottom Grid (Sub-tables & Remarks) */
     .cs-bottom-grid {
       display: grid;
-      grid-template-columns: 50% 50%;
+      grid-template-columns: 1fr 1fr;
       gap: 16px;
       align-items: start;
       margin-top: 3px;
       width: 100%;
+      box-sizing: border-box;
       font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', sans-serif;
     }
 
     /* Sub-tables ((Information) & Abnormal Record) */
+    .cs-sub-title-label {
+      font-size: 8.5px;
+      font-weight: normal;
+      font-family: 'Calibri', 'BrowalliaUPC', sans-serif;
+      color: #000000;
+      margin-bottom: 2px;
+      padding-left: 1px;
+    }
+
     .cs-sub-table {
       width: 100%;
       border-collapse: collapse;
       border: 1.5px solid #000000;
-      margin-bottom: 5px;
+      margin-bottom: 4px;
       table-layout: fixed;
       font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', sans-serif;
     }
 
     .cs-sub-table th, .cs-sub-table td {
       border: 1px solid #000000;
-      padding: 1.5px 4px;
-      font-size: 8.5px;
+      padding: 1px 4px;
+      font-size: 8px;
       color: #000000;
-      height: 17px;
+      height: 16px;
     }
 
     .cs-sub-table th {
-      background: #ffffff;
+      background: #e5e7eb;
       font-weight: bold;
       text-align: center;
       font-family: 'Calibri', sans-serif;
-    }
-
-    .cs-sub-title-th {
-      text-align: left !important;
-      background: #e5e7eb !important;
-      font-weight: bold !important;
-      padding: 2px 5px !important;
-      font-size: 9px;
-      font-family: 'Calibri', 'BrowalliaUPC', sans-serif;
     }
 
     .cs-sub-input {
       width: 100%;
       border: none;
       font-family: 'Calibri', 'Cordia New', 'Sarabun', sans-serif;
-      font-size: 8.5px;
+      font-size: 8px;
       background: transparent;
       padding: 1px 2px;
       box-sizing: border-box;
@@ -2909,12 +2945,12 @@
       background: #f0f9ff;
     }
 
-    /* Remark Box (Image 3 & Preview Replica) */
+    /* Remark Box (Image 2 & Preview Replica) */
     .cs-remark-container {
-      font-size: 9px;
+      font-size: 8.5px;
       color: #000000;
       position: relative;
-      line-height: 1.32;
+      line-height: 1.3;
       padding-top: 1px;
       font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', sans-serif;
       text-transform: none !important;
@@ -2927,8 +2963,13 @@
     .cs-mini-ex-wrap {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin: 2px 0 3px 8px;
+      gap: 10px;
+      margin: 2px 0 3px 0;
+    }
+
+    .cs-mini-ex-title {
+      min-width: 105px;
+      white-space: nowrap;
     }
 
     .cs-mini-ex-table {
@@ -2941,10 +2982,10 @@
     .cs-mini-ex-table th, .cs-mini-ex-table td {
       border: 1px solid #000000;
       padding: 1px 2px;
-      font-size: 8px;
+      font-size: 7.5px;
       text-align: center;
-      width: 17px;
-      height: 16px;
+      width: 16px;
+      height: 15px;
     }
 
     .cs-mini-ex-table th {
@@ -2963,7 +3004,7 @@
     .cs-na-line-wrap {
       position: relative;
       width: 100%;
-      height: 16px;
+      height: 15px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2982,24 +3023,26 @@
       z-index: 2;
       background: #ffffff;
       padding: 0 3px;
-      font-size: 7.5px;
+      font-size: 7px;
       font-weight: bold;
       color: #000000;
     }
 
     .cs-page-tag {
       text-align: right;
-      font-size: 8.5px;
+      font-size: 8px;
       font-weight: normal;
-      margin-top: 6px;
+      margin-top: 4px;
       color: #000000;
       font-family: 'Calibri', sans-serif;
+      white-space: nowrap !important;
+      padding-right: 2px;
     }
 
     /* Print Styles for Checksheet (Strictly 1 Page A4 Landscape) */
     @page {
       size: A4 landscape;
-      margin: 6mm 10mm 6mm 10mm;
+      margin: 6mm 8mm 6mm 8mm;
     }
     @media print {
       html, body {
@@ -3055,7 +3098,7 @@
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
-      .cs-table, .cs-meta-table, .cs-sub-table, .cs-mini-ex-table, .cs-bottom-grid {
+      .cs-table, .cs-meta-box, .cs-sub-table, .cs-mini-ex-table, .cs-bottom-grid {
         border-color: #000000 !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
@@ -3066,7 +3109,7 @@
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
-      .cs-head-row th, .cs-sec-row td, .cs-sub-title-th, .cs-mini-ex-table th {
+      .cs-head-row th, .cs-sec-row td, .cs-sub-table th, .cs-mini-ex-table th {
         background: #e5e7eb !important;
       }
       .cs-head-row th.col-today {
@@ -3079,6 +3122,11 @@
       }
       .cs-byteam-input {
         border-bottom: none !important;
+      }
+      .cs-byteam-input::placeholder,
+      .cs-sub-input::placeholder {
+        color: transparent !important;
+        opacity: 0 !important;
       }
       .cs-sub-input {
         border: none !important;
@@ -7988,6 +8036,13 @@
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return `${d.getDate()}/${months[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`;
     }
+    const match = str.match(/^(\d{1,2})[\/\-]([a-zA-Z]{3,4})[\/\-](\d{2,4})$/);
+    if (match) {
+      const day = match[1];
+      const mStr = match[2].charAt(0).toUpperCase() + match[2].slice(1).toLowerCase();
+      const yr = match[3];
+      return `${day}/${mStr}/${yr}`;
+    }
     return str;
   }
 
@@ -8025,48 +8080,76 @@
         <h2 class="cs-main-title">${sheet.formTitle || 'TPM OPERATION STANDARD CHECK SHEET (OPERATOR)'}</h2>
       </div>
 
-      <!-- Exact Meta Table matching Image 2 & Print Preview -->
-      <table class="cs-meta-table">
-        <colgroup>
-          <col style="width: 110px;">
-          <col style="width: 190px;">
-          <col style="width: 100px;">
-          <col style="width: 90px;">
-          <col style="width: 85px;">
-          <col style="width: 80px;">
-          <col style="width: 80px;">
-          <col style="width: 80px;">
-          <col style="width: 191px;">
-        </colgroup>
-        <tr>
-          <td class="cs-meta-label">USING AREA</td>
-          <td class="cs-meta-val">${tpl.usingArea || 'OPTICAL'}</td>
-          <td class="cs-meta-head">MACHINE CODE</td>
-          <td class="cs-meta-head">ISSUE REVISION</td>
-          <td class="cs-meta-head">ISSUE DATE</td>
-          <td class="cs-meta-head">FACTORY</td>
-          <td class="cs-meta-head">MONTH</td>
-          <td class="cs-meta-head">YEAR</td>
-          <td class="cs-meta-head">CHECK</td>
-        </tr>
-        <tr>
-          <td class="cs-meta-label">MACHINE NAME</td>
-          <td class="cs-meta-val">${tpl.machineName || ''}</td>
-          <td rowspan="2" class="cs-meta-center-val" style="color: #000000; font-size: 11px;">${mc}</td>
-          <td rowspan="2" class="cs-meta-center-val">${tpl.issueRevision || '0'}</td>
-          <td rowspan="2" class="cs-meta-center-val">${formatExcelDate(tpl.issueDate)}</td>
-          <td rowspan="2" class="cs-meta-center-val">${tpl.factory || ''}</td>
-          <td rowspan="2" class="cs-meta-center-val">${monthName}</td>
-          <td rowspan="2" class="cs-meta-center-val">${yr}</td>
-          <td rowspan="2" class="cs-meta-check-cell">
-            <div class="cs-check-sub">${tpl.factoryCheck || 'G6 AND UP'}</div>
-          </td>
-        </tr>
-        <tr>
-          <td class="cs-meta-label">WORK INSTRUCTION NO.</td>
-          <td class="cs-meta-val">${tpl.wiNo || ''}</td>
-        </tr>
-      </table>
+      <!-- 3-Box Meta Header matching Excel and Image 2 -->
+      <div class="cs-meta-grid">
+        <!-- Box 1 (Left: Machine & WI) -->
+        <table class="cs-meta-box cs-meta-box-1">
+          <colgroup>
+            <col style="width: 110px;">
+            <col style="width: 270px;">
+          </colgroup>
+          <tr>
+            <td class="cs-meta-label">USING AREA</td>
+            <td class="cs-meta-val">${tpl.usingArea || 'OPTICAL'}</td>
+          </tr>
+          <tr>
+            <td class="cs-meta-label">MACHINE NAME</td>
+            <td class="cs-meta-val">${tpl.machineName || ''}</td>
+          </tr>
+          <tr>
+            <td class="cs-meta-label">WORK INSTRUCTION NO.</td>
+            <td class="cs-meta-val">${tpl.wiNo || ''}</td>
+          </tr>
+        </table>
+
+        <!-- Box 2 (Center: Code, Revision, Dates) -->
+        <table class="cs-meta-box cs-meta-box-2">
+          <colgroup>
+            <col style="width: 100px;">
+            <col style="width: 85px;">
+            <col style="width: 80px;">
+            <col style="width: 75px;">
+            <col style="width: 80px;">
+            <col style="width: 70px;">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="cs-meta-head">MACHINE CODE</th>
+              <th class="cs-meta-head">ISSUE REVISION</th>
+              <th class="cs-meta-head">ISSUE DATE</th>
+              <th class="cs-meta-head">FACTORY</th>
+              <th class="cs-meta-head">MONTH</th>
+              <th class="cs-meta-head">YEAR</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cs-meta-center-val" style="color:#000000; font-size:10px;">${mc}</td>
+              <td class="cs-meta-center-val">${tpl.issueRevision || '0'}</td>
+              <td class="cs-meta-center-val">${formatExcelDate(tpl.issueDate)}</td>
+              <td class="cs-meta-center-val">${tpl.factory || ''}</td>
+              <td class="cs-meta-center-val">${monthName}</td>
+              <td class="cs-meta-center-val">${yr}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Box 3 (Right: Check Sign-off) -->
+        <table class="cs-meta-box cs-meta-box-3">
+          <thead>
+            <tr>
+              <th class="cs-meta-head">CHECK</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cs-meta-check-cell">
+                <div class="cs-check-sub">${tpl.factoryCheck || 'G6 AND UP'}</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <!-- Exact Inspection Table matching Image 2 & Print Preview -->
       <table class="cs-table">
@@ -8158,7 +8241,8 @@
     html += `
       <div class="cs-bottom-grid">
         <div>
-          <!-- (Information) Table -->
+          <!-- (Information) Section -->
+          <div class="cs-sub-title-label">(Information)</div>
           <table class="cs-sub-table">
             <colgroup>
               <col style="width: 70px;">
@@ -8166,9 +8250,6 @@
               <col>
             </colgroup>
             <thead>
-              <tr>
-                <th colspan="3" class="cs-sub-title-th">(Information)</th>
-              </tr>
               <tr>
                 <th>Date</th>
                 <th>By</th>
@@ -8187,17 +8268,15 @@
             </tbody>
           </table>
 
-          <!-- << Abnormal, Repair Record>> Table -->
-          <table class="cs-sub-table" style="margin-top:5px;">
+          <!-- << Abnormal, Repair Record>> Section -->
+          <div class="cs-sub-title-label" style="margin-top: 4px;">&lt;&lt; Abnormal, Repair Record&gt;&gt;</div>
+          <table class="cs-sub-table">
             <colgroup>
               <col style="width: 70px;">
               <col style="width: 130px;">
               <col>
             </colgroup>
             <thead>
-              <tr>
-                <th colspan="3" class="cs-sub-title-th">&lt;&lt; Abnormal, Repair Record&gt;&gt;</th>
-              </tr>
               <tr>
                 <th>Date</th>
                 <th>Abnormal Detail</th>
@@ -8217,15 +8296,22 @@
           </table>
         </div>
 
-        <!-- Remark Box (Exact Replica of Image 3 & Excel Form) -->
+        <!-- Remark Box (Exact Replica of Image 2 & Excel Form) -->
         <div class="cs-remark-container">
-          <div class="cs-remark-line"><strong>Remark. :</strong> - ถ้า <strong>PASS.</strong> ให้เช็ค &nbsp;<span style="color:#15803d; font-weight:900; font-size:12px;">✔</span></div>
-          <div class="cs-remark-line" style="margin-left: 54px;">- ถ้า <strong>FAIL.</strong> ให้เช็ค &nbsp;<span style="color:#dc2626; font-weight:900; font-size:12px;">✘</span></div>
-          <div class="cs-remark-line" style="margin-left: 54px;">- ในกรณีหัวข้อตรวจเช็ครายวัน ในวันที่ไม่มีการตรวจเช็คให้ระบุสัญลักษณ์ &nbsp;<span style="font-weight:900; font-size:13px;">−</span>&nbsp; ในช่องว่าง</div>
+          <div class="cs-remark-line" style="display: flex; gap: 6px;">
+            <span style="font-weight: normal;">Remark. :</span>
+            <span>- ถ้า <strong>PASS.</strong> ให้เช็ค &nbsp;<span style="color:#15803d; font-weight:900; font-size:11px;">✔</span></span>
+          </div>
+          <div class="cs-remark-line" style="padding-left: 48px;">
+            - ถ้า <strong>FAIL.</strong> ให้เช็ค &nbsp;<span style="color:#dc2626; font-weight:900; font-size:11px;">✘</span>
+          </div>
+          <div class="cs-remark-line" style="margin-top: 2px;">
+            - ในกรณีหัวข้อตรวจเช็ครายวัน ในวันที่ไม่มีการตรวจเช็คให้ระบุสัญลักษณ์ &nbsp;<span style="font-weight:900; font-size:11px;">−</span>&nbsp; ในช่องว่าง
+          </div>
           
           <!-- Example 1: Period = 2 Days -->
           <div class="cs-mini-ex-wrap">
-            <span>เช่น <strong>Period = 2 Days</strong></span>
+            <span class="cs-mini-ex-title">เช่น <strong>Period = 2 Days</strong></span>
             <table class="cs-mini-ex-table">
               <thead><tr><th>1</th><th>2</th><th>3</th></tr></thead>
               <tbody>
@@ -8238,11 +8324,13 @@
             </table>
           </div>
 
-          <div class="cs-remark-line" style="margin-left: 54px; margin-top: 2px;">- ส่วนช่องว่างอื่นๆ หากไม่มีการตรวจสอบให้ขีดคาดแล้วเขียน <strong>NA</strong></div>
+          <div class="cs-remark-line" style="margin-top: 2px;">
+            - ส่วนช่องว่างอื่นๆ หากไม่มีการตรวจสอบให้ขีดคาดแล้วเขียน <strong>NA</strong>
+          </div>
           
           <!-- Example 2: Period = 1 Week -->
           <div class="cs-mini-ex-wrap">
-            <span>เช่น <strong>Period = 1 Week</strong></span>
+            <span class="cs-mini-ex-title">เช่น <strong>Period = 1 Week</strong></span>
             <table class="cs-mini-ex-table">
               <thead><tr><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr></thead>
               <tbody>
@@ -8250,8 +8338,8 @@
                   <td class="cs-day-cell status-pass">✔</td>
                   <td colspan="6" class="cs-multi-na-cell">
                     <div class="cs-na-line-wrap">
-                      <svg class="cs-na-svg" viewBox="0 0 100 16" preserveAspectRatio="none">
-                        <line x1="0" y1="2" x2="100" y2="14" stroke="#000000" stroke-width="1.2"/>
+                      <svg class="cs-na-svg" viewBox="0 0 100 15" preserveAspectRatio="none">
+                        <line x1="0" y1="2" x2="100" y2="13" stroke="#000000" stroke-width="1.1"/>
                       </svg>
                       <span class="cs-na-label">NA</span>
                     </div>
