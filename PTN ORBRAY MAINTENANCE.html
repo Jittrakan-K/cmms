@@ -19,6 +19,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <!-- TPM Master Dataset (Motor 142, Ferrule 207, Optical 51 Machines - Aug to Dec 2026) -->
   <script src="tpm_master_data.js"></script>
+  <!-- TPM Checksheet Templates Master Data (Extracted directly from CHECKSHEET/OPTIC/*.xlsx) -->
+  <script src="tpm_checksheet_data.js"></script>
 
   <style>
     :root {
@@ -2430,7 +2432,657 @@
     }
     .btn-back-to-top:hover {
       transform: translateY(-3px) scale(1.05);
-      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.5);
+    }
+
+    /* ========================================================
+       TPM CHECKSHEET SYSTEM (EXACT EXCEL REPLICA - QR-PT-046-D)
+       ======================================================== */
+    .checksheet-wrapper {
+      margin-top: 18px;
+    }
+
+    .cs-toolbar {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 14px 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .cs-tool-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .cs-select, .cs-input {
+      padding: 7px 12px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      font-family: 'Prompt', sans-serif;
+      font-size: 13px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .cs-select:focus, .cs-input:focus {
+      outline: none;
+      border-color: #0284c7;
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+    }
+
+    .cs-btn {
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-family: 'Prompt', sans-serif;
+      font-size: 12.5px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .cs-btn-primary {
+      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+    }
+    .cs-btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
+    }
+
+    .cs-btn-success {
+      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(22, 163, 74, 0.3);
+    }
+    .cs-btn-success:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4);
+    }
+
+    .cs-btn-secondary {
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+    }
+    .cs-btn-secondary:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .cs-toggle-group {
+      display: inline-flex;
+      background: #f1f5f9;
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+    }
+
+    .cs-toggle-btn {
+      border: none;
+      background: transparent;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'Prompt', sans-serif;
+      color: #64748b;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .cs-toggle-btn.active {
+      background: #ffffff;
+      color: #0284c7;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    .cs-toggle-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Authentic Excel Paper */
+    /* Authentic Excel Paper (Centered Landscape A4 Preview) */
+    .cs-paper-wrap {
+      overflow-x: auto;
+      background: #e2e8f0;
+      padding: 24px 10px;
+      border-radius: 12px;
+      display: flex;
+      justify-content: center;
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.12);
+    }
+
+    .cs-paper {
+      background: #ffffff;
+      width: 1050px;
+      min-width: 1050px;
+      max-width: 1050px;
+      box-sizing: border-box;
+      padding: 16px 20px 18px 20px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+      border: 1px solid #cbd5e1;
+      font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', 'Leelawadee UI', sans-serif;
+      color: #000000;
+      position: relative;
+      text-transform: none !important;
+    }
+
+    /* Top Doc No and Title */
+    .cs-doc-header {
+      position: relative;
+      margin-bottom: 5px;
+      text-align: center;
+    }
+
+    .cs-doc-no-top {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 9.5px;
+      font-weight: bold;
+      font-family: 'Calibri', sans-serif;
+      color: #000000;
+      letter-spacing: 0.2px;
+    }
+
+    .cs-main-title {
+      font-size: 15px;
+      font-weight: bold;
+      font-family: 'Calibri', sans-serif;
+      color: #000000;
+      margin: 0 0 5px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      text-align: center;
+    }
+
+    /* Meta Table (Header Box matching Image 2 & Preview) */
+    .cs-meta-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1.5px solid #000000;
+      margin-bottom: 5px;
+      table-layout: fixed;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    .cs-meta-table td, .cs-meta-table th {
+      border: 1px solid #000000;
+      padding: 2px 5px;
+      font-size: 9px;
+      line-height: 1.25;
+      vertical-align: middle;
+    }
+
+    .cs-meta-label {
+      font-weight: bold;
+      color: #000000;
+      background: #ffffff;
+      white-space: nowrap;
+      font-size: 8.5px;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    .cs-meta-val {
+      font-weight: normal;
+      color: #000000;
+      font-size: 9px;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    .cs-meta-head {
+      font-weight: bold;
+      text-align: center;
+      color: #000000;
+      background: #ffffff;
+      white-space: nowrap;
+      font-size: 8.5px;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    .cs-meta-center-val {
+      text-align: center;
+      vertical-align: middle;
+      font-size: 10px;
+      font-weight: normal;
+      color: #000000;
+      padding: 2px;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    .cs-meta-check-cell {
+      text-align: center;
+      vertical-align: bottom;
+      padding: 2px;
+    }
+
+    .cs-check-sub {
+      font-size: 8px;
+      font-weight: normal;
+      color: #000000;
+      border-top: 1px solid #000000;
+      padding-top: 2px;
+      margin-top: 14px;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    /* Main Inspection Grid Table */
+    .cs-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1.5px solid #000000;
+      margin-bottom: 5px;
+      table-layout: fixed;
+      font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', sans-serif;
+      text-transform: none !important;
+    }
+
+    .cs-table th, .cs-table td {
+      border: 1px solid #000000;
+      padding: 1.5px 2px;
+      font-size: 9px;
+      line-height: 1.2;
+      color: #000000;
+      text-transform: none !important;
+    }
+
+    .cs-head-row th {
+      background: #e5e7eb;
+      font-weight: bold;
+      text-align: center;
+      height: 19px;
+      font-size: 8.5px;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    .cs-head-row th.col-today {
+      background: #bae6fd !important;
+      color: #0369a1 !important;
+    }
+
+    .cs-sec-row td {
+      background: #e5e7eb;
+      font-weight: bold;
+      padding: 2px 5px;
+      color: #000000;
+      font-size: 9px;
+      height: 18px;
+      font-family: 'Calibri', 'Cordia New', 'Sarabun', sans-serif;
+    }
+
+    .cs-item-tr td {
+      height: 19px;
+      font-family: 'Calibri', 'Cordia New', 'Sarabun', sans-serif;
+    }
+
+    .cs-empty-row td {
+      height: 18px;
+      background: #ffffff;
+    }
+
+    /* Square Day Check Cell */
+    .cs-day-cell {
+      height: 19px;
+      text-align: center;
+      vertical-align: middle;
+      cursor: pointer;
+      user-select: none;
+      padding: 0;
+      font-family: 'Calibri', sans-serif;
+      position: relative;
+    }
+
+    .cs-day-cell:hover {
+      filter: brightness(0.92);
+      outline: 1.5px solid #0284c7;
+      z-index: 5;
+    }
+
+    .cs-day-cell.is-today {
+      box-shadow: inset 0 0 0 1.5px #0284c7;
+    }
+
+    /* PASS State (✔) */
+    .cs-day-cell.status-pass {
+      color: #15803d;
+      font-size: 12px;
+      font-weight: 900;
+      background: #ffffff;
+    }
+
+    /* FAIL State (✘) */
+    .cs-day-cell.status-fail {
+      color: #dc2626;
+      font-size: 12px;
+      font-weight: 900;
+      background: #ffffff;
+    }
+
+    /* Skip / No-check State (−) */
+    .cs-day-cell.status-skip {
+      color: #334155;
+      font-size: 13px;
+      font-weight: 900;
+      background: #ffffff;
+    }
+
+    /* NA State */
+    .cs-day-cell.status-na {
+      background: linear-gradient(to top right, transparent calc(50% - 0.75px), #000000 calc(50% - 0.75px), #000000 calc(50% + 0.75px), transparent calc(50% + 0.75px)) !important;
+      color: #000000 !important;
+      font-size: 7.5px !important;
+      font-weight: 800 !important;
+      line-height: 1 !important;
+    }
+
+    .cs-day-cell.status-na .mark-na-text {
+      background: #ffffff;
+      padding: 0 1px;
+      display: inline-block;
+      line-height: 1;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* By Team Table Row matching Excel Row 19 */
+    .cs-byteam-tr {
+      height: 48px;
+    }
+
+    .cs-byteam-td {
+      vertical-align: middle;
+      padding: 4px 8px !important;
+      background: #ffffff;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    .cs-byteam-inner {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .cs-byteam-label {
+      font-weight: normal;
+      font-size: 9.5px;
+      font-family: 'Calibri', sans-serif;
+      color: #000000;
+      white-space: nowrap;
+    }
+
+    .cs-byteam-input {
+      border: none;
+      border-bottom: 1px solid #000000;
+      font-family: 'Calibri', 'Cordia New', 'Sarabun', sans-serif;
+      font-size: 9.5px;
+      flex: 1;
+      padding: 1px 4px;
+      background: transparent;
+      color: #000000;
+    }
+    .cs-byteam-input:focus {
+      outline: none;
+      border-bottom: 1.5px solid #0284c7;
+      background: #f0f9ff;
+    }
+
+    .cs-byteam-day-cell {
+      height: 48px;
+      background: #ffffff;
+    }
+
+    /* Bottom Grid (Sub-tables & Remarks) */
+    .cs-bottom-grid {
+      display: grid;
+      grid-template-columns: 50% 50%;
+      gap: 16px;
+      align-items: start;
+      margin-top: 3px;
+      width: 100%;
+      font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', sans-serif;
+    }
+
+    /* Sub-tables ((Information) & Abnormal Record) */
+    .cs-sub-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1.5px solid #000000;
+      margin-bottom: 5px;
+      table-layout: fixed;
+      font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', sans-serif;
+    }
+
+    .cs-sub-table th, .cs-sub-table td {
+      border: 1px solid #000000;
+      padding: 1.5px 4px;
+      font-size: 8.5px;
+      color: #000000;
+      height: 17px;
+    }
+
+    .cs-sub-table th {
+      background: #ffffff;
+      font-weight: bold;
+      text-align: center;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    .cs-sub-title-th {
+      text-align: left !important;
+      background: #e5e7eb !important;
+      font-weight: bold !important;
+      padding: 2px 5px !important;
+      font-size: 9px;
+      font-family: 'Calibri', 'BrowalliaUPC', sans-serif;
+    }
+
+    .cs-sub-input {
+      width: 100%;
+      border: none;
+      font-family: 'Calibri', 'Cordia New', 'Sarabun', sans-serif;
+      font-size: 8.5px;
+      background: transparent;
+      padding: 1px 2px;
+      box-sizing: border-box;
+      color: #000000;
+    }
+    .cs-sub-input:focus {
+      outline: 1px solid #0284c7;
+      background: #f0f9ff;
+    }
+
+    /* Remark Box (Image 3 & Preview Replica) */
+    .cs-remark-container {
+      font-size: 9px;
+      color: #000000;
+      position: relative;
+      line-height: 1.32;
+      padding-top: 1px;
+      font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', sans-serif;
+      text-transform: none !important;
+    }
+
+    .cs-remark-line {
+      margin-bottom: 2px;
+    }
+
+    .cs-mini-ex-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 2px 0 3px 8px;
+    }
+
+    .cs-mini-ex-table {
+      border-collapse: collapse;
+      border: 1px solid #000000;
+      display: inline-table;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    .cs-mini-ex-table th, .cs-mini-ex-table td {
+      border: 1px solid #000000;
+      padding: 1px 2px;
+      font-size: 8px;
+      text-align: center;
+      width: 17px;
+      height: 16px;
+    }
+
+    .cs-mini-ex-table th {
+      background: #e5e7eb;
+      font-weight: bold;
+    }
+
+    .cs-multi-na-cell {
+      position: relative;
+      padding: 0 !important;
+      vertical-align: middle;
+      text-align: center;
+      background: #ffffff;
+    }
+
+    .cs-na-line-wrap {
+      position: relative;
+      width: 100%;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .cs-na-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .cs-na-label {
+      position: relative;
+      z-index: 2;
+      background: #ffffff;
+      padding: 0 3px;
+      font-size: 7.5px;
+      font-weight: bold;
+      color: #000000;
+    }
+
+    .cs-page-tag {
+      text-align: right;
+      font-size: 8.5px;
+      font-weight: normal;
+      margin-top: 6px;
+      color: #000000;
+      font-family: 'Calibri', sans-serif;
+    }
+
+    /* Print Styles for Checksheet (Strictly 1 Page A4 Landscape) */
+    @page {
+      size: A4 landscape;
+      margin: 6mm 10mm 6mm 10mm;
+    }
+    @media print {
+      html, body {
+        width: 100% !important;
+        height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        overflow: hidden !important;
+      }
+      body * {
+        visibility: hidden;
+      }
+      #checksheetSection, #checksheetSection * {
+        visibility: visible;
+      }
+      #checksheetSection {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+      }
+      .navbar, .hero-section, .dashboard-summary, .filter-bar, .tpm-section:not(#checksheetSection),
+      .charts-row, .charts-grid, .job-section, .cs-toolbar, .tpm-header-box, .nav-actions, .btn-back-to-top, .section-header, .toast-notification, .modal-backdrop, .modal {
+        display: none !important;
+      }
+      .container {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      .cs-paper-wrap {
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        display: block !important;
+      }
+      .cs-paper {
+        border: none !important;
+        box-shadow: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .cs-table, .cs-meta-table, .cs-sub-table, .cs-mini-ex-table, .cs-bottom-grid {
+        border-color: #000000 !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      th, td {
+        border-color: #000000 !important;
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .cs-head-row th, .cs-sec-row td, .cs-sub-title-th, .cs-mini-ex-table th {
+        background: #e5e7eb !important;
+      }
+      .cs-head-row th.col-today {
+        background: #e5e7eb !important;
+        color: #000000 !important;
+      }
+      .cs-day-cell.is-today {
+        box-shadow: none !important;
+        outline: none !important;
+      }
+      .cs-byteam-input {
+        border-bottom: none !important;
+      }
+      .cs-sub-input {
+        border: none !important;
+      }
     }
 </style>
 </head>
@@ -2475,6 +3127,7 @@
         <li class="nav-item"><a href="#dashboardSection">ภาพรวมแดชบอร์ด</a></li>
         <li class="nav-item"><a href="#jobRecords">จัดการงานซ่อม</a></li>
         <li class="nav-item"><a href="#tpmSection">แผน PM & TPM</a></li>
+        <li class="nav-item"><a href="#checksheetSection">ใบเช็คชีท (CHECKSHEET)</a></li>
         <li class="nav-item"><a href="#machineAnalysis">วิเคราะห์ DOWNTIME</a></li>
         <li class="nav-item"><a href="#techSummarySection">ผลงานทีมช่าง</a></li>
       </ul>
@@ -3151,6 +3804,79 @@
               <span style="font-size: 13px; font-weight: 700; color: #0f172a; padding: 0 4px;" id="pmPageNumber">หน้า 1 / 16</span>
               <button type="button" class="pm-pagination-btn" id="pmBtnNext" onclick="changePMPage(1)">ถัดไป ▶</button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================
+           TPM CHECKSHEET SECTION (EXACT EXCEL REPLICA - QR-PT-046-D)
+           ======================================================== -->
+      <section class="tpm-section checksheet-wrapper" id="checksheetSection" style="margin-top: 28px;">
+        <!-- Header -->
+        <div class="tpm-header-box">
+          <div class="tpm-header-left">
+            <span class="tpm-pill-badge">📋 DIGITAL CHECKSHEET SYSTEM</span>
+            <h2 class="tpm-title">ระบบใบตรวจเช็คมาตรฐานเครื่องจักร (TPM OPERATION STANDARD CHECK SHEET)</h2>
+            <div class="tpm-sub">แบบฟอร์มมาตรฐานทางการ QR-PT-046-D ครบ 31 เครื่องจักร (OPERATOR รายวัน 31 วัน & TECHNICIAN รายเดือน 12 เดือน)</div>
+          </div>
+        </div>
+
+        <!-- Controls Toolbar -->
+        <div class="cs-toolbar">
+          <div class="cs-tool-group">
+            <label style="font-weight:700; font-size:13px; color:#1e293b;">📋 ประเภทเครื่องจักร (31 รายการ):</label>
+            <select id="csSelTemplate" class="cs-select" onchange="onChecksheetTemplateChange()" style="max-width:320px;">
+              <!-- Populated by JS -->
+            </select>
+
+            <label style="font-weight:700; font-size:13px; color:#1e293b; margin-left:6px;">รหัสเครื่อง (ID):</label>
+            <select id="csSelMachineCode" class="cs-select" onchange="onChecksheetMachineCodeChange()">
+              <!-- Populated by JS -->
+            </select>
+          </div>
+
+          <div class="cs-tool-group">
+            <!-- Mode Toggle -->
+            <div class="cs-toggle-group">
+              <button type="button" class="cs-toggle-btn active" id="csBtnModeOperator" onclick="setChecksheetMode('operator')">👨‍🔧 OPERATOR (31 วัน)</button>
+              <button type="button" class="cs-toggle-btn" id="csBtnModeTechnician" onclick="setChecksheetMode('technician')">🛠️ TECHNICIAN (12 เดือน)</button>
+            </div>
+
+            <select id="csSelMonth" class="cs-select" onchange="renderCurrentChecksheet()">
+              <option value="1">มกราคม (Jan)</option>
+              <option value="2">กุมภาพันธ์ (Feb)</option>
+              <option value="3">มีนาคม (Mar)</option>
+              <option value="4">เมษายน (Apr)</option>
+              <option value="5">พฤษภาคม (May)</option>
+              <option value="6">มิถุนายน (Jun)</option>
+              <option value="7">กรกฎาคม (Jul)</option>
+              <option value="8">สิงหาคม (Aug)</option>
+              <option value="9" selected>กันยายน (Sep)</option>
+              <option value="10">ตุลาคม (Oct)</option>
+              <option value="11">พฤศจิกายน (Nov)</option>
+              <option value="12">ธันวาคม (Dec)</option>
+            </select>
+
+            <select id="csSelYear" class="cs-select" onchange="renderCurrentChecksheet()">
+              <option value="2026" selected>2026</option>
+              <option value="2027">2027</option>
+            </select>
+          </div>
+
+          <div class="cs-tool-group">
+            <button type="button" class="cs-btn cs-btn-success" onclick="quickFillTodayChecksheet()" title="บันทึกผลการเช็คของวันนี้เป็น PASS (✔) ครบทุกข้อ">⚡ เช็คครบวันนี้ (PASS)</button>
+            <button type="button" class="cs-btn cs-btn-secondary" onclick="quickFillWeekendSkips()" title="เติมสัญลักษณ์ (-) ในวันหยุดประจำสัปดาห์ (เสาร์-อาทิตย์)">⚡ เติมขีด (-) วันหยุด</button>
+            <button type="button" class="cs-btn cs-btn-secondary" onclick="quickFillBlanksWithNA()" title="เติมสัญลักษณ์ NA พร้อมเส้นขีดคาดในช่องที่ว่างอยู่">⚡ เติม NA ในช่องว่าง</button>
+            <button type="button" class="cs-btn cs-btn-primary" onclick="saveChecksheetDataManual()" title="บันทึกลงระบบและซิงค์คลาวด์">💾 บันทึกใบเช็คชีท</button>
+            <button type="button" class="cs-btn cs-btn-secondary" onclick="printChecksheet()" title="พิมพ์หรือบันทึกเป็น PDF ขนาด A4 แนวนอนตามฟอร์ม Excel">🖨️ พิมพ์ / PDF</button>
+            <button type="button" class="cs-btn cs-btn-secondary" onclick="resetChecksheetMonthData()" title="ล้างผลการตรวจเช็คของเดือนนี้">🔄 ล้างข้อมูล</button>
+          </div>
+        </div>
+
+        <!-- Authentic Excel Paper Container -->
+        <div class="cs-paper-wrap">
+          <div class="cs-paper" id="csPaperContainer">
+            <!-- Dynamically populated by JS -->
           </div>
         </div>
       </section>
@@ -5415,6 +6141,9 @@
       renderTPMTags();
       renderTPMKPIs();
       renderPMSchedule();
+      if (typeof initChecksheetSystem === 'function') {
+        initChecksheetSystem();
+      }
     }
 
     // 1. OEE & Six Big Losses Calculations
@@ -6107,11 +6836,11 @@
             </td>
             <td style="text-align: center;">
               <span class="pm-badge ${badgeClass}" style="cursor: pointer; user-select: none;" onclick="cyclePMStatus('${item.id}')" title="คลิกเพื่อสลับสถานะ: SCHEDULED ↔ COMPLETED ↔ ON-DEMAND">${sched.status} ⟳</span>
-            </td>
             <td style="text-align: center;">
               <button type="button" class="pm-btn-check" onclick="openPMCheckModal('${item.id}')" title="แก้ไขข้อมูลเครื่องจักรและผลตรวจ PM">
                 ✏️ แก้ไขข้อมูล
               </button>
+              ${getPMChecksheetButtonHtml(item)}
             </td>
           </tr>
         `;
@@ -7080,6 +7809,893 @@
 
   
   // =========================================================================
+  // TPM CHECKSHEET SYSTEM (AUTHENTIC EXCEL TEMPLATE REPLICA - QR-PT-046-D)
+  // =========================================================================
+  const STORAGE_KEY_CHECKSHEET = 'ORBRAY_CHECKSHEET_STORAGE';
+  let checksheetStore = {};
+  let currentChecksheetTpl = null;
+  let currentChecksheetMode = 'operator'; // 'operator' | 'technician'
+
+  function getPMChecksheetButtonHtml(item) {
+    if (!window.TPM_CHECKSHEET_TEMPLATES || !item.mcCode) return '';
+    const prefix = item.mcCode.split('-')[0].trim().toUpperCase();
+    const hasTpl = window.TPM_CHECKSHEET_TEMPLATES.some(t => t.prefix === prefix);
+    if (hasTpl) {
+      return `<button type="button" class="pm-btn-check" style="background: #f0fdf4; color: #16a34a; border-color: #86efac; margin-top: 4px;" onclick="openChecksheetForMachine('${item.mcCode}', '${prefix}')" title="เปิดใบตรวจเช็คมาตรฐาน TPM ประจำเครื่องนี้">📋 ใบเช็คชีท</button>`;
+    }
+    return '';
+  }
+
+  function loadChecksheetDataFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_CHECKSHEET);
+      if (raw) {
+        checksheetStore = JSON.parse(raw) || {};
+      }
+    } catch (e) {
+      checksheetStore = {};
+    }
+  }
+
+  function saveChecksheetDataToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY_CHECKSHEET, JSON.stringify(checksheetStore));
+      if (isCloudConnected && firestoreDb) {
+        const docRef = firestoreDb.collection('orbray_maintenance').doc('checksheets');
+        docRef.set({
+          lastUpdated: Date.now(),
+          data: checksheetStore
+        }, { merge: true }).catch(err => {
+          console.warn('Firestore checksheet sync error:', err);
+        });
+      }
+    } catch (e) {
+      console.warn('Error saving checksheet storage:', e);
+    }
+  }
+
+  function initChecksheetSystem() {
+    loadChecksheetDataFromStorage();
+
+    const selTpl = document.getElementById('csSelTemplate');
+    if (!selTpl) return;
+    selTpl.innerHTML = '';
+
+    if (!window.TPM_CHECKSHEET_TEMPLATES || window.TPM_CHECKSHEET_TEMPLATES.length === 0) {
+      const container = document.getElementById('csPaperContainer');
+      if (container) container.innerHTML = '<div style="text-align:center; padding:30px; color:#64748b;">กำลังโหลดข้อมูลเทมเพลตใบเช็คชีท...</div>';
+      return;
+    }
+
+    window.TPM_CHECKSHEET_TEMPLATES.forEach(tpl => {
+      const opt = document.createElement('option');
+      opt.value = tpl.prefix;
+      const techBadge = tpl.hasTechnicianSheet ? ' [+ช่าง]' : '';
+      opt.textContent = `${tpl.prefix} - ${tpl.machineName} (${tpl.wiNo})${techBadge}`;
+      selTpl.appendChild(opt);
+    });
+
+    onChecksheetTemplateChange();
+  }
+
+  function onChecksheetTemplateChange() {
+    const selTpl = document.getElementById('csSelTemplate');
+    if (!selTpl || !window.TPM_CHECKSHEET_TEMPLATES) return;
+    const prefix = selTpl.value;
+    currentChecksheetTpl = window.TPM_CHECKSHEET_TEMPLATES.find(t => t.prefix === prefix);
+
+    // Populate Machine Codes
+    const selMc = document.getElementById('csSelMachineCode');
+    if (selMc) {
+      selMc.innerHTML = '';
+      let matchingMcs = [];
+      if (window.MASTER_TPM_MACHINES) {
+        matchingMcs = window.MASTER_TPM_MACHINES.filter(m => m.dept === 'OPTICAL' && m.mcCode && m.mcCode.toUpperCase().startsWith(prefix));
+      }
+      if (matchingMcs.length > 0) {
+        matchingMcs.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.mcCode;
+          opt.textContent = `${m.mcCode} (${m.machine})`;
+          selMc.appendChild(opt);
+        });
+      } else {
+        const opt = document.createElement('option');
+        opt.value = `${prefix}-001`;
+        opt.textContent = `${prefix}-001`;
+        selMc.appendChild(opt);
+      }
+    }
+
+    // Technician toggle state
+    const btnTech = document.getElementById('csBtnModeTechnician');
+    if (btnTech) {
+      if (currentChecksheetTpl && currentChecksheetTpl.hasTechnicianSheet) {
+        btnTech.removeAttribute('disabled');
+        btnTech.title = 'มีชีทตรวจสอบสำหรับช่างซ่อมบำรุงประจำเดือน';
+      } else {
+        btnTech.setAttribute('disabled', 'true');
+        btnTech.title = 'เครื่องจักรนี้ไม่มีชีทช่างในไฟล์ Excel';
+        if (currentChecksheetMode === 'technician') {
+          setChecksheetMode('operator');
+          return;
+        }
+      }
+    }
+
+    renderCurrentChecksheet();
+  }
+
+  function onChecksheetMachineCodeChange() {
+    renderCurrentChecksheet();
+  }
+
+  function setChecksheetMode(mode) {
+    if (mode === 'technician' && (!currentChecksheetTpl || !currentChecksheetTpl.hasTechnicianSheet)) {
+      showToast('⚠️ เครื่องจักรนี้ไม่มีชีท TECHNICIAN ในไฟล์ Excel', 'warning');
+      return;
+    }
+    currentChecksheetMode = mode;
+    const btnOp = document.getElementById('csBtnModeOperator');
+    const btnTech = document.getElementById('csBtnModeTechnician');
+    if (btnOp) btnOp.classList.toggle('active', mode === 'operator');
+    if (btnTech) btnTech.classList.toggle('active', mode === 'technician');
+    renderCurrentChecksheet();
+  }
+
+  function getChecksheetDataKey() {
+    const mc = document.getElementById('csSelMachineCode') ? document.getElementById('csSelMachineCode').value : 'M/C';
+    const mo = document.getElementById('csSelMonth') ? document.getElementById('csSelMonth').value : '9';
+    const yr = document.getElementById('csSelYear') ? document.getElementById('csSelYear').value : '2026';
+    return `${mc}_${yr}_${mo}_${currentChecksheetMode}`;
+  }
+
+  function getCurrentChecksheetData() {
+    const key = getChecksheetDataKey();
+    if (!checksheetStore[key]) {
+      checksheetStore[key] = {
+        checks: {},
+        infoRows: [ ['', '', ''], ['', '', ''], ['', '', ''] ],
+        abnormalRows: [ ['', '', ''], ['', '', ''], ['', '', ''] ],
+        team: ''
+      };
+    }
+    return checksheetStore[key];
+  }
+
+  function renderCurrentChecksheet() {
+    if (!currentChecksheetTpl) return;
+    const container = document.getElementById('csPaperContainer');
+    if (!container) return;
+
+    const mc = document.getElementById('csSelMachineCode') ? document.getElementById('csSelMachineCode').value : `${currentChecksheetTpl.prefix}-001`;
+    const mo = document.getElementById('csSelMonth') ? document.getElementById('csSelMonth').value : '9';
+    const yr = document.getElementById('csSelYear') ? document.getElementById('csSelYear').value : '2026';
+    const data = getCurrentChecksheetData();
+
+    if (currentChecksheetMode === 'operator') {
+      renderOperatorChecksheetView(container, currentChecksheetTpl, mc, mo, yr, data);
+    } else {
+      renderTechnicianChecksheetView(container, currentChecksheetTpl, mc, yr, data);
+    }
+  }
+
+  function formatExcelDate(val) {
+    if (!val) return '-';
+    const str = String(val).trim();
+    if (/^\d{5}$/.test(str)) {
+      const d = new Date((parseInt(str) - 25569) * 86400 * 1000);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${d.getDate()}/${months[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`;
+    }
+    return str;
+  }
+
+  function getCheckCellContent(val) {
+    if (val === '✔' || val === '✓') return '<span style="color:#15803d; font-weight:900; font-size:14px;">✔</span>';
+    if (val === '✘' || val === '✗') return '<span style="color:#dc2626; font-weight:900; font-size:14px;">✘</span>';
+    if (val === '−' || val === '-') return '<span style="color:#334155; font-weight:900; font-size:15px;">−</span>';
+    if (val === 'NA') return '<span class="mark-na-text">NA</span>';
+    return '';
+  }
+
+  function getCheckCellClass(val, isToday) {
+    let cls = 'cs-day-cell';
+    if (val === '✔' || val === '✓') cls += ' status-pass';
+    else if (val === '✘' || val === '✗') cls += ' status-fail';
+    else if (val === '−' || val === '-') cls += ' status-skip';
+    else if (val === 'NA') cls += ' status-na';
+    if (isToday) cls += ' is-today';
+    return cls;
+  }
+
+  function renderOperatorChecksheetView(container, tpl, mc, mo, yr, data) {
+    const sheet = tpl.operatorSheet || {};
+    const items = sheet.items || [];
+    const monthNames = ['', 'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+    const monthName = monthNames[parseInt(mo)] || 'SEPTEMBER';
+
+    const now = new Date();
+    const isCurrentRealMonth = (now.getFullYear() === parseInt(yr) && (now.getMonth() + 1) === parseInt(mo));
+    const activeDay = isCurrentRealMonth ? now.getDate() : (parseInt(mo) === 9 ? 11 : -1);
+
+    let html = `
+      <div class="cs-doc-header">
+        <div class="cs-doc-no-top">${tpl.docNo || 'QR-PT-046-D'}</div>
+        <h2 class="cs-main-title">${sheet.formTitle || 'TPM OPERATION STANDARD CHECK SHEET (OPERATOR)'}</h2>
+      </div>
+
+      <!-- Exact Meta Table matching Image 2 & Print Preview -->
+      <table class="cs-meta-table">
+        <colgroup>
+          <col style="width: 110px;">
+          <col style="width: 190px;">
+          <col style="width: 100px;">
+          <col style="width: 90px;">
+          <col style="width: 85px;">
+          <col style="width: 80px;">
+          <col style="width: 80px;">
+          <col style="width: 80px;">
+          <col style="width: 191px;">
+        </colgroup>
+        <tr>
+          <td class="cs-meta-label">USING AREA</td>
+          <td class="cs-meta-val">${tpl.usingArea || 'OPTICAL'}</td>
+          <td class="cs-meta-head">MACHINE CODE</td>
+          <td class="cs-meta-head">ISSUE REVISION</td>
+          <td class="cs-meta-head">ISSUE DATE</td>
+          <td class="cs-meta-head">FACTORY</td>
+          <td class="cs-meta-head">MONTH</td>
+          <td class="cs-meta-head">YEAR</td>
+          <td class="cs-meta-head">CHECK</td>
+        </tr>
+        <tr>
+          <td class="cs-meta-label">MACHINE NAME</td>
+          <td class="cs-meta-val">${tpl.machineName || ''}</td>
+          <td rowspan="2" class="cs-meta-center-val" style="color: #000000; font-size: 11px;">${mc}</td>
+          <td rowspan="2" class="cs-meta-center-val">${tpl.issueRevision || '0'}</td>
+          <td rowspan="2" class="cs-meta-center-val">${formatExcelDate(tpl.issueDate)}</td>
+          <td rowspan="2" class="cs-meta-center-val">${tpl.factory || ''}</td>
+          <td rowspan="2" class="cs-meta-center-val">${monthName}</td>
+          <td rowspan="2" class="cs-meta-center-val">${yr}</td>
+          <td rowspan="2" class="cs-meta-check-cell">
+            <div class="cs-check-sub">${tpl.factoryCheck || 'G6 AND UP'}</div>
+          </td>
+        </tr>
+        <tr>
+          <td class="cs-meta-label">WORK INSTRUCTION NO.</td>
+          <td class="cs-meta-val">${tpl.wiNo || ''}</td>
+        </tr>
+      </table>
+
+      <!-- Exact Inspection Table matching Image 2 & Print Preview -->
+      <table class="cs-table">
+        <colgroup>
+          <col style="width: 28px;">
+          <col style="width: 120px;">
+          <col style="width: 232px;">
+          <col style="width: 38px;">
+          <col span="31" style="width: calc((100% - 418px) / 31);">
+        </colgroup>
+        <thead>
+          <tr class="cs-head-row">
+            <th>No.</th>
+            <th style="text-align: left; padding-left: 5px;">Item</th>
+            <th style="text-align: left; padding-left: 5px;">Check Title</th>
+            <th>Period</th>
+    `;
+
+    for (let d = 1; d <= 31; d++) {
+      const isToday = (d === activeDay);
+      html += `<th class="${isToday ? 'col-today' : ''}">${d}</th>`;
+    }
+    html += `</tr></thead><tbody>`;
+
+    let lastSec = '';
+    let renderedRowsCount = 0;
+
+    items.forEach((item, idx) => {
+      if (item.section && item.section !== lastSec) {
+        lastSec = item.section;
+        html += `<tr class="cs-sec-row"><td colspan="4" style="text-align:left; padding-left:6px;">${item.section}</td>`;
+        for (let d = 1; d <= 31; d++) {
+          html += `<td></td>`;
+        }
+        html += `</tr>`;
+        renderedRowsCount++;
+      }
+
+      const itemNoDisplay = item.no || '';
+      const itemNameDisplay = item.no ? (item.item || '') : '';
+
+      html += `<tr class="cs-item-tr">
+        <td style="text-align:center;">${itemNoDisplay}</td>
+        <td style="text-align:left; padding-left:5px;">${itemNameDisplay}</td>
+        <td style="text-align:left; padding-left:5px;">${item.checkTitle}</td>
+        <td style="text-align:center; font-size:9px;">${item.period || 'วัน'}</td>
+      `;
+
+      for (let d = 1; d <= 31; d++) {
+        const checkKey = `${idx}_${d}`;
+        const val = (data.checks && data.checks[checkKey]) || '';
+        const isToday = (d === activeDay);
+        const cellClass = getCheckCellClass(val, isToday);
+        const cellInner = getCheckCellContent(val);
+        html += `<td class="${cellClass}" id="csCell_${checkKey}" data-check-key="${checkKey}" data-is-today="${isToday}" onclick="cycleChecksheetCell('${checkKey}')" oncontextmenu="openCheckCellMenu(event, '${checkKey}')" title="ข้อ ${item.no || idx+1} วันที่ ${d}: คลิกเพื่อเปลี่ยนสถานะ (คลิกขวาเพื่อเลือกด่วน)">${cellInner}</td>`;
+      }
+      html += `</tr>`;
+      renderedRowsCount++;
+    });
+
+    // Empty row before By Team (matching Excel row 18)
+    const emptyRowsBeforeTeam = 1;
+    for (let r = 0; r < emptyRowsBeforeTeam; r++) {
+      html += `<tr class="cs-empty-row">
+        <td></td><td></td><td></td><td></td>`;
+      for (let d = 1; d <= 31; d++) {
+        html += `<td></td>`;
+      }
+      html += `</tr>`;
+    }
+
+    // Embed By Team row directly in the table grid (Excel Row 19 A19:E19)
+    const teamVal = data.team || '';
+    html += `
+      <tr class="cs-byteam-tr">
+        <td colspan="4" class="cs-byteam-td">
+          <div class="cs-byteam-inner">
+            <span class="cs-byteam-label">By Team :&nbsp;</span>
+            <input type="text" class="cs-byteam-input" value="${teamVal}" placeholder="ระบุชื่อทีม / พนักงานผู้รับผิดชอบ" onchange="updateChecksheetTeam(this.value)">
+          </div>
+        </td>
+    `;
+    for (let d = 1; d <= 31; d++) {
+      html += `<td class="cs-byteam-day-cell"></td>`;
+    }
+    html += `</tr></tbody></table>`;
+
+    // Lower Grid: Sub-tables (Left) & Remark Box (Right)
+    html += `
+      <div class="cs-bottom-grid">
+        <div>
+          <!-- (Information) Table -->
+          <table class="cs-sub-table">
+            <colgroup>
+              <col style="width: 70px;">
+              <col style="width: 100px;">
+              <col>
+            </colgroup>
+            <thead>
+              <tr>
+                <th colspan="3" class="cs-sub-title-th">(Information)</th>
+              </tr>
+              <tr>
+                <th>Date</th>
+                <th>By</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${[0, 1, 2].map(r => {
+                const rowData = (data.infoRows && data.infoRows[r]) || ['', '', ''];
+                return `<tr>
+                  <td><input type="text" class="cs-sub-input" value="${rowData[0]||''}" onchange="updateChecksheetInfoRow(${r}, 0, this.value)"></td>
+                  <td><input type="text" class="cs-sub-input" value="${rowData[1]||''}" onchange="updateChecksheetInfoRow(${r}, 1, this.value)"></td>
+                  <td><input type="text" class="cs-sub-input" value="${rowData[2]||''}" onchange="updateChecksheetInfoRow(${r}, 2, this.value)"></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+
+          <!-- << Abnormal, Repair Record>> Table -->
+          <table class="cs-sub-table" style="margin-top:5px;">
+            <colgroup>
+              <col style="width: 70px;">
+              <col style="width: 130px;">
+              <col>
+            </colgroup>
+            <thead>
+              <tr>
+                <th colspan="3" class="cs-sub-title-th">&lt;&lt; Abnormal, Repair Record&gt;&gt;</th>
+              </tr>
+              <tr>
+                <th>Date</th>
+                <th>Abnormal Detail</th>
+                <th>Repair Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${[0, 1, 2].map(r => {
+                const rowData = (data.abnormalRows && data.abnormalRows[r]) || ['', '', ''];
+                return `<tr>
+                  <td><input type="text" class="cs-sub-input" value="${rowData[0]||''}" onchange="updateChecksheetAbnormalRow(${r}, 0, this.value)"></td>
+                  <td><input type="text" class="cs-sub-input" value="${rowData[1]||''}" onchange="updateChecksheetAbnormalRow(${r}, 1, this.value)"></td>
+                  <td><input type="text" class="cs-sub-input" value="${rowData[2]||''}" onchange="updateChecksheetAbnormalRow(${r}, 2, this.value)"></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Remark Box (Exact Replica of Image 3 & Excel Form) -->
+        <div class="cs-remark-container">
+          <div class="cs-remark-line"><strong>Remark. :</strong> - ถ้า <strong>PASS.</strong> ให้เช็ค &nbsp;<span style="color:#15803d; font-weight:900; font-size:12px;">✔</span></div>
+          <div class="cs-remark-line" style="margin-left: 54px;">- ถ้า <strong>FAIL.</strong> ให้เช็ค &nbsp;<span style="color:#dc2626; font-weight:900; font-size:12px;">✘</span></div>
+          <div class="cs-remark-line" style="margin-left: 54px;">- ในกรณีหัวข้อตรวจเช็ครายวัน ในวันที่ไม่มีการตรวจเช็คให้ระบุสัญลักษณ์ &nbsp;<span style="font-weight:900; font-size:13px;">−</span>&nbsp; ในช่องว่าง</div>
+          
+          <!-- Example 1: Period = 2 Days -->
+          <div class="cs-mini-ex-wrap">
+            <span>เช่น <strong>Period = 2 Days</strong></span>
+            <table class="cs-mini-ex-table">
+              <thead><tr><th>1</th><th>2</th><th>3</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="cs-day-cell status-pass">✔</td>
+                  <td class="cs-day-cell status-skip">−</td>
+                  <td class="cs-day-cell status-pass">✔</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="cs-remark-line" style="margin-left: 54px; margin-top: 2px;">- ส่วนช่องว่างอื่นๆ หากไม่มีการตรวจสอบให้ขีดคาดแล้วเขียน <strong>NA</strong></div>
+          
+          <!-- Example 2: Period = 1 Week -->
+          <div class="cs-mini-ex-wrap">
+            <span>เช่น <strong>Period = 1 Week</strong></span>
+            <table class="cs-mini-ex-table">
+              <thead><tr><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="cs-day-cell status-pass">✔</td>
+                  <td colspan="6" class="cs-multi-na-cell">
+                    <div class="cs-na-line-wrap">
+                      <svg class="cs-na-svg" viewBox="0 0 100 16" preserveAspectRatio="none">
+                        <line x1="0" y1="2" x2="100" y2="14" stroke="#000000" stroke-width="1.2"/>
+                      </svg>
+                      <span class="cs-na-label">NA</span>
+                    </div>
+                  </td>
+                  <td class="cs-day-cell status-pass">✔</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="cs-page-tag">PAGE 1 / 1</div>
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = html;
+  }
+
+  function renderTechnicianChecksheetView(container, tpl, mc, yr, data) {
+    const tech = tpl.technicianSheet || {};
+    const items = tech.items || [];
+
+    let html = `
+      <div class="cs-doc-header">
+        <div class="cs-doc-no-top">${tpl.docNo || 'QR-PT-046-D'}</div>
+        <h2 class="cs-main-title">${tech.formTitle || 'TPM OPERATION STANDARD CHECK SHEET (TECHNICIAN)'}</h2>
+      </div>
+
+      <!-- Exact Meta Table -->
+      <table class="cs-meta-table">
+        <tr>
+          <td class="cs-meta-label" style="width: 120px;">USING AREA</td>
+          <td class="cs-meta-val" style="width: 180px;">${tpl.usingArea || 'OPTICAL'}</td>
+          <td class="cs-meta-head" style="width: 110px;">MACHINE CODE</td>
+          <td class="cs-meta-head" style="width: 95px;">ISSUE REVISION</td>
+          <td class="cs-meta-head" style="width: 90px;">ISSUE DATE</td>
+          <td class="cs-meta-head" style="width: 80px;">FACTORY</td>
+          <td class="cs-meta-head" style="width: 85px;">YEAR</td>
+          <td class="cs-meta-head" style="width: 95px;" colspan="2">CHECK</td>
+        </tr>
+        <tr>
+          <td class="cs-meta-label">MACHINE NAME</td>
+          <td class="cs-meta-val">${tpl.machineName || ''}</td>
+          <td rowspan="2" class="cs-meta-center-val" style="color: #0284c7; font-weight: 800; font-size: 13px;">${mc}</td>
+          <td rowspan="2" class="cs-meta-center-val">${tech.issueRevision || tpl.issueRevision || '0'}</td>
+          <td rowspan="2" class="cs-meta-center-val">${formatExcelDate(tech.issueDate || tpl.issueDate)}</td>
+          <td rowspan="2" class="cs-meta-center-val">${tpl.factory || ''}</td>
+          <td rowspan="2" class="cs-meta-center-val">${yr}</td>
+          <td rowspan="2" colspan="2" class="cs-meta-check-cell">
+            <div class="cs-check-sub">${tpl.factoryCheck || 'G6 AND UP'}</div>
+          </td>
+        </tr>
+        <tr>
+          <td class="cs-meta-label">WORK INSTRUCTION NO.</td>
+          <td class="cs-meta-val" style="font-weight: 700;">${tech.wiNo || tpl.wiNo || ''}</td>
+        </tr>
+      </table>
+
+      <!-- Tech Main Table -->
+      <table class="cs-table">
+        <thead>
+          <tr class="cs-head-row">
+            <th rowspan="2" style="width: 28px;">No.</th>
+            <th rowspan="2" style="width: 155px; text-align: left; padding-left: 6px;">Item / Checklist</th>
+            <th rowspan="2" style="width: 260px; text-align: left; padding-left: 6px;">Check Title / Standard</th>
+            <th rowspan="2" style="width: 44px;">Period</th>
+    `;
+
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    months.forEach(m => {
+      html += `<th colspan="3" style="font-size:9.5px;">${m}</th>`;
+    });
+    html += `</tr><tr class="cs-head-row">`;
+    for (let i = 0; i < 12; i++) {
+      html += `<th style="width:19px; font-size:8px; color:#15803d;">PASS</th>
+               <th style="width:19px; font-size:8px; color:#dc2626;">FAIL</th>
+               <th style="width:19px; font-size:8px; color:#475569;">N/O</th>`;
+    }
+    html += `</tr></thead><tbody>`;
+
+    let lastSec = '';
+    items.forEach((item, idx) => {
+      if (item.section && item.section !== lastSec) {
+        lastSec = item.section;
+        html += `<tr class="cs-sec-row"><td colspan="40" style="text-align:left; padding-left:6px;">${item.section}</td></tr>`;
+      }
+
+      html += `<tr>
+        <td style="text-align:center; font-weight:600;">${item.no || (idx+1)}</td>
+        <td style="text-align:left; padding-left:6px; font-weight:600;">${item.item}</td>
+        <td style="text-align:left; padding-left:6px;">${item.checkTitle}</td>
+        <td style="text-align:center; font-size:9.5px;">${item.period || 'เดือน'}</td>
+      `;
+
+      for (let m = 1; m <= 12; m++) {
+        const passKey = `tech_${idx}_${m}_P`;
+        const failKey = `tech_${idx}_${m}_F`;
+        const noKey = `tech_${idx}_${m}_N`;
+
+        const isP = (data.checks && data.checks[passKey]) ? '✔' : '';
+        const isF = (data.checks && data.checks[failKey]) ? '✔' : '';
+        const isN = (data.checks && data.checks[noKey]) ? '✔' : '';
+
+        html += `<td class="cs-day-cell status-pass" onclick="toggleTechChecksheetCell('${idx}', '${m}', 'P')">${isP}</td>
+                 <td class="cs-day-cell status-fail" onclick="toggleTechChecksheetCell('${idx}', '${m}', 'F')">${isF}</td>
+                 <td class="cs-day-cell status-skip" onclick="toggleTechChecksheetCell('${idx}', '${m}', 'N')">${isN}</td>`;
+      }
+      html += `</tr>`;
+    });
+
+    // PM Signatures
+    html += `<tr>
+      <td colspan="4" style="text-align:right; font-weight:bold; background:#f3f4f6; padding-right:8px;">By Preventive Maintenance (PM) :</td>
+    `;
+    for (let m = 1; m <= 12; m++) {
+      const pmSignKey = `pmSign_${m}`;
+      const signVal = (data.checks && data.checks[pmSignKey]) || '';
+      html += `<td colspan="3"><input type="text" class="cs-sub-input" style="text-align:center;" placeholder="Sign" value="${signVal}" onchange="updateTechSignature('${pmSignKey}', this.value)"></td>`;
+    }
+    html += `</tr>`;
+
+    // G6 Approvals
+    html += `<tr>
+      <td colspan="4" style="text-align:right; font-weight:bold; background:#f3f4f6; padding-right:8px;">CHECK (G6 AND UP) :</td>
+    `;
+    for (let m = 1; m <= 12; m++) {
+      const g6Key = `g6Sign_${m}`;
+      const g6Val = (data.checks && data.checks[g6Key]) || '';
+      html += `<td colspan="3"><input type="text" class="cs-sub-input" style="text-align:center;" placeholder="Approve" value="${g6Val}" onchange="updateTechSignature('${g6Key}', this.value)"></td>`;
+    }
+    html += `</tr></tbody></table>`;
+
+    // Lower Tech Sections
+    const ab0 = (data.abnormalRows && data.abnormalRows[0]) ? data.abnormalRows[0] : ['', '', '', ''];
+    const ab1 = (data.abnormalRows && data.abnormalRows[1]) ? data.abnormalRows[1] : ['', '', '', ''];
+
+    html += `
+      <div class="cs-bottom-grid">
+        <table class="cs-sub-table">
+          <thead>
+            <tr>
+              <th style="width:75px;">Date</th>
+              <th style="width:160px;">Abnormal detail (FAIL)</th>
+              <th>Action</th>
+              <th style="width:75px;">By</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><input type="text" class="cs-sub-input" value="${ab0[0]||''}" onchange="updateChecksheetAbnormalRow(0, 0, this.value)"></td>
+              <td><input type="text" class="cs-sub-input" value="${ab0[1]||''}" onchange="updateChecksheetAbnormalRow(0, 1, this.value)"></td>
+              <td><input type="text" class="cs-sub-input" value="${ab0[2]||''}" onchange="updateChecksheetAbnormalRow(0, 2, this.value)"></td>
+              <td><input type="text" class="cs-sub-input" value="${ab0[3]||''}" onchange="updateChecksheetAbnormalRow(0, 3, this.value)"></td>
+            </tr>
+            <tr>
+              <td><input type="text" class="cs-sub-input" value="${ab1[0]||''}" onchange="updateChecksheetAbnormalRow(1, 0, this.value)"></td>
+              <td><input type="text" class="cs-sub-input" value="${ab1[1]||''}" onchange="updateChecksheetAbnormalRow(1, 1, this.value)"></td>
+              <td><input type="text" class="cs-sub-input" value="${ab1[2]||''}" onchange="updateChecksheetAbnormalRow(1, 2, this.value)"></td>
+              <td><input type="text" class="cs-sub-input" value="${ab1[3]||''}" onchange="updateChecksheetAbnormalRow(1, 3, this.value)"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="cs-remark-container">
+          <div class="cs-remark-line"><strong>Remark :</strong> คำแนะนำและข้อกำหนดการบันทึกของช่างซ่อมบำรุง</div>
+          <div class="cs-remark-line">- ถ้า <b>PASS</b> ให้เช็ค <span style="color:#15803d; font-weight:bold;">✔</span> ในช่อง PASS</div>
+          <div class="cs-remark-line">- ถ้า <b>FAIL</b> ให้เช็ค <span style="color:#dc2626; font-weight:bold;">✔</span> ในช่อง FAIL (พร้อมระบุ Abnormal detail และ Action)</div>
+          <div class="cs-remark-line">- ถ้า <b>Not Operate</b> ให้เช็ค <span style="color:#475569; font-weight:bold;">✔</span> ในช่อง Not Operate (ไม่อยู่ในรอบการตรวจเช็ค)</div>
+          <div class="cs-page-tag">PAGE 2 / 2</div>
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = html;
+  }
+
+  function isDayWeekend(yr, mo, d) {
+    try {
+      const dt = new Date(parseInt(yr), parseInt(mo) - 1, d);
+      return (dt.getDay() === 0 || dt.getDay() === 6);
+    } catch (e) { return false; }
+  }
+
+  function cycleChecksheetCell(checkKey) {
+    const data = getCurrentChecksheetData();
+    const cur = (data.checks && data.checks[checkKey]) || '';
+    let next = '';
+    if (cur === '') next = '✔';
+    else if (cur === '✔' || cur === '✓') next = '✘';
+    else if (cur === '✘' || cur === '✗') next = '−';
+    else if (cur === '−' || cur === '-') next = 'NA';
+    else next = '';
+
+    if (!data.checks) data.checks = {};
+    if (next) {
+      data.checks[checkKey] = next;
+    } else {
+      delete data.checks[checkKey];
+    }
+    saveChecksheetDataToStorage();
+
+    // Fast in-place DOM update
+    const cell = document.getElementById(`csCell_${checkKey}`);
+    if (cell) {
+      const isToday = (cell.dataset.isToday === 'true');
+      cell.className = getCheckCellClass(next, isToday);
+      cell.innerHTML = getCheckCellContent(next);
+    } else {
+      renderCurrentChecksheet();
+    }
+  }
+
+  // Quick cell context menu / popup
+  let activeCheckCellMenu = null;
+  function openCheckCellMenu(e, checkKey) {
+    e.preventDefault();
+    closeCheckCellMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'cs-cell-popup';
+    menu.style.left = `${e.clientX + 4}px`;
+    menu.style.top = `${e.clientY + 4}px`;
+    menu.innerHTML = `
+      <button type="button" style="color:#15803d;" onclick="setCheckCellDirect('${checkKey}', '✔')">✔ PASS</button>
+      <button type="button" style="color:#dc2626;" onclick="setCheckCellDirect('${checkKey}', '✘')">✘ FAIL</button>
+      <button type="button" style="color:#334155;" onclick="setCheckCellDirect('${checkKey}', '−')">− ข้าม</button>
+      <button type="button" style="color:#000000;" onclick="setCheckCellDirect('${checkKey}', 'NA')">NA ขีดคาด</button>
+      <button type="button" style="color:#64748b;" onclick="setCheckCellDirect('${checkKey}', '')">✕ ล้าง</button>
+    `;
+
+    document.body.appendChild(menu);
+    activeCheckCellMenu = menu;
+
+    setTimeout(() => {
+      window.addEventListener('click', closeCheckCellMenu, { once: true });
+    }, 50);
+  }
+
+  function closeCheckCellMenu() {
+    if (activeCheckCellMenu && activeCheckCellMenu.parentNode) {
+      activeCheckCellMenu.parentNode.removeChild(activeCheckCellMenu);
+      activeCheckCellMenu = null;
+    }
+  }
+
+  function setCheckCellDirect(checkKey, val) {
+    closeCheckCellMenu();
+    const data = getCurrentChecksheetData();
+    if (!data.checks) data.checks = {};
+    if (val) {
+      data.checks[checkKey] = val;
+    } else {
+      delete data.checks[checkKey];
+    }
+    saveChecksheetDataToStorage();
+
+    const cell = document.getElementById(`csCell_${checkKey}`);
+    if (cell) {
+      const isToday = (cell.dataset.isToday === 'true');
+      cell.className = getCheckCellClass(val, isToday);
+      cell.innerHTML = getCheckCellContent(val);
+    } else {
+      renderCurrentChecksheet();
+    }
+  }
+
+  function toggleTechChecksheetCell(itemIdx, month, type) {
+    const data = getCurrentChecksheetData();
+    const pKey = `tech_${itemIdx}_${month}_P`;
+    const fKey = `tech_${itemIdx}_${month}_F`;
+    const nKey = `tech_${itemIdx}_${month}_N`;
+
+    const curTargetKey = `tech_${itemIdx}_${month}_${type}`;
+    const curVal = data.checks[curTargetKey];
+
+    delete data.checks[pKey];
+    delete data.checks[fKey];
+    delete data.checks[nKey];
+
+    if (!curVal) {
+      data.checks[curTargetKey] = true;
+    }
+    saveChecksheetDataToStorage();
+    renderCurrentChecksheet();
+  }
+
+  function updateTechSignature(key, val) {
+    const data = getCurrentChecksheetData();
+    if (!data.checks) data.checks = {};
+    data.checks[key] = val;
+    saveChecksheetDataToStorage();
+  }
+
+  function quickFillTodayChecksheet() {
+    if (currentChecksheetMode !== 'operator' || !currentChecksheetTpl) {
+      showToast('⚡ การเช็คด่วนรองรับในโหมด OPERATOR เท่านั้น', 'warning');
+      return;
+    }
+    const data = getCurrentChecksheetData();
+    const items = (currentChecksheetTpl.operatorSheet && currentChecksheetTpl.operatorSheet.items) || [];
+    const now = new Date();
+    const mo = document.getElementById('csSelMonth') ? document.getElementById('csSelMonth').value : '9';
+    const yr = document.getElementById('csSelYear') ? document.getElementById('csSelYear').value : '2026';
+    const isCurrentRealMonth = (now.getFullYear() === parseInt(yr) && (now.getMonth() + 1) === parseInt(mo));
+    const targetDay = isCurrentRealMonth ? now.getDate() : 11;
+
+    if (!data.checks) data.checks = {};
+    items.forEach((it, idx) => {
+      data.checks[`${idx}_${targetDay}`] = '✔';
+    });
+
+    saveChecksheetDataToStorage();
+    renderCurrentChecksheet();
+    showToast(`✅ บันทึกตรวจเช็คทุกข้อเป็น PASS (✔) ประจำวันที่ ${targetDay} เรียบร้อยแล้ว`, 'success');
+  }
+
+  function quickFillWeekendSkips() {
+    if (currentChecksheetMode !== 'operator' || !currentChecksheetTpl) {
+      showToast('⚡ การเติมขีดวันหยุดรองรับในโหมด OPERATOR เท่านั้น', 'warning');
+      return;
+    }
+    const data = getCurrentChecksheetData();
+    const items = (currentChecksheetTpl.operatorSheet && currentChecksheetTpl.operatorSheet.items) || [];
+    const mo = document.getElementById('csSelMonth') ? document.getElementById('csSelMonth').value : '9';
+    const yr = document.getElementById('csSelYear') ? document.getElementById('csSelYear').value : '2026';
+
+    if (!data.checks) data.checks = {};
+    let count = 0;
+    for (let d = 1; d <= 31; d++) {
+      if (isDayWeekend(yr, mo, d)) {
+        items.forEach((it, idx) => {
+          const key = `${idx}_${d}`;
+          if (!data.checks[key]) {
+            data.checks[key] = '−';
+            count++;
+          }
+        });
+      }
+    }
+
+    saveChecksheetDataToStorage();
+    renderCurrentChecksheet();
+    showToast(`⚡ เติมสัญลักษณ์ (-) สำหรับวันหยุดประจำสัปดาห์เรียบร้อย (${count} ช่อง)`, 'info');
+  }
+
+  function quickFillBlanksWithNA() {
+    if (currentChecksheetMode !== 'operator' || !currentChecksheetTpl) {
+      showToast('⚡ การเติม NA รองรับในโหมด OPERATOR เท่านั้น', 'warning');
+      return;
+    }
+    const data = getCurrentChecksheetData();
+    const items = (currentChecksheetTpl.operatorSheet && currentChecksheetTpl.operatorSheet.items) || [];
+
+    if (!data.checks) data.checks = {};
+    let count = 0;
+    items.forEach((it, idx) => {
+      for (let d = 1; d <= 31; d++) {
+        const key = `${idx}_${d}`;
+        if (!data.checks[key]) {
+          data.checks[key] = 'NA';
+          count++;
+        }
+      }
+    });
+
+    saveChecksheetDataToStorage();
+    renderCurrentChecksheet();
+    showToast(`⚡ เติมสัญลักษณ์ NA พร้อมเส้นขีดคาดในช่องว่างเรียบร้อย (${count} ช่อง)`, 'info');
+  }
+
+  function updateChecksheetTeam(val) {
+    const data = getCurrentChecksheetData();
+    data.team = val;
+    saveChecksheetDataToStorage();
+  }
+
+  function updateChecksheetInfoRow(rowIdx, colIdx, val) {
+    const data = getCurrentChecksheetData();
+    if (!data.infoRows) data.infoRows = [ ['', '', ''], ['', '', ''], ['', '', ''] ];
+    if (!data.infoRows[rowIdx]) data.infoRows[rowIdx] = ['', '', ''];
+    data.infoRows[rowIdx][colIdx] = val;
+    saveChecksheetDataToStorage();
+  }
+
+  function updateChecksheetAbnormalRow(rowIdx, colIdx, val) {
+    const data = getCurrentChecksheetData();
+    if (!data.abnormalRows) data.abnormalRows = [ ['', '', ''], ['', '', ''], ['', '', ''] ];
+    if (!data.abnormalRows[rowIdx]) data.abnormalRows[rowIdx] = ['', '', ''];
+    data.abnormalRows[rowIdx][colIdx] = val;
+    saveChecksheetDataToStorage();
+  }
+
+  function saveChecksheetDataManual() {
+    saveChecksheetDataToStorage();
+    showToast('💾 บันทึกข้อมูลใบเช็คชีทสำเร็จแล้ว!', 'success');
+  }
+
+  function resetChecksheetMonthData() {
+    if (!confirm('คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลการเช็คของเดือนนี้สำหรับเครื่องนี้?')) return;
+    const key = getChecksheetDataKey();
+    delete checksheetStore[key];
+    saveChecksheetDataToStorage();
+    renderCurrentChecksheet();
+    showToast('🔄 ล้างข้อมูลการเช็คของเดือนนี้เรียบร้อยแล้ว', 'info');
+  }
+
+  function openChecksheetForMachine(mcCode, prefix) {
+    const selTpl = document.getElementById('csSelTemplate');
+    if (selTpl && prefix) {
+      selTpl.value = prefix;
+      onChecksheetTemplateChange();
+    }
+    const selMc = document.getElementById('csSelMachineCode');
+    if (selMc && mcCode) {
+      let found = false;
+      for (let i = 0; i < selMc.options.length; i++) {
+        if (selMc.options[i].value === mcCode) {
+          selMc.selectedIndex = i;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        const newOpt = document.createElement('option');
+        newOpt.value = mcCode;
+        newOpt.textContent = mcCode;
+        selMc.appendChild(newOpt);
+        selMc.value = mcCode;
+      }
+      renderCurrentChecksheet();
+    }
+
+    const target = document.getElementById('checksheetSection');
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth' });
+      showToast(`📋 โหลดใบเช็คชีทสำหรับเครื่อง ${mcCode} (${prefix}) เรียบร้อยแล้ว`, 'success');
+    }
+  }
+
+  function printChecksheet() {
+    window.print();
+  }
+
+  // =========================================================================
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -7100,6 +8716,7 @@
       { id: 'dashboardSection', el: document.getElementById('dashboardSection') },
       { id: 'jobRecords', el: document.getElementById('jobRecords') },
       { id: 'tpmSection', el: document.getElementById('tpmSection') },
+      { id: 'checksheetSection', el: document.getElementById('checksheetSection') },
       { id: 'machineAnalysis', el: document.getElementById('machineAnalysis') },
       { id: 'techSummarySection', el: document.getElementById('techSummarySection') }
     ];
