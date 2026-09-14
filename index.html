@@ -1684,12 +1684,12 @@
       display: flex;
       align-items: center;
       gap: 24px;
-      margin: 18px 0;
-      padding: 16px;
+      margin: 16px 0 20px 0;
+      padding: 18px 20px;
       background: #ffffff;
       border: 1px solid #f1f5f9;
       border-radius: 14px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
     }
 
     @media (max-width: 600px) {
@@ -1700,8 +1700,8 @@
     }
 
     .oee-score-circle {
-      width: 140px;
-      height: 140px;
+      width: 162px;
+      height: 162px;
       position: relative;
       display: flex;
       align-items: center;
@@ -1718,13 +1718,13 @@
     .circle-bg {
       fill: none;
       stroke: #f1f5f9;
-      stroke-width: 12;
+      stroke-width: 9.5;
     }
 
     .circle-progress {
       fill: none;
-      stroke: #a855f7;
-      stroke-width: 12;
+      stroke: url(#oeePurpleGrad);
+      stroke-width: 9.5;
       stroke-linecap: round;
       stroke-dasharray: 440;
       stroke-dashoffset: 60;
@@ -1738,6 +1738,9 @@
       align-items: center;
       justify-content: center;
       text-align: center;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
     }
 
     .oee-main-val {
@@ -1746,23 +1749,36 @@
       font-weight: 800;
       color: #0f172a;
       line-height: 1;
+      margin-bottom: 3px;
     }
 
     .oee-target-label {
-      font-size: 10.5px;
-      color: #059669;
+      font-size: 8.5px;
       font-weight: 700;
-      margin-top: 4px;
+      color: #059669;
+      background: #ecfdf5;
+      padding: 2px 7px;
+      border-radius: 10px;
+      border: 1px solid #a7f3d0;
+      letter-spacing: -0.15px;
+      white-space: nowrap;
+      margin-top: 2px;
+      box-shadow: 0 1px 2px rgba(5, 150, 105, 0.06);
     }
 
     .oee-formula-desc {
       flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
 
     .oee-formula-badge {
       font-size: 11px;
       font-weight: 700;
       color: #64748b;
+      letter-spacing: 0.2px;
       margin-bottom: 2px;
     }
 
@@ -1770,58 +1786,70 @@
       font-size: 12.5px;
       font-weight: 700;
       color: #1e293b;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
+      letter-spacing: 0.1px;
+      white-space: nowrap;
+    }
+
+    .oee-bar-wrapper {
+      position: relative;
+      width: 100%;
     }
 
     .oee-benchmark-bar {
       position: relative;
-      height: 10px;
+      height: 12px;
       background: #e2e8f0;
       border-radius: 8px;
-      overflow: visible;
-      margin-top: 14px;
-    }
-
-    .benchmark-point {
-      position: absolute;
-      top: -20px;
-      transform: translateX(-50%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      z-index: 2;
-    }
-
-    .benchmark-tag {
-      font-size: 9.5px;
-      font-weight: 800;
-      color: #059669;
-      background: #ecfdf5;
-      padding: 1px 5px;
-      border-radius: 4px;
-      border: 1px solid #a7f3d0;
-      white-space: nowrap;
-    }
-
-    .benchmark-line {
-      width: 2px;
-      height: 24px;
-      background: #059669;
-      margin-top: 2px;
+      overflow: hidden;
     }
 
     .benchmark-fill {
       height: 100%;
       border-radius: 8px;
-      background: linear-gradient(90deg, #0284c7 0%, #a855f7 70%, #ec4899 100%);
+      background: linear-gradient(90deg, #0284c7 0%, #a855f7 65%, #10b981 100%);
       transition: width 1s ease;
+    }
+
+    .benchmark-target-line {
+      position: absolute;
+      top: -2px;
+      left: 85%;
+      width: 3px;
+      height: 16px;
+      background: #047857;
+      border-radius: 2px;
+      transform: translateX(-50%);
+      z-index: 3;
+      box-shadow: 0 0 3px rgba(0,0,0,0.3);
+    }
+
+    .oee-bar-scale-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+      font-size: 10.5px;
+      color: #64748b;
+    }
+
+    .oee-bar-scale-target {
+      color: #059669;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      background: #ecfdf5;
+      padding: 1px 6px;
+      border-radius: 4px;
+      border: 1px solid #a7f3d0;
     }
 
     .oee-factors-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-top: 16px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
     }
 
     @media (max-width: 768px) {
@@ -1834,16 +1862,24 @@
       background: #ffffff;
       border: 1px solid #e2e8f0;
       border-radius: 12px;
-      padding: 12px 14px;
+      padding: 14px 16px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.02);
       display: flex;
       flex-direction: column;
+      justify-content: space-between;
+      min-height: 124px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .factor-box:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     }
 
     .factor-header {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 7px;
     }
 
     .factor-tag {
@@ -1851,6 +1887,7 @@
       font-weight: 800;
       padding: 2px 7px;
       border-radius: 4px;
+      line-height: 1.2;
     }
 
     .factor-avail .factor-tag {
@@ -1865,52 +1902,56 @@
 
     .factor-qual .factor-tag {
       background: #dcfce7;
-      color: #15803d;
+      color: #16a34a;
     }
 
     .factor-name {
       font-size: 11.5px;
       font-weight: 700;
       color: #475569;
+      letter-spacing: 0.2px;
     }
 
     .factor-num {
       font-family: 'Prompt', sans-serif;
-      font-size: 22px;
+      font-size: 26px;
       font-weight: 800;
       color: #0f172a;
       margin: 4px 0;
+      line-height: 1.1;
     }
 
     .factor-bar-track {
-      height: 6px;
+      height: 5px;
       background: #f1f5f9;
-      border-radius: 10px;
+      border-radius: 3px;
       overflow: hidden;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
+    }
+
+    .factor-bar-fill {
+      height: 100%;
+      border-radius: 3px;
     }
 
     .factor-bar-fill.avail {
       background: #0284c7;
-      height: 100%;
       transition: width 0.8s ease;
     }
 
     .factor-bar-fill.perf {
       background: #f59e0b;
-      height: 100%;
       transition: width 0.8s ease;
     }
 
     .factor-bar-fill.qual {
       background: #10b981;
-      height: 100%;
       transition: width 0.8s ease;
     }
 
     .factor-detail {
       font-size: 11px;
-      color: var(--text-muted);
+      color: #64748b;
       line-height: 1.35;
     }
 
@@ -2563,11 +2604,9 @@
     .cs-paper-wrap {
       overflow-x: auto;
       background: #e2e8f0;
-      padding: 24px 10px;
+      padding: 24px 16px;
       border-radius: 12px;
-      display: flex;
-      justify-content: center;
-      box-shadow: inset 0 2px 8px rgba(0,0,0,0.12);
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.06);
     }
 
     .cs-paper {
@@ -2577,7 +2616,8 @@
       max-width: 1050px;
       box-sizing: border-box;
       padding: 16px 20px 18px 20px;
-      box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+      margin: 0 auto;
+      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.12), 0 1px 3px rgba(15, 23, 42, 0.08);
       border: 1px solid #cbd5e1;
       font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', 'Leelawadee UI', sans-serif;
       color: #000000;
@@ -2624,12 +2664,10 @@
       text-align: center;
     }
 
-    /* 3-Box Meta Header matching Excel and Image 2 */
+    /* Balanced Meta Grid (Aligned perfectly with table columns below) */
     .cs-meta-grid {
       display: flex;
-      justify-content: space-between;
       align-items: stretch;
-      gap: 12px;
       margin-bottom: 5px;
       width: 100%;
     }
@@ -2643,25 +2681,47 @@
 
     .cs-meta-box td, .cs-meta-box th {
       border: 1px solid #000000;
-      padding: 2px 5px;
+      padding: 2px 4px;
       font-size: 8.5px;
       line-height: 1.25;
       vertical-align: middle;
       color: #000000;
     }
 
+    /* Box 1: Cols A-D (No + Item + Check Title = 380px) */
     .cs-meta-box-1 {
       width: 380px;
       min-width: 380px;
+      max-width: 380px;
     }
 
+    /* Gap 1: Col E (Period = 34px) */
+    .cs-meta-gap-1 {
+      width: 34px;
+      min-width: 34px;
+      max-width: 34px;
+      flex-shrink: 0;
+    }
+
+    /* Box 2: Days 1-24 (24 day columns = flex 24) */
     .cs-meta-box-2 {
-      flex: 1;
+      flex: 24;
+      min-width: 0;
+      table-layout: fixed;
     }
 
+    /* Gap 2: Days 25-26 (2 day columns = flex 2) */
+    .cs-meta-gap-2 {
+      flex: 2;
+      min-width: 0;
+      flex-shrink: 0;
+    }
+
+    /* Box 3: Days 27-31 (5 day columns = flex 5) */
     .cs-meta-box-3 {
-      width: 125px;
-      min-width: 125px;
+      flex: 5;
+      min-width: 0;
+      table-layout: fixed;
     }
 
     .cs-meta-label {
@@ -2884,16 +2944,35 @@
       background: #ffffff;
     }
 
-    /* Bottom Grid (Sub-tables & Remarks) */
+    /* Bottom Grid (Sub-tables & Remarks - Precision Aligned) */
     .cs-bottom-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      align-items: start;
+      display: flex;
+      align-items: stretch;
       margin-top: 3px;
       width: 100%;
       box-sizing: border-box;
       font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', sans-serif;
+    }
+
+    .cs-bottom-left {
+      /* Cols A..E (414px) + 13 Days */
+      width: calc(414px + (13 * ((100% - 414px) / 31)));
+      flex-shrink: 0;
+    }
+
+    .cs-bottom-gap {
+      /* Day 14 */
+      width: calc((100% - 414px) / 31);
+      flex-shrink: 0;
+    }
+
+    .cs-bottom-right {
+      /* Days 15..31 (17 Days) */
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
 
     /* Sub-tables ((Information) & Abnormal Record) */
@@ -2951,9 +3030,24 @@
       color: #000000;
       position: relative;
       line-height: 1.3;
-      padding-top: 1px;
+      padding-top: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
       font-family: 'Calibri', 'Cordia New', 'BrowalliaUPC', 'Sarabun', sans-serif;
       text-transform: none !important;
+    }
+
+    .cs-remark-label {
+      white-space: nowrap;
+      font-weight: normal;
+      flex-shrink: 0;
+      line-height: 1.3;
+    }
+
+    .cs-remark-content {
+      flex: 1;
+      min-width: 0;
     }
 
     .cs-remark-line {
@@ -3032,17 +3126,17 @@
       text-align: right;
       font-size: 8px;
       font-weight: normal;
-      margin-top: 4px;
+      margin-top: auto;
       color: #000000;
       font-family: 'Calibri', sans-serif;
       white-space: nowrap !important;
       padding-right: 2px;
     }
 
-    /* Print Styles for Checksheet (Strictly 1 Page A4 Landscape) */
+    /* Print Styles for Checksheet (Strictly 1 Page A4 Landscape - Full Balanced Height) */
     @page {
       size: A4 landscape;
-      margin: 6mm 8mm 6mm 8mm;
+      margin: 12mm 8mm 12mm 8mm;
     }
     @media print {
       html, body {
@@ -3066,9 +3160,12 @@
         left: 0;
         top: 0;
         width: 100% !important;
+        height: auto !important;
+        min-height: auto !important;
         margin: 0 !important;
         padding: 0 !important;
         background: transparent !important;
+        display: block !important;
       }
       .navbar, .hero-section, .dashboard-summary, .filter-bar, .tpm-section:not(#checksheetSection),
       .charts-row, .charts-grid, .job-section, .cs-toolbar, .tpm-header-box, .nav-actions, .btn-back-to-top, .section-header, .toast-notification, .modal-backdrop, .modal {
@@ -3086,6 +3183,7 @@
         margin: 0 !important;
         box-shadow: none !important;
         display: block !important;
+        width: 100% !important;
       }
       .cs-paper {
         border: none !important;
@@ -3131,6 +3229,46 @@
       .cs-sub-input {
         border: none !important;
       }
+
+      /* Balanced Heights & Full Page A4 Print */
+      .cs-doc-header { margin-bottom: 8px !important; }
+      .cs-main-title { font-size: 16.5px !important; margin-bottom: 5px !important; }
+      .cs-doc-no-top { font-size: 10px !important; }
+
+      .cs-meta-grid { margin-bottom: 8px !important; }
+      .cs-meta-box td, .cs-meta-box th { padding: 3px 5px !important; font-size: 8.5px !important; }
+      .cs-meta-head { height: 21px !important; }
+      .cs-meta-center-val { height: 38px !important; font-size: 11px !important; }
+      .cs-meta-check-cell { height: 38px !important; }
+      .cs-check-sub { font-size: 8px !important; margin-top: 18px !important; }
+
+      .cs-table { margin-bottom: 8px !important; }
+      .cs-table th, .cs-table td { font-size: 8.5px !important; }
+      .cs-head-row th { height: 22px !important; }
+      .cs-sec-row td { height: 21px !important; font-size: 9px !important; padding: 2px 6px !important; }
+      .cs-item-tr td { height: 29px !important; font-size: 8.5px !important; }
+      .cs-day-cell { height: 29px !important; font-size: 12.5px !important; }
+      .cs-empty-row td { height: 21px !important; }
+      .cs-byteam-tr { height: 58px !important; }
+      .cs-byteam-td { padding: 4px 6px !important; }
+      .cs-byteam-label { font-size: 9.5px !important; }
+      .cs-byteam-input { font-size: 9.5px !important; }
+      .cs-byteam-day-cell { height: 58px !important; }
+
+      .cs-bottom-grid { margin-top: 6px !important; align-items: stretch !important; }
+      .cs-bottom-right { display: flex !important; flex-direction: column !important; justify-content: space-between !important; }
+      .cs-sub-title-label { font-size: 9.5px !important; margin-bottom: 3px !important; }
+      .cs-sub-table { margin-bottom: 5px !important; }
+      .cs-sub-table th, .cs-sub-table td { height: 28px !important; font-size: 8.5px !important; padding: 2px 5px !important; }
+      .cs-sub-input { font-size: 8.5px !important; }
+
+      .cs-remark-container { font-size: 9px !important; line-height: 1.38 !important; padding-top: 15px !important; display: flex !important; align-items: flex-start !important; gap: 6px !important; }
+      .cs-remark-label { font-size: 9px !important; line-height: 1.38 !important; white-space: nowrap !important; flex-shrink: 0 !important; }
+      .cs-remark-content { flex: 1 !important; min-width: 0 !important; }
+      .cs-remark-line { white-space: nowrap !important; }
+      .cs-mini-ex-wrap { margin: 2px 0 3px 0 !important; }
+      .cs-mini-ex-table th, .cs-mini-ex-table td { height: 17px !important; font-size: 7.5px !important; }
+      .cs-page-tag { font-size: 8.5px !important; margin-top: auto !important; padding-bottom: 2px !important; }
     }
 </style>
 </head>
@@ -3606,6 +3744,12 @@
             <div class="oee-gauge-container">
               <div class="oee-score-circle">
                 <svg class="oee-circle-svg" viewBox="0 0 160 160">
+                  <defs>
+                    <linearGradient id="oeePurpleGrad" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stop-color="#a855f7"/>
+                      <stop offset="100%" stop-color="#6366f1"/>
+                    </linearGradient>
+                  </defs>
                   <circle class="circle-bg" cx="80" cy="80" r="70"></circle>
                   <circle class="circle-progress" id="oeeCircleProgress" cx="80" cy="80" r="70"></circle>
                 </svg>
@@ -3618,12 +3762,16 @@
               <div class="oee-formula-desc">
                 <div class="oee-formula-badge">สูตรคำนวณ OEE:</div>
                 <div class="oee-formula-text">OEE = AVAILABILITY (A) × PERFORMANCE (P) × QUALITY (Q)</div>
-                <div class="oee-benchmark-bar">
-                  <div class="benchmark-point" id="oeeBenchmarkPoint" style="left: 85%;">
-                    <div class="benchmark-line"></div>
-                    <span class="benchmark-tag">WORLD CLASS (85%)</span>
+                <div class="oee-bar-wrapper">
+                  <div class="oee-benchmark-bar">
+                    <div class="benchmark-fill" id="oeeBenchmarkFill" style="width: 86.3%;"></div>
+                    <div class="benchmark-target-line" id="oeeBenchmarkPoint" title="เกณฑ์ World-Class 85%"></div>
                   </div>
-                  <div class="benchmark-fill" id="oeeBenchmarkFill" style="width: 86.3%;"></div>
+                  <div class="oee-bar-scale-row">
+                    <span>0%</span>
+                    <span class="oee-bar-scale-target">▲ WORLD CLASS (85%)</span>
+                    <span>100%</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -8102,15 +8250,18 @@
           </tr>
         </table>
 
+        <!-- Gap 1 (Col E Period = 34px) -->
+        <div class="cs-meta-gap-1"></div>
+
         <!-- Box 2 (Center: Code, Revision, Dates) -->
         <table class="cs-meta-box cs-meta-box-2">
           <colgroup>
-            <col style="width: 100px;">
-            <col style="width: 85px;">
-            <col style="width: 80px;">
-            <col style="width: 75px;">
-            <col style="width: 80px;">
-            <col style="width: 70px;">
+            <col style="width: calc(100% / 6);">
+            <col style="width: calc(100% / 6);">
+            <col style="width: calc(100% / 6);">
+            <col style="width: calc(100% / 6);">
+            <col style="width: calc(100% / 6);">
+            <col style="width: calc(100% / 6);">
           </colgroup>
           <thead>
             <tr>
@@ -8134,6 +8285,9 @@
           </tbody>
         </table>
 
+        <!-- Gap 2 (Days 25-26 = 2 cols) -->
+        <div class="cs-meta-gap-2"></div>
+
         <!-- Box 3 (Right: Check Sign-off) -->
         <table class="cs-meta-box cs-meta-box-3">
           <thead>
@@ -8155,10 +8309,10 @@
       <table class="cs-table">
         <colgroup>
           <col style="width: 28px;">
-          <col style="width: 120px;">
-          <col style="width: 232px;">
-          <col style="width: 38px;">
-          <col span="31" style="width: calc((100% - 418px) / 31);">
+          <col style="width: 124px;">
+          <col style="width: 228px;">
+          <col style="width: 34px;">
+          <col span="31" style="width: calc((100% - 414px) / 31);">
         </colgroup>
         <thead>
           <tr class="cs-head-row">
@@ -8237,16 +8391,16 @@
     }
     html += `</tr></tbody></table>`;
 
-    // Lower Grid: Sub-tables (Left) & Remark Box (Right)
+    // Lower Grid: Sub-tables (Left) & Remark Box (Right) - Precision Balanced
     html += `
       <div class="cs-bottom-grid">
-        <div>
+        <div class="cs-bottom-left">
           <!-- (Information) Section -->
           <div class="cs-sub-title-label">(Information)</div>
           <table class="cs-sub-table">
             <colgroup>
-              <col style="width: 70px;">
-              <col style="width: 100px;">
+              <col style="width: 75px;">
+              <col style="width: 140px;">
               <col>
             </colgroup>
             <thead>
@@ -8269,11 +8423,11 @@
           </table>
 
           <!-- << Abnormal, Repair Record>> Section -->
-          <div class="cs-sub-title-label" style="margin-top: 4px;">&lt;&lt; Abnormal, Repair Record&gt;&gt;</div>
+          <div class="cs-sub-title-label" style="margin-top: 5px;">&lt;&lt; Abnormal, Repair Record&gt;&gt;</div>
           <table class="cs-sub-table">
             <colgroup>
-              <col style="width: 70px;">
-              <col style="width: 130px;">
+              <col style="width: 75px;">
+              <col style="width: 260px;">
               <col>
             </colgroup>
             <thead>
@@ -8296,64 +8450,62 @@
           </table>
         </div>
 
+        <!-- Gap (Day 14) -->
+        <div class="cs-bottom-gap"></div>
+
         <!-- Remark Box (Exact Replica of Image 2 & Excel Form) -->
-        <div class="cs-remark-container">
-          <div class="cs-remark-line" style="display: flex; gap: 6px;">
-            <span style="font-weight: normal;">Remark. :</span>
-            <span>- ถ้า <strong>PASS.</strong> ให้เช็ค &nbsp;<span style="color:#15803d; font-weight:900; font-size:11px;">✔</span></span>
-          </div>
-          <div class="cs-remark-line" style="padding-left: 48px;">
-            - ถ้า <strong>FAIL.</strong> ให้เช็ค &nbsp;<span style="color:#dc2626; font-weight:900; font-size:11px;">✘</span>
-          </div>
-          <div class="cs-remark-line" style="margin-top: 2px;">
-            - ในกรณีหัวข้อตรวจเช็ครายวัน ในวันที่ไม่มีการตรวจเช็คให้ระบุสัญลักษณ์ &nbsp;<span style="font-weight:900; font-size:11px;">−</span>&nbsp; ในช่องว่าง
-          </div>
-          
-          <!-- Example 1: Period = 2 Days -->
-          <div class="cs-mini-ex-wrap">
-            <span class="cs-mini-ex-title">เช่น <strong>Period = 2 Days</strong></span>
-            <table class="cs-mini-ex-table">
-              <thead><tr><th>1</th><th>2</th><th>3</th></tr></thead>
-              <tbody>
-                <tr>
-                  <td class="cs-day-cell status-pass">✔</td>
-                  <td class="cs-day-cell status-skip">−</td>
-                  <td class="cs-day-cell status-pass">✔</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        <div class="cs-bottom-right">
+          <div class="cs-remark-container">
+            <div class="cs-remark-label">Remark. :</div>
+            <div class="cs-remark-content">
+              <div class="cs-remark-line">- ถ้า <strong>PASS.</strong> ให้เช็ค &nbsp;<span style="color:#15803d; font-weight:900; font-size:11px;">✔</span></div>
+              <div class="cs-remark-line">- ถ้า <strong>FAIL.</strong> ให้เช็ค &nbsp;<span style="color:#dc2626; font-weight:900; font-size:11px;">✘</span></div>
+              <div class="cs-remark-line">- ในกรณีหัวข้อตรวจเช็ครายวัน ในวันที่ไม่มีการตรวจเช็คให้ระบุสัญลักษณ์ &nbsp;<span style="font-weight:900; font-size:11px;">−</span>&nbsp; ในช่องว่าง</div>
+              
+              <!-- Example 1: Period = 2 Days -->
+              <div class="cs-mini-ex-wrap">
+                <span class="cs-mini-ex-title">เช่น <strong>Period = 2 Days</strong></span>
+                <table class="cs-mini-ex-table">
+                  <thead><tr><th>1</th><th>2</th><th>3</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td class="cs-day-cell status-pass">✔</td>
+                      <td class="cs-day-cell status-skip">−</td>
+                      <td class="cs-day-cell status-pass">✔</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-          <div class="cs-remark-line" style="margin-top: 2px;">
-            - ส่วนช่องว่างอื่นๆ หากไม่มีการตรวจสอบให้ขีดคาดแล้วเขียน <strong>NA</strong>
+              <div class="cs-remark-line">- ส่วนช่องว่างอื่นๆ หากไม่มีการตรวจสอบให้ขีดคาดแล้วเขียน <strong>NA</strong></div>
+              
+              <!-- Example 2: Period = 1 Week -->
+              <div class="cs-mini-ex-wrap">
+                <span class="cs-mini-ex-title">เช่น <strong>Period = 1 Week</strong></span>
+                <table class="cs-mini-ex-table">
+                  <thead><tr><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td class="cs-day-cell status-pass">✔</td>
+                      <td colspan="6" class="cs-multi-na-cell">
+                        <div class="cs-na-line-wrap">
+                          <svg class="cs-na-svg" viewBox="0 0 100 15" preserveAspectRatio="none">
+                            <line x1="0" y1="2" x2="100" y2="13" stroke="#000000" stroke-width="1.1"/>
+                          </svg>
+                          <span class="cs-na-label">NA</span>
+                        </div>
+                      </td>
+                      <td class="cs-day-cell status-pass">✔</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
-          
-          <!-- Example 2: Period = 1 Week -->
-          <div class="cs-mini-ex-wrap">
-            <span class="cs-mini-ex-title">เช่น <strong>Period = 1 Week</strong></span>
-            <table class="cs-mini-ex-table">
-              <thead><tr><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr></thead>
-              <tbody>
-                <tr>
-                  <td class="cs-day-cell status-pass">✔</td>
-                  <td colspan="6" class="cs-multi-na-cell">
-                    <div class="cs-na-line-wrap">
-                      <svg class="cs-na-svg" viewBox="0 0 100 15" preserveAspectRatio="none">
-                        <line x1="0" y1="2" x2="100" y2="13" stroke="#000000" stroke-width="1.1"/>
-                      </svg>
-                      <span class="cs-na-label">NA</span>
-                    </div>
-                  </td>
-                  <td class="cs-day-cell status-pass">✔</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
           <div class="cs-page-tag">PAGE 1 / 1</div>
-        </div>
       </div>
-    `;
+    </div>
+  `;
 
     container.innerHTML = html;
   }
@@ -8368,35 +8520,79 @@
         <h2 class="cs-main-title">${tech.formTitle || 'TPM OPERATION STANDARD CHECK SHEET (TECHNICIAN)'}</h2>
       </div>
 
-      <!-- Exact Meta Table -->
-      <table class="cs-meta-table">
-        <tr>
-          <td class="cs-meta-label" style="width: 120px;">USING AREA</td>
-          <td class="cs-meta-val" style="width: 180px;">${tpl.usingArea || 'OPTICAL'}</td>
-          <td class="cs-meta-head" style="width: 110px;">MACHINE CODE</td>
-          <td class="cs-meta-head" style="width: 95px;">ISSUE REVISION</td>
-          <td class="cs-meta-head" style="width: 90px;">ISSUE DATE</td>
-          <td class="cs-meta-head" style="width: 80px;">FACTORY</td>
-          <td class="cs-meta-head" style="width: 85px;">YEAR</td>
-          <td class="cs-meta-head" style="width: 95px;" colspan="2">CHECK</td>
-        </tr>
-        <tr>
-          <td class="cs-meta-label">MACHINE NAME</td>
-          <td class="cs-meta-val">${tpl.machineName || ''}</td>
-          <td rowspan="2" class="cs-meta-center-val" style="color: #0284c7; font-weight: 800; font-size: 13px;">${mc}</td>
-          <td rowspan="2" class="cs-meta-center-val">${tech.issueRevision || tpl.issueRevision || '0'}</td>
-          <td rowspan="2" class="cs-meta-center-val">${formatExcelDate(tech.issueDate || tpl.issueDate)}</td>
-          <td rowspan="2" class="cs-meta-center-val">${tpl.factory || ''}</td>
-          <td rowspan="2" class="cs-meta-center-val">${yr}</td>
-          <td rowspan="2" colspan="2" class="cs-meta-check-cell">
-            <div class="cs-check-sub">${tpl.factoryCheck || 'G6 AND UP'}</div>
-          </td>
-        </tr>
-        <tr>
-          <td class="cs-meta-label">WORK INSTRUCTION NO.</td>
-          <td class="cs-meta-val" style="font-weight: 700;">${tech.wiNo || tpl.wiNo || ''}</td>
-        </tr>
-      </table>
+      <!-- 3-Box Meta Header -->
+      <div class="cs-meta-grid">
+        <!-- Box 1 (Left: Machine & WI) -->
+        <table class="cs-meta-box cs-meta-box-1">
+          <colgroup>
+            <col style="width: 110px;">
+            <col style="width: 270px;">
+          </colgroup>
+          <tr>
+            <td class="cs-meta-label">USING AREA</td>
+            <td class="cs-meta-val">${tpl.usingArea || 'OPTICAL'}</td>
+          </tr>
+          <tr>
+            <td class="cs-meta-label">MACHINE NAME</td>
+            <td class="cs-meta-val">${tpl.machineName || ''}</td>
+          </tr>
+          <tr>
+            <td class="cs-meta-label">WORK INSTRUCTION NO.</td>
+            <td class="cs-meta-val">${tech.wiNo || tpl.wiNo || ''}</td>
+          </tr>
+        </table>
+
+        <!-- Gap 1 -->
+        <div class="cs-meta-gap-1"></div>
+
+        <!-- Box 2 (Center: Code, Revision, Dates) -->
+        <table class="cs-meta-box cs-meta-box-2">
+          <colgroup>
+            <col style="width: 22%;">
+            <col style="width: 19%;">
+            <col style="width: 19%;">
+            <col style="width: 20%;">
+            <col style="width: 20%;">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="cs-meta-head">MACHINE CODE</th>
+              <th class="cs-meta-head">ISSUE REVISION</th>
+              <th class="cs-meta-head">ISSUE DATE</th>
+              <th class="cs-meta-head">FACTORY</th>
+              <th class="cs-meta-head">YEAR</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cs-meta-center-val" style="color:#000000; font-size:10px;">${mc}</td>
+              <td class="cs-meta-center-val">${tech.issueRevision || tpl.issueRevision || '0'}</td>
+              <td class="cs-meta-center-val">${formatExcelDate(tech.issueDate || tpl.issueDate)}</td>
+              <td class="cs-meta-center-val">${tpl.factory || ''}</td>
+              <td class="cs-meta-center-val">${yr}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Gap 2 -->
+        <div class="cs-meta-gap-2"></div>
+
+        <!-- Box 3 (Right: Check Sign-off) -->
+        <table class="cs-meta-box cs-meta-box-3">
+          <thead>
+            <tr>
+              <th class="cs-meta-head">CHECK</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cs-meta-check-cell">
+                <div class="cs-check-sub">${tpl.factoryCheck || 'G6 AND UP'}</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <!-- Tech Main Table -->
       <table class="cs-table">
@@ -8478,36 +8674,45 @@
 
     html += `
       <div class="cs-bottom-grid">
-        <table class="cs-sub-table">
-          <thead>
-            <tr>
-              <th style="width:75px;">Date</th>
-              <th style="width:160px;">Abnormal detail (FAIL)</th>
-              <th>Action</th>
-              <th style="width:75px;">By</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><input type="text" class="cs-sub-input" value="${ab0[0]||''}" onchange="updateChecksheetAbnormalRow(0, 0, this.value)"></td>
-              <td><input type="text" class="cs-sub-input" value="${ab0[1]||''}" onchange="updateChecksheetAbnormalRow(0, 1, this.value)"></td>
-              <td><input type="text" class="cs-sub-input" value="${ab0[2]||''}" onchange="updateChecksheetAbnormalRow(0, 2, this.value)"></td>
-              <td><input type="text" class="cs-sub-input" value="${ab0[3]||''}" onchange="updateChecksheetAbnormalRow(0, 3, this.value)"></td>
-            </tr>
-            <tr>
-              <td><input type="text" class="cs-sub-input" value="${ab1[0]||''}" onchange="updateChecksheetAbnormalRow(1, 0, this.value)"></td>
-              <td><input type="text" class="cs-sub-input" value="${ab1[1]||''}" onchange="updateChecksheetAbnormalRow(1, 1, this.value)"></td>
-              <td><input type="text" class="cs-sub-input" value="${ab1[2]||''}" onchange="updateChecksheetAbnormalRow(1, 2, this.value)"></td>
-              <td><input type="text" class="cs-sub-input" value="${ab1[3]||''}" onchange="updateChecksheetAbnormalRow(1, 3, this.value)"></td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="cs-bottom-left">
+          <table class="cs-sub-table">
+            <thead>
+              <tr>
+                <th style="width:75px;">Date</th>
+                <th style="width:160px;">Abnormal detail (FAIL)</th>
+                <th>Action</th>
+                <th style="width:75px;">By</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><input type="text" class="cs-sub-input" value="${ab0[0]||''}" onchange="updateChecksheetAbnormalRow(0, 0, this.value)"></td>
+                <td><input type="text" class="cs-sub-input" value="${ab0[1]||''}" onchange="updateChecksheetAbnormalRow(0, 1, this.value)"></td>
+                <td><input type="text" class="cs-sub-input" value="${ab0[2]||''}" onchange="updateChecksheetAbnormalRow(0, 2, this.value)"></td>
+                <td><input type="text" class="cs-sub-input" value="${ab0[3]||''}" onchange="updateChecksheetAbnormalRow(0, 3, this.value)"></td>
+              </tr>
+              <tr>
+                <td><input type="text" class="cs-sub-input" value="${ab1[0]||''}" onchange="updateChecksheetAbnormalRow(1, 0, this.value)"></td>
+                <td><input type="text" class="cs-sub-input" value="${ab1[1]||''}" onchange="updateChecksheetAbnormalRow(1, 1, this.value)"></td>
+                <td><input type="text" class="cs-sub-input" value="${ab1[2]||''}" onchange="updateChecksheetAbnormalRow(1, 2, this.value)"></td>
+                <td><input type="text" class="cs-sub-input" value="${ab1[3]||''}" onchange="updateChecksheetAbnormalRow(1, 3, this.value)"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-        <div class="cs-remark-container">
-          <div class="cs-remark-line"><strong>Remark :</strong> คำแนะนำและข้อกำหนดการบันทึกของช่างซ่อมบำรุง</div>
-          <div class="cs-remark-line">- ถ้า <b>PASS</b> ให้เช็ค <span style="color:#15803d; font-weight:bold;">✔</span> ในช่อง PASS</div>
-          <div class="cs-remark-line">- ถ้า <b>FAIL</b> ให้เช็ค <span style="color:#dc2626; font-weight:bold;">✔</span> ในช่อง FAIL (พร้อมระบุ Abnormal detail และ Action)</div>
-          <div class="cs-remark-line">- ถ้า <b>Not Operate</b> ให้เช็ค <span style="color:#475569; font-weight:bold;">✔</span> ในช่อง Not Operate (ไม่อยู่ในรอบการตรวจเช็ค)</div>
+        <div class="cs-bottom-gap"></div>
+
+        <div class="cs-bottom-right">
+          <div class="cs-remark-container">
+            <div class="cs-remark-label"><strong>Remark :</strong></div>
+            <div class="cs-remark-content">
+              <div class="cs-remark-line" style="margin-bottom: 2px;">คำแนะนำและข้อกำหนดการบันทึกของช่างซ่อมบำรุง</div>
+              <div class="cs-remark-line">- ถ้า <b>PASS</b> ให้เช็ค <span style="color:#15803d; font-weight:bold;">✔</span> ในช่อง PASS</div>
+              <div class="cs-remark-line">- ถ้า <b>FAIL</b> ให้เช็ค <span style="color:#dc2626; font-weight:bold;">✔</span> ในช่อง FAIL (พร้อมระบุ Abnormal detail และ Action)</div>
+              <div class="cs-remark-line">- ถ้า <b>Not Operate</b> ให้เช็ค <span style="color:#475569; font-weight:bold;">✔</span> ในช่อง Not Operate (ไม่อยู่ในรอบการตรวจเช็ค)</div>
+            </div>
+          </div>
           <div class="cs-page-tag">PAGE 2 / 2</div>
         </div>
       </div>
