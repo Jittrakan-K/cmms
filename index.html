@@ -2749,6 +2749,7 @@
       font-size: 8px;
       font-family: 'Calibri', sans-serif;
       height: 18px;
+      padding: 1px 2px !important;
     }
 
     .cs-meta-center-val {
@@ -2757,15 +2758,42 @@
       font-size: 9.5px;
       font-weight: normal;
       color: #000000;
-      padding: 2px;
+      padding: 2px 1px;
       font-family: 'Calibri', sans-serif;
       height: 30px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cs-meta-input {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+      outline: none;
+      text-align: center;
+      font-family: 'Calibri', sans-serif;
+      font-size: 9.5px;
+      font-weight: normal;
+      color: #000000;
+      padding: 0;
+      margin: 0;
+      box-sizing: border-box;
+      cursor: text;
+    }
+    .cs-meta-input:hover {
+      background: #f8fafc;
+    }
+    .cs-meta-input:focus {
+      background: #eff6ff;
+      outline: 1px solid #38bdf8;
     }
 
     .cs-meta-check-cell {
       text-align: center;
       vertical-align: bottom;
-      padding: 2px;
+      padding: 2px 1px;
       height: 30px;
     }
 
@@ -2777,6 +2805,7 @@
       padding-top: 2px;
       margin-top: 14px;
       font-family: 'Calibri', sans-serif;
+      white-space: nowrap;
     }
 
     /* Main Inspection Grid Table */
@@ -2903,45 +2932,48 @@
     }
 
     .cs-byteam-td {
-      vertical-align: middle;
-      padding: 3px 6px !important;
+      vertical-align: middle !important;
+      text-align: center !important;
+      padding: 2px 6px !important;
       background: #ffffff;
       font-family: 'Calibri', sans-serif;
     }
 
-    .cs-byteam-inner {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
     .cs-byteam-label {
       font-weight: normal;
-      font-size: 9px;
+      font-size: 9.5px;
       font-family: 'Calibri', sans-serif;
       color: #000000;
       white-space: nowrap;
-    }
-
-    .cs-byteam-input {
-      border: none;
-      border-bottom: 1px solid #000000;
-      font-family: 'Calibri', 'Cordia New', 'Sarabun', sans-serif;
-      font-size: 9px;
-      flex: 1;
-      padding: 1px 4px;
-      background: transparent;
-      color: #000000;
-    }
-    .cs-byteam-input:focus {
-      outline: none;
-      border-bottom: 1.5px solid #0284c7;
-      background: #f0f9ff;
+      letter-spacing: 0.2px;
     }
 
     .cs-byteam-day-cell {
       height: 44px;
       background: #ffffff;
+      padding: 0 !important;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .cs-byteam-day-input {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+      outline: none;
+      text-align: center;
+      font-family: 'Calibri', sans-serif;
+      font-size: 8px;
+      font-weight: 600;
+      color: #0f172a;
+      padding: 0;
+      margin: 0;
+      box-sizing: border-box;
+      cursor: text;
+    }
+    .cs-byteam-day-input:focus {
+      background: #eff6ff;
     }
 
     /* Bottom Grid (Sub-tables & Remarks - Precision Aligned) */
@@ -3136,7 +3168,7 @@
     /* Print Styles for Checksheet (Strictly 1 Page A4 Landscape - Full Balanced Height) */
     @page {
       size: A4 landscape;
-      margin: 12mm 8mm 12mm 8mm;
+      margin: 6mm 6mm 6mm 6mm;
     }
     @media print {
       html, body {
@@ -3221,54 +3253,106 @@
       .cs-byteam-input {
         border-bottom: none !important;
       }
+      .cs-byteam-day-input {
+        border: none !important;
+        background: transparent !important;
+        text-align: center !important;
+        font-size: 7.5px !important;
+        color: #000000 !important;
+      }
       .cs-byteam-input::placeholder,
-      .cs-sub-input::placeholder {
+      .cs-sub-input::placeholder,
+      .cs-byteam-day-input::placeholder {
         color: transparent !important;
         opacity: 0 !important;
       }
       .cs-sub-input {
         border: none !important;
       }
+      .cs-meta-input {
+        border: none !important;
+        background: transparent !important;
+        outline: none !important;
+        text-align: center !important;
+        font-size: 9px !important;
+        color: #000000 !important;
+      }
+      .cs-meta-input::placeholder {
+        color: transparent !important;
+        opacity: 0 !important;
+      }
 
-      /* Balanced Heights & Full Page A4 Print */
-      .cs-doc-header { margin-bottom: 8px !important; }
-      .cs-main-title { font-size: 16.5px !important; margin-bottom: 5px !important; }
-      .cs-doc-no-top { font-size: 10px !important; }
-
-      .cs-meta-grid { margin-bottom: 8px !important; }
-      .cs-meta-box td, .cs-meta-box th { padding: 3px 5px !important; font-size: 8.5px !important; }
-      .cs-meta-head { height: 21px !important; }
-      .cs-meta-center-val { height: 38px !important; font-size: 11px !important; }
-      .cs-meta-check-cell { height: 38px !important; }
-      .cs-check-sub { font-size: 8px !important; margin-top: 18px !important; }
-
-      .cs-table { margin-bottom: 8px !important; }
-      .cs-table th, .cs-table td { font-size: 8.5px !important; }
-      .cs-head-row th { height: 22px !important; }
-      .cs-sec-row td { height: 21px !important; font-size: 9px !important; padding: 2px 6px !important; }
-      .cs-item-tr td { height: 29px !important; font-size: 8.5px !important; }
-      .cs-day-cell { height: 29px !important; font-size: 12.5px !important; }
-      .cs-empty-row td { height: 21px !important; }
-      .cs-byteam-tr { height: 58px !important; }
-      .cs-byteam-td { padding: 4px 6px !important; }
-      .cs-byteam-label { font-size: 9.5px !important; }
-      .cs-byteam-input { font-size: 9.5px !important; }
-      .cs-byteam-day-cell { height: 58px !important; }
-
-      .cs-bottom-grid { margin-top: 6px !important; align-items: stretch !important; }
+      /* Base Layout Elements */
+      .cs-doc-header { margin-bottom: 5px !important; }
+      .cs-main-title { font-size: 15px !important; margin-bottom: 3px !important; }
+      .cs-doc-no-top { font-size: 9.5px !important; }
+      .cs-meta-grid { margin-bottom: 5px !important; }
+      .cs-meta-box td, .cs-meta-box th { padding: 2px 4px !important; font-size: 8px !important; }
+      .cs-meta-head { height: 18px !important; }
+      .cs-table { margin-bottom: 5px !important; }
+      .cs-table th, .cs-table td { font-size: 8px !important; }
+      .cs-bottom-grid { margin-top: 4px !important; align-items: stretch !important; }
       .cs-bottom-right { display: flex !important; flex-direction: column !important; justify-content: space-between !important; }
-      .cs-sub-title-label { font-size: 9.5px !important; margin-bottom: 3px !important; }
-      .cs-sub-table { margin-bottom: 5px !important; }
-      .cs-sub-table th, .cs-sub-table td { height: 28px !important; font-size: 8.5px !important; padding: 2px 5px !important; }
-      .cs-sub-input { font-size: 8.5px !important; }
+      .cs-page-tag { font-size: 8px !important; margin-top: auto !important; padding-bottom: 1px !important; }
 
-      .cs-remark-container { font-size: 9px !important; line-height: 1.38 !important; padding-top: 15px !important; display: flex !important; align-items: flex-start !important; gap: 6px !important; }
-      .cs-remark-label { font-size: 9px !important; line-height: 1.38 !important; white-space: nowrap !important; flex-shrink: 0 !important; }
-      .cs-remark-content { flex: 1 !important; min-width: 0 !important; }
-      .cs-remark-line { white-space: nowrap !important; }
-      .cs-mini-ex-wrap { margin: 2px 0 3px 0 !important; }
-      .cs-mini-ex-table th, .cs-mini-ex-table td { height: 17px !important; font-size: 7.5px !important; }
-      .cs-page-tag { font-size: 8.5px !important; margin-top: auto !important; padding-bottom: 2px !important; }
+      /* --- LOW DENSITY (2 to 7 items, e.g. CBS, ACF, PAM, SPS, DRL) --- */
+      .cs-density-low .cs-doc-header { margin-bottom: 8px !important; }
+      .cs-density-low .cs-main-title { font-size: 16.5px !important; margin-bottom: 5px !important; }
+      .cs-density-low .cs-meta-center-val { height: 36px !important; font-size: 10.5px !important; }
+      .cs-density-low .cs-meta-check-cell { height: 36px !important; }
+      .cs-density-low .cs-check-sub { font-size: 8px !important; margin-top: 16px !important; }
+      .cs-density-low .cs-head-row th { height: 22px !important; font-size: 8.5px !important; }
+      .cs-density-low .cs-sec-row td { height: 21px !important; font-size: 9px !important; padding: 2px 6px !important; }
+      .cs-density-low .cs-item-tr td { height: 28px !important; font-size: 8.5px !important; }
+      .cs-density-low .cs-day-cell { height: 28px !important; font-size: 12.5px !important; }
+      .cs-density-low .cs-empty-row td { height: 20px !important; }
+      .cs-density-low .cs-byteam-tr, .cs-density-low .cs-byteam-day-cell { height: 50px !important; }
+      .cs-density-low .cs-sub-title-label { font-size: 9.5px !important; margin-bottom: 3px !important; }
+      .cs-density-low .cs-sub-table th, .cs-density-low .cs-sub-table td { height: 26px !important; font-size: 8.5px !important; }
+      .cs-density-low .cs-remark-container { font-size: 9px !important; line-height: 1.35 !important; padding-top: 12px !important; }
+
+      /* --- MEDIUM DENSITY (8 to 12 items, e.g. LOC, XGM, PAD, PSI, UIM, MTS, LCH) --- */
+      .cs-density-medium .cs-meta-center-val { height: 28px !important; font-size: 9.5px !important; }
+      .cs-density-medium .cs-meta-check-cell { height: 28px !important; }
+      .cs-density-medium .cs-check-sub { font-size: 7.5px !important; margin-top: 12px !important; }
+      .cs-density-medium .cs-head-row th { height: 19px !important; font-size: 8px !important; }
+      .cs-density-medium .cs-sec-row td { height: 18px !important; font-size: 8.5px !important; padding: 1px 5px !important; }
+      .cs-density-medium .cs-item-tr td { height: 20px !important; font-size: 8px !important; line-height: 1.15 !important; }
+      .cs-density-medium .cs-day-cell { height: 20px !important; font-size: 10.5px !important; }
+      .cs-density-medium .cs-empty-row td { height: 14px !important; }
+      .cs-density-medium .cs-byteam-tr, .cs-density-medium .cs-byteam-day-cell { height: 30px !important; }
+      .cs-density-medium .cs-sub-title-label { font-size: 9px !important; margin-bottom: 2px !important; }
+      .cs-density-medium .cs-sub-table th, .cs-density-medium .cs-sub-table td { height: 21px !important; font-size: 8px !important; }
+      .cs-density-medium .cs-remark-container { font-size: 8.5px !important; line-height: 1.3 !important; padding-top: 8px !important; }
+
+      /* --- HIGH DENSITY (13 to 16 items, e.g. FAM, LCC, LNF, GJM, PMC, LNP) --- */
+      .cs-density-high .cs-doc-header { margin-bottom: 3px !important; }
+      .cs-density-high .cs-main-title { font-size: 14px !important; margin-bottom: 2px !important; }
+      .cs-density-high .cs-meta-grid { margin-bottom: 4px !important; }
+      .cs-density-high .cs-meta-center-val { height: 24px !important; font-size: 9px !important; }
+      .cs-density-high .cs-meta-check-cell { height: 24px !important; }
+      .cs-density-high .cs-check-sub { font-size: 7px !important; margin-top: 8px !important; }
+      .cs-density-high .cs-table { margin-bottom: 3px !important; }
+      .cs-density-high .cs-head-row th { height: 17px !important; font-size: 7.5px !important; }
+      .cs-density-high .cs-sec-row td { height: 15px !important; font-size: 8px !important; padding: 1px 4px !important; }
+      .cs-density-high .cs-item-tr td { height: 15.5px !important; font-size: 7.5px !important; line-height: 1.1 !important; padding: 1px 3px !important; }
+      .cs-density-high .cs-day-cell { height: 15.5px !important; font-size: 9.5px !important; }
+      .cs-density-high .cs-empty-row td { height: 10px !important; }
+      .cs-density-high .cs-byteam-tr, .cs-density-high .cs-byteam-day-cell { height: 20px !important; }
+      .cs-density-high .cs-byteam-td { padding: 2px 4px !important; }
+      .cs-density-high .cs-byteam-label { font-size: 8.5px !important; }
+      .cs-density-high .cs-sub-title-label { font-size: 8px !important; margin-bottom: 1px !important; margin-top: 1px !important; }
+      .cs-density-high .cs-sub-table { margin-bottom: 2px !important; }
+      .cs-density-high .cs-sub-table th, .cs-density-high .cs-sub-table td { height: 16px !important; font-size: 7.5px !important; padding: 1px 3px !important; }
+      .cs-density-high .cs-remark-container { font-size: 7.5px !important; line-height: 1.25 !important; padding-top: 4px !important; }
+
+      /* --- TECHNICIAN DENSITY --- */
+      .cs-density-tech .cs-meta-center-val { height: 28px !important; font-size: 9.5px !important; }
+      .cs-density-tech .cs-meta-check-cell { height: 28px !important; }
+      .cs-density-tech .cs-check-sub { font-size: 7.5px !important; margin-top: 12px !important; }
+      .cs-density-tech .cs-item-tr td { height: 22px !important; font-size: 8.5px !important; }
+      .cs-density-tech .cs-day-cell { height: 22px !important; font-size: 10px !important; }
+      .cs-density-tech .cs-sub-table th, .cs-density-tech .cs-sub-table td { height: 22px !important; font-size: 8.5px !important; }
     }
 </style>
 </head>
@@ -8088,17 +8172,31 @@
       if (window.MASTER_TPM_MACHINES) {
         matchingMcs = window.MASTER_TPM_MACHINES.filter(m => m.dept === 'OPTICAL' && m.mcCode && m.mcCode.toUpperCase().startsWith(prefix));
       }
+      const defaultTplCode = formatMachineCode(currentChecksheetTpl.machineCodeRaw || `${prefix} - 001`);
       if (matchingMcs.length > 0) {
+        let foundDefault = false;
         matchingMcs.forEach(m => {
           const opt = document.createElement('option');
-          opt.value = m.mcCode;
-          opt.textContent = `${m.mcCode} (${m.machine})`;
+          const formattedCode = formatMachineCode(m.mcCode);
+          opt.value = formattedCode;
+          opt.textContent = `${formattedCode} (${m.machine})`;
+          if (formattedCode === defaultTplCode || m.mcCode === defaultTplCode) {
+            opt.selected = true;
+            foundDefault = true;
+          }
           selMc.appendChild(opt);
         });
+        if (!foundDefault && defaultTplCode && !defaultTplCode.includes('_')) {
+          const opt = document.createElement('option');
+          opt.value = defaultTplCode;
+          opt.textContent = `${defaultTplCode} (จากเอกสารมาตรฐาน)`;
+          opt.selected = true;
+          selMc.insertBefore(opt, selMc.firstChild);
+        }
       } else {
         const opt = document.createElement('option');
-        opt.value = `${prefix}-001`;
-        opt.textContent = `${prefix}-001`;
+        opt.value = defaultTplCode;
+        opt.textContent = defaultTplCode;
         selMc.appendChild(opt);
       }
     }
@@ -8153,8 +8251,12 @@
         checks: {},
         infoRows: [ ['', '', ''], ['', '', ''], ['', '', ''] ],
         abnormalRows: [ ['', '', ''], ['', '', ''], ['', '', ''] ],
-        team: ''
+        team: '',
+        teamDaily: {}
       };
+    }
+    if (!checksheetStore[key].teamDaily) {
+      checksheetStore[key].teamDaily = {};
     }
     return checksheetStore[key];
   }
@@ -8164,7 +8266,8 @@
     const container = document.getElementById('csPaperContainer');
     if (!container) return;
 
-    const mc = document.getElementById('csSelMachineCode') ? document.getElementById('csSelMachineCode').value : `${currentChecksheetTpl.prefix}-001`;
+    const defaultMc = currentChecksheetTpl ? formatMachineCode(currentChecksheetTpl.machineCodeRaw || `${currentChecksheetTpl.prefix} - 001`) : 'CBS - 002';
+    const mc = document.getElementById('csSelMachineCode') && document.getElementById('csSelMachineCode').value ? formatMachineCode(document.getElementById('csSelMachineCode').value) : defaultMc;
     const mo = document.getElementById('csSelMonth') ? document.getElementById('csSelMonth').value : '9';
     const yr = document.getElementById('csSelYear') ? document.getElementById('csSelYear').value : '2026';
     const data = getCurrentChecksheetData();
@@ -8179,19 +8282,35 @@
   function formatExcelDate(val) {
     if (!val) return '-';
     const str = String(val).trim();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     if (/^\d{5}$/.test(str)) {
       const d = new Date((parseInt(str) - 25569) * 86400 * 1000);
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${d.getDate()}/${months[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`;
+      const yr2 = String(d.getFullYear()).slice(-2);
+      return `${d.getDate()}-${months[d.getMonth()]}-${yr2}`;
     }
     const match = str.match(/^(\d{1,2})[\/\-]([a-zA-Z]{3,4})[\/\-](\d{2,4})$/);
     if (match) {
       const day = match[1];
       const mStr = match[2].charAt(0).toUpperCase() + match[2].slice(1).toLowerCase();
-      const yr = match[3];
-      return `${day}/${mStr}/${yr}`;
+      const yr = match[3].length === 4 ? match[3].slice(-2) : match[3];
+      return `${day}-${mStr}-${yr}`;
     }
     return str;
+  }
+
+  function formatMachineCode(code) {
+    if (!code) return '';
+    let s = String(code).trim();
+    const m = s.match(/^([A-Za-z0-9]+)\s*-\s*(.+)$/);
+    if (m) {
+      const pfx = m[1];
+      let rest = m[2].trim();
+      if (/^(\d\s+)+\d$/.test(rest)) {
+        rest = rest.replace(/\s+/g, '');
+      }
+      return `${pfx} - ${rest}`;
+    }
+    return s;
   }
 
   function getCheckCellContent(val) {
@@ -8215,8 +8334,14 @@
   function renderOperatorChecksheetView(container, tpl, mc, mo, yr, data) {
     const sheet = tpl.operatorSheet || {};
     const items = sheet.items || [];
+    const densityClass = items.length > 12 ? 'cs-density-high' : (items.length > 7 ? 'cs-density-medium' : 'cs-density-low');
+    if (container) container.className = 'cs-paper ' + densityClass;
     const monthNames = ['', 'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
     const monthName = monthNames[parseInt(mo)] || 'SEPTEMBER';
+
+    const factoryVal = (data.factory !== undefined) ? data.factory : (tpl.factory || '');
+    const monthVal = (data.month !== undefined) ? data.month : '';
+    const yearVal = (data.year !== undefined) ? data.year : '';
 
     const now = new Date();
     const isCurrentRealMonth = (now.getFullYear() === parseInt(yr) && (now.getMonth() + 1) === parseInt(mo));
@@ -8275,12 +8400,18 @@
           </thead>
           <tbody>
             <tr>
-              <td class="cs-meta-center-val" style="color:#000000; font-size:10px;">${mc}</td>
+              <td class="cs-meta-center-val" style="color:#000000; font-size:9.5px;">${formatMachineCode(mc)}</td>
               <td class="cs-meta-center-val">${tpl.issueRevision || '0'}</td>
               <td class="cs-meta-center-val">${formatExcelDate(tpl.issueDate)}</td>
-              <td class="cs-meta-center-val">${tpl.factory || ''}</td>
-              <td class="cs-meta-center-val">${monthName}</td>
-              <td class="cs-meta-center-val">${yr}</td>
+              <td class="cs-meta-center-val">
+                <input type="text" class="cs-meta-input" id="csMetaFactory" value="${factoryVal}" placeholder="" title="คลิกเพื่อพิมพ์ระบุ Factory" onchange="updateChecksheetMeta('factory', this.value)">
+              </td>
+              <td class="cs-meta-center-val">
+                <input type="text" class="cs-meta-input" id="csMetaMonth" value="${monthVal}" placeholder="" title="คลิกเพื่อพิมพ์ระบุ Month" onchange="updateChecksheetMeta('month', this.value)">
+              </td>
+              <td class="cs-meta-center-val">
+                <input type="text" class="cs-meta-input" id="csMetaYear" value="${yearVal}" placeholder="" title="คลิกเพื่อพิมพ์ระบุ Year" onchange="updateChecksheetMeta('year', this.value)">
+              </td>
             </tr>
           </tbody>
         </table>
@@ -8331,6 +8462,25 @@
     let lastSec = '';
     let renderedRowsCount = 0;
 
+    // Pre-calculate rowspans for consecutive sub-items under same item (matching Excel)
+    const itemSpanInfo = [];
+    for (let i = 0; i < items.length; i++) {
+      if (itemSpanInfo[i]) continue;
+      let span = 1;
+      while (
+        i + span < items.length &&
+        items[i + span].section === items[i].section &&
+        (items[i + span].no === '' || items[i + span].no === items[i].no) &&
+        (items[i + span].item === '' || items[i + span].item === items[i].item)
+      ) {
+        span++;
+      }
+      itemSpanInfo[i] = { isFirst: true, rowSpan: span };
+      for (let s = 1; s < span; s++) {
+        itemSpanInfo[i + s] = { isFirst: false, rowSpan: 0 };
+      }
+    }
+
     items.forEach((item, idx) => {
       if (item.section && item.section !== lastSec) {
         lastSec = item.section;
@@ -8342,12 +8492,18 @@
         renderedRowsCount++;
       }
 
-      const itemNoDisplay = item.no || '';
-      const itemNameDisplay = item.no ? (item.item || '') : '';
+      const spanInfo = itemSpanInfo[idx] || { isFirst: true, rowSpan: 1 };
 
-      html += `<tr class="cs-item-tr">
-        <td style="text-align:center;">${itemNoDisplay}</td>
-        <td style="text-align:left; padding-left:5px;">${itemNameDisplay}</td>
+      html += `<tr class="cs-item-tr">`;
+      if (spanInfo.isFirst) {
+        const rSpanAttr = spanInfo.rowSpan > 1 ? ` rowspan="${spanInfo.rowSpan}"` : '';
+        html += `
+          <td${rSpanAttr} style="text-align:center; vertical-align:middle; font-weight:600;">${item.no}</td>
+          <td${rSpanAttr} style="text-align:left; padding-left:5px; vertical-align:middle; font-weight:600;">${item.item}</td>
+        `;
+      }
+
+      html += `
         <td style="text-align:left; padding-left:5px;">${item.checkTitle}</td>
         <td style="text-align:center; font-size:9px;">${item.period || 'วัน'}</td>
       `;
@@ -8376,18 +8532,25 @@
     }
 
     // Embed By Team row directly in the table grid (Excel Row 19 A19:E19)
-    const teamVal = data.team || '';
+    // Label centered in merged cols 1-4 without input, and daily square inputs for days 1-31 (matching Image 4)
     html += `
       <tr class="cs-byteam-tr">
-        <td colspan="4" class="cs-byteam-td">
-          <div class="cs-byteam-inner">
-            <span class="cs-byteam-label">By Team :&nbsp;</span>
-            <input type="text" class="cs-byteam-input" value="${teamVal}" placeholder="ระบุชื่อทีม / พนักงานผู้รับผิดชอบ" onchange="updateChecksheetTeam(this.value)">
-          </div>
+        <td colspan="4" class="cs-byteam-td" style="text-align:center; vertical-align:middle;">
+          <span class="cs-byteam-label">By Team :</span>
         </td>
     `;
     for (let d = 1; d <= 31; d++) {
-      html += `<td class="cs-byteam-day-cell"></td>`;
+      const dayTeam = (data.teamDaily && data.teamDaily[d]) !== undefined ? data.teamDaily[d] : '';
+      html += `
+        <td class="cs-byteam-day-cell">
+          <input type="text" class="cs-byteam-day-input" id="csTeamDay_${d}" 
+                 value="${dayTeam}" 
+                 placeholder="" 
+                 maxlength="15"
+                 title="ระบุชื่อทีม / พนักงานผู้รับผิดชอบ วันที่ ${d}" 
+                 onchange="updateChecksheetDailyTeam(${d}, this.value)">
+        </td>
+      `;
     }
     html += `</tr></tbody></table>`;
 
@@ -8503,9 +8666,9 @@
             </div>
           </div>
           <div class="cs-page-tag">PAGE 1 / 1</div>
+        </div>
       </div>
-    </div>
-  `;
+    `;
 
     container.innerHTML = html;
   }
@@ -8513,6 +8676,10 @@
   function renderTechnicianChecksheetView(container, tpl, mc, yr, data) {
     const tech = tpl.technicianSheet || {};
     const items = tech.items || [];
+    if (container) container.className = 'cs-paper cs-density-tech';
+
+    const factoryVal = (data.factory !== undefined) ? data.factory : (tpl.factory || '');
+    const yearVal = (data.year !== undefined) ? data.year : '';
 
     let html = `
       <div class="cs-doc-header">
@@ -8565,11 +8732,15 @@
           </thead>
           <tbody>
             <tr>
-              <td class="cs-meta-center-val" style="color:#000000; font-size:10px;">${mc}</td>
+              <td class="cs-meta-center-val" style="color:#000000; font-size:9.5px;">${formatMachineCode(mc)}</td>
               <td class="cs-meta-center-val">${tech.issueRevision || tpl.issueRevision || '0'}</td>
               <td class="cs-meta-center-val">${formatExcelDate(tech.issueDate || tpl.issueDate)}</td>
-              <td class="cs-meta-center-val">${tpl.factory || ''}</td>
-              <td class="cs-meta-center-val">${yr}</td>
+              <td class="cs-meta-center-val">
+                <input type="text" class="cs-meta-input" id="csMetaTechFactory" value="${factoryVal}" placeholder="" title="คลิกเพื่อพิมพ์ระบุ Factory" onchange="updateChecksheetMeta('factory', this.value)">
+              </td>
+              <td class="cs-meta-center-val">
+                <input type="text" class="cs-meta-input" id="csMetaTechYear" value="${yearVal}" placeholder="" title="คลิกเพื่อพิมพ์ระบุ Year" onchange="updateChecksheetMeta('year', this.value)">
+              </td>
             </tr>
           </tbody>
         </table>
@@ -8921,6 +9092,19 @@
     saveChecksheetDataToStorage();
   }
 
+  function updateChecksheetDailyTeam(day, val) {
+    const data = getCurrentChecksheetData();
+    if (!data.teamDaily) data.teamDaily = {};
+    data.teamDaily[day] = val;
+    saveChecksheetDataToStorage();
+  }
+
+  function updateChecksheetMeta(field, val) {
+    const data = getCurrentChecksheetData();
+    data[field] = val;
+    saveChecksheetDataToStorage();
+  }
+
   function updateChecksheetInfoRow(rowIdx, colIdx, val) {
     const data = getCurrentChecksheetData();
     if (!data.infoRows) data.infoRows = [ ['', '', ''], ['', '', ''], ['', '', ''] ];
@@ -8960,8 +9144,9 @@
     const selMc = document.getElementById('csSelMachineCode');
     if (selMc && mcCode) {
       let found = false;
+      const formattedInput = formatMachineCode(mcCode);
       for (let i = 0; i < selMc.options.length; i++) {
-        if (selMc.options[i].value === mcCode) {
+        if (selMc.options[i].value === formattedInput || selMc.options[i].value === mcCode) {
           selMc.selectedIndex = i;
           found = true;
           break;
@@ -8969,10 +9154,10 @@
       }
       if (!found) {
         const newOpt = document.createElement('option');
-        newOpt.value = mcCode;
-        newOpt.textContent = mcCode;
+        newOpt.value = formattedInput;
+        newOpt.textContent = formattedInput;
         selMc.appendChild(newOpt);
-        selMc.value = mcCode;
+        selMc.value = formattedInput;
       }
       renderCurrentChecksheet();
     }
