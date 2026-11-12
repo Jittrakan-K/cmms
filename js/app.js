@@ -25,13 +25,13 @@ const FILTERS = {
 };
 const PAGES = {
   overview: ['SH-01', 'ภาพรวม', 'ภาพรวมโรงงาน'],
-  work: ['SH-02', 'ใบสั่งงาน', 'ใบสั่งงาน'],
+  work: ['SH-02', 'งานซ่อม', 'งานซ่อม'],
   assets: ['SH-03', 'เครื่องจักร', 'ทะเบียนเครื่องจักร'],
   pm: ['SH-04', 'แผน PM', 'แผนบำรุงรักษา'],
   parts: ['SH-05', 'อะไหล่', 'คลังอะไหล่'],
   gauges: ['SH-06', 'เครื่องมือวัด', 'ทะเบียนเครื่องมือวัด'],
   report: ['SH-07', 'รายงาน KPI', 'รายงาน KPI'],
-  server: ['SH-08', 'เชื่อมต่อเซิร์ฟเวอร์', 'เชื่อมต่อเซิร์ฟเวอร์']
+  server: ['SH-08', 'ตั้งค่า', 'ตั้งค่าและเชื่อมต่อ']
 };
 const ADD_LABEL = { assets: 'เพิ่มเครื่อง', pm: 'เพิ่มแผน PM', parts: 'เพิ่มอะไหล่', gauges: 'เพิ่มเครื่องมือวัด' };
 const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -39,7 +39,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [],
-  page: 'overview', filter: 'active', selectedWo: null, selectedAsset: null, period: 30, q: '',
+  page: 'overview', filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '',
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
 
@@ -58,6 +58,24 @@ const canAdmin = () => state.user?.role === 'admin';
 const assetOf = (id) => state.assets.find((a) => a.id === id);
 const partOf = (id) => state.parts.find((p) => p.id === id);
 const isoDate = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const PRIO = { stop: ['สูง', 'var(--stop-bg)', 'var(--stop-fg)'], slow: ['กลาง', 'var(--wait-bg)', 'var(--wait-fg)'], plan: ['ต่ำ', 'var(--grey-bg)', 'var(--grey-fg)'] };
+const TYPE_STYLE = { breakdown: ['var(--stop)', 'var(--stop-bg)', 'var(--stop-fg)'], pm: ['var(--pm)', 'var(--pm-bg)', 'var(--pm-fg)'], inspect: ['var(--wait)', 'var(--grey-bg)', 'var(--grey-fg)'] };
+const priOf = (w) => w.priority || { breakdown: 'stop', inspect: 'slow', pm: 'plan' }[w.type] || 'plan';
+const pill = (label, b, f) => `<span class="pill" style="--b:${b};--f:${f}">${esc(label)}</span>`;
+// ตัวย่อชื่อ ข้ามสระหน้าเพื่อให้ได้พยัญชนะต้น
+const ini = (name) => { if (!name) return '—'; const first = (w) => [...(w || '')].find((ch) => !'เแโใไ'.includes(ch)) || ''; const [a, b] = name.split(/\s+/); return first(a) + first(b); };
+const avatar = (name, sm = true) => `<span class="avatar ${sm ? 'sm' : ''}" aria-hidden="true">${esc(ini(name))}</span>`;
+const relDate = (t) => { const d0 = startOfToday(); if (t >= d0) return 'วันนี้'; if (t >= d0 - DAY) return 'เมื่อวาน'; return fmtDate(t); };
+const NAV_ICON = {
+  overview: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  work: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>',
+  assets: '<path d="M3 21V10l6 4V10l6 4V4h6v17z"/>',
+  pm: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  parts: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  gauges: '<path d="M4 15a8 8 0 1 1 16 0"/><path d="m12 15 4-5"/><path d="M4 19h16"/>',
+  report: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  server: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
+};
 const editBtn = (coll, id) => canAdmin() ? `<button type="button" class="btn small" data-act="edit" data-coll="${coll}" data-id="${esc(id)}">แก้ไข</button>` : '';
 const delBtn = (coll, id, label = 'ลบ') => canAdmin() ? `<button type="button" class="btn small danger" data-act="del" data-coll="${coll}" data-id="${esc(id)}">${label}</button>` : '';
 
@@ -148,20 +166,6 @@ function metrics() {
 }
 
 /* ---------- ส่วนประกอบ ---------- */
-function titleBlock(rows) {
-  return `<div class="tblock">${rows.map(([k, v, mono]) => `<div><span>${esc(k)}</span><span class="${mono ? 'mono' : ''}">${esc(v)}</span></div>`).join('')}</div>`;
-}
-function sheetBlock(n) {
-  const [code, , full] = PAGES[state.page];
-  const b = state.backend;
-  return titleBlock([
-    ['โรงงาน', b.mode === 'firebase' ? b.projectId : 'ข้อมูลตัวอย่าง'],
-    ['แผ่นงาน', full], ['เลขที่', `CMMS-${code}`, true], ['แผ่นที่', `${n} / ${Object.keys(PAGES).length}`, true],
-    ['ข้อมูล', b.mode === 'firebase' ? 'Firebase' : 'เบราว์เซอร์เครื่องนี้'],
-    ['ซิงก์ล่าสุด', state.lastSync ? fmtSec(state.lastSync) : '—', true]
-  ]);
-}
-
 /* ---------- SH-01 ภาพรวม ---------- */
 function viewOverview(m) {
   const span = 7 * DAY;
@@ -303,22 +307,81 @@ function woDetail(w) {
     </div></section>`;
 }
 
+function scopeList() {
+  const me = state.user.name;
+  return state.scope === 'mine' ? state.workOrders.filter((w) => w.tech === me || w.requestedBy === me) : state.workOrders;
+}
+
+function taskRow(w) {
+  const done = w.status === 'done';
+  const [c, tb, tf] = TYPE_STYLE[w.type] || TYPE_STYLE.inspect;
+  const [pl, pb, pf] = PRIO[priOf(w)];
+  const sub = done ? `${w.id} · ปิดแล้ว` : `${w.id} · ${STATUS[w.status][0]}`;
+  return `<div class="trow task ${done ? 'done' : ''}" data-act="open-wo" data-id="${esc(w.id)}" aria-selected="${w.id === state.selectedWo}">
+    <span class="stripe" style="--c:${c}"></span>
+    <span><button type="button" class="check ${done ? 'on' : ''}" data-act="open-wo" data-id="${esc(w.id)}" aria-label="${done ? 'ปิดงานแล้ว' : 'ปิดงาน'} ${esc(w.id)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button></span>
+    <span class="tname"><button type="button" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.title)}</button><small>${esc(sub)}</small></span>
+    <span class="cell">${done ? pill(TYPE[w.type], 'var(--grey-bg)', 'var(--muted)') : pill(TYPE[w.type], tb, tf)}</span>
+    <span class="cell"><span class="tag">${esc(w.asset)}</span></span>
+    <span class="cell">${w.tech ? `${avatar(w.tech)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(w.tech)}</span>` : '<span class="dim">ยังไม่มอบหมาย</span>'}</span>
+    <span class="cell mono" style="font-size:13px;${!done && w.startAt >= startOfToday() ? 'color:var(--ok-fg)' : ''}">${relDate(done ? w.endAt : w.startAt)}</span>
+    <span class="cell">${done ? pill(pl, 'var(--grey-bg)', 'var(--muted)') : pill(pl, pb, pf)}</span>
+  </div>`;
+}
+
+function quickAdd() {
+  if (!state.user.role) return '';
+  if (!state.quick) return `<button type="button" class="addrow" data-act="quick-open"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>เพิ่มงาน</button>`;
+  const d = state.draft;
+  return `<form class="quick" data-form="quick">
+    <label for="qa-title" class="sr">ชื่องาน</label><input id="qa-title" name="title" placeholder="อาการหรือชื่องาน แล้วกด Enter" value="${esc(d.title)}" required autocomplete="off">
+    <label for="qa-asset" class="sr">เครื่องจักร</label><select id="qa-asset" name="asset" required>${state.assets.map((a) => `<option value="${esc(a.id)}" ${d.asset === a.id ? 'selected' : ''}>${esc(a.id)} ${esc(a.name)}</option>`).join('')}</select>
+    <label for="qa-pri" class="sr">ผลกระทบ</label><select id="qa-pri" name="priority" style="flex-basis:150px">${Object.entries({ stop: 'เครื่องหยุด', slow: 'เดินได้แต่ผิดปกติ', plan: 'ทำตามแผนได้' }).map(([k, l]) => `<option value="${k}" ${(d.priority || 'stop') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <button class="btn solid small">เพิ่ม</button><button type="button" class="btn small" data-act="quick-cancel">ยกเลิก</button>
+  </form>`;
+}
+
 function viewWork() {
-  const rows = state.workOrders.filter(FILTERS[state.filter][1]);
-  const chips = Object.entries(FILTERS).map(([k, [label, test]]) => `<button type="button" data-act="filter" data-id="${k}" aria-pressed="${state.filter === k}">${label}<span>${state.workOrders.filter(test).length}</span></button>`).join('');
-  const body = rows.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}" aria-selected="${w.id === state.selectedWo}">
-      <td><button type="button" class="link" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.id)}</button></td>
-      <td>${tag(w.asset)}</td><td>${esc(w.title)}<span class="sub">${TYPE[w.type]}</span></td>
-      <td class="dim" style="white-space:nowrap">${esc(w.tech || 'ยังไม่มอบหมาย')}</td>
-      <td class="mono" style="white-space:nowrap">${fmtDateTime(w.startAt)}</td><td>${lamp(w.status)}</td></tr>`).join('');
-  const w = state.workOrders.find((x) => x.id === state.selectedWo);
-  return `${state.form === 'wo' ? formWorkOrder() : ''}
-    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px"><div class="chips" role="group" aria-label="กรองตามสถานะ">${chips}</div>
+  const all = state.workOrders;
+  const me = state.user.name;
+  const mineCount = all.filter((w) => (w.tech === me || w.requestedBy === me) && w.status !== 'done').length;
+  const tabs = [['mine', 'งานของฉัน', mineCount], ['all', 'งานทั้งหมด', all.filter((w) => w.status !== 'done').length]]
+    .map(([k, l, n]) => `<button type="button" data-act="scope" data-id="${k}" aria-pressed="${state.scope === k}">${l}<span>${n}</span></button>`).join('');
+  const list = scopeList();
+  const groups = [
+    ['pending', 'รออนุมัติ', (w) => w.status === 'pending'],
+    ['active', 'กำลังดำเนินการ', (w) => ['open', 'doing', 'parts'].includes(w.status)],
+    ['done', 'ปิดแล้ว', (w) => w.status === 'done']
+  ];
+  const chevron = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  const body = groups.map(([k, label, test]) => {
+    const items = list.filter(test);
+    const open = !state.collapsed[k];
+    const shown = k === 'done' && !state.showDone ? items.slice(0, 6) : items;
+    return `<section aria-label="${label}">
+      <button type="button" class="ghead" data-act="toggle-group" data-id="${k}" aria-expanded="${open}">${chevron}${label}<span class="mono">${items.length}</span></button>
+      ${open ? `${shown.map(taskRow).join('')}${!items.length && k !== 'pending' ? '<p class="empty" style="padding-left:22px">ไม่มีงานในกลุ่มนี้</p>' : ''}
+        ${k === 'done' && items.length > shown.length ? `<button type="button" class="more" data-act="show-done">แสดงอีก ${items.length - shown.length} งาน</button>` : ''}
+        ${k === 'pending' ? quickAdd() : ''}` : ''}
+    </section>`;
+  }).join('');
+  return `<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px"><div class="chips" role="group" aria-label="ขอบเขตงาน">${tabs}</div>
       <button type="button" class="btn" data-act="export-wo">ส่งออก CSV</button></div>
-    <section class="box" aria-label="รายการใบสั่งงาน">${rows.length
-      ? `<div class="scroll"><table style="min-width:720px"><thead><tr><th scope="col">เลขที่</th><th scope="col">เครื่อง</th><th scope="col">งาน</th><th scope="col">ช่าง</th><th scope="col">แจ้งเมื่อ</th><th scope="col">สถานะ</th></tr></thead><tbody>${body}</tbody></table></div>`
-      : '<p class="empty">ไม่มีงานในสถานะนี้</p>'}</section>
-    ${w ? woDetail(w) : ''}`;
+    <div class="tasks"><div class="scroll"><div class="grid">
+      <div class="trow th"><span></span><span></span><span style="padding:0 10px">ชื่องาน</span><span style="padding:0 10px">ประเภท</span><span style="padding:0 10px">เครื่อง</span><span style="padding:0 10px">ผู้รับผิดชอบ</span><span style="padding:0 10px">วันที่</span><span style="padding:0 10px">ความสำคัญ</span></div>
+      ${body}
+    </div></div></div>`;
+}
+
+function drawer() {
+  const w = state.page === 'work' && state.workOrders.find((x) => x.id === state.selectedWo);
+  document.body.style.overflow = w ? 'hidden' : '';
+  if (!w) return '';
+  return `<div class="drawer-wrap"><button type="button" class="scrim" data-act="close-drawer" aria-label="ปิดรายละเอียด" tabindex="-1"></button>
+    <aside class="drawer" role="dialog" aria-modal="true" aria-label="ใบสั่งงาน ${esc(w.id)}">
+      <div class="dhead"><span class="mono dim">${esc(w.id)}</span><button type="button" class="iconbtn" data-act="close-drawer" aria-label="ปิด"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <div class="dbody">${woDetail(w)}</div>
+    </aside></div>`;
 }
 
 /* ---------- SH-03 เครื่องจักร ---------- */
@@ -522,31 +585,35 @@ function viewLogin() {
 /* ---------- วาดหน้า ---------- */
 function render() {
   if (!state.backend || state.user === undefined) { app.innerHTML = '<p style="padding:24px">กำลังโหลด</p>'; return; }
-  if (!state.user) { app.innerHTML = viewLogin(); return; }
+  if (!state.user) { document.body.style.overflow = ''; app.innerHTML = viewLogin(); return; }
   const m = metrics();
   const counts = { work: m.open.length, assets: state.assets.length, pm: m.pmSoon.length, parts: m.low.length, gauges: m.gaugeAlert.length || '' };
-  const nav = Object.entries(PAGES).map(([k, [code, label]]) => `<button type="button" data-act="nav" data-id="${k}" ${state.page === k ? 'aria-current="page"' : ''}><span class="code">${code}</span><span>${label}</span><span class="n">${counts[k] ?? ''}</span></button>`).join('');
+  const nav = Object.entries(PAGES).map(([k, [, label]]) => `<button type="button" data-act="nav" data-id="${k}" ${state.page === k ? 'aria-current="page"' : ''}>${icon(NAV_ICON[k])}<span>${label}</span><span class="n">${counts[k] ?? ''}</span></button>`).join('');
   const views = { overview: viewOverview, work: viewWork, assets: viewAssets, pm: viewPm, parts: viewParts, gauges: viewGauges, report: viewReport, server: viewServer };
   const noRole = !state.user.role;
-  const [code, , full] = PAGES[state.page];
-  const n = Object.keys(PAGES).indexOf(state.page) + 1;
+  const [, , full] = PAGES[state.page];
   const add = canAdmin() && ADD_LABEL[state.page] ? `<button type="button" class="btn" data-act="add" data-id="${state.page}">${ADD_LABEL[state.page]}</button>` : '';
   const report = noRole ? '' : `<button type="button" class="btn solid" data-act="report">${icon('<path d="M12 5v14M5 12h14"/>')}แจ้งซ่อม</button>`;
-  app.innerHTML = `<div class="page"><div class="sheet">
-    <div class="ruler" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<span>${i + 1}</span>`).join('')}</div>
-    <div class="body">
-      <aside class="side"><div class="brand">${logo}<div><b>CMMS</b><span>แผนกซ่อมบำรุง</span></div></div>
-        <nav class="nav" aria-label="รายการแผ่นงาน"><span class="label">รายการแผ่นงาน</span>${nav}</nav>
-        <div class="who"><b>${esc(state.user.name)}</b><span>${esc({ admin: 'หัวหน้า / แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต' }[state.user.role] || 'ยังไม่มีสิทธิ์')}</span>${state.backend.mode === 'firebase' ? '<button type="button" data-act="logout">ออกจากระบบ</button>' : ''}</div></aside>
+  const role = { admin: 'หัวหน้า / แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต' }[state.user.role] || 'ยังไม่มีสิทธิ์';
+  const where = state.backend.mode === 'firebase' ? state.backend.projectId : 'ข้อมูลตัวอย่างในเครื่องนี้';
+  const sync = state.lastSync ? ` · ซิงก์ ${fmtTime(state.lastSync)}` : '';
+  app.innerHTML = `<header class="topbar">
+      <span class="brand"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>CMMS</span>
+      <div class="right">
+        <div class="searchwrap"><label for="q" class="sr">ค้นหาเครื่อง ใบงาน อะไหล่ เครื่องมือวัด</label><input id="q" class="search" type="search" autocomplete="off" placeholder="ค้นหาทั้งระบบ" value="${esc(state.q)}"><div id="q-res" class="qres" hidden></div></div>
+        <div class="me">${avatar(state.user.name, false)}<span class="who"><b>${esc(state.user.name)}</b><span>${esc(role)}</span></span>${state.backend.mode === 'firebase' ? '<button type="button" data-act="logout">ออกจากระบบ</button>' : ''}</div>
+      </div>
+    </header>
+    <div class="shell">
+      <aside class="side"><span class="label">ซ่อมบำรุง</span><nav class="nav" aria-label="เมนูหลัก">${nav}</nav></aside>
       <main>
-        <header class="head"><div><span class="doc">CMMS-${code} · REV A</span><h1>${full}</h1><span class="meta">${today()}</span></div>
-          <div class="actions"><div class="searchwrap"><label for="q" class="sr">ค้นหาเครื่อง ใบงาน อะไหล่ เครื่องมือวัด</label><input id="q" class="search" type="search" autocomplete="off" placeholder="ค้นหาเครื่อง ใบงาน อะไหล่" value="${esc(state.q)}"><div id="q-res" class="qres" hidden></div></div>${add}${report}</div></header>
+        <header class="head"><div><h1>${full}</h1><span class="meta">${today()} · ${esc(where)}${sync}</span></div>
+          <div class="actions">${add}${report}</div></header>
         ${noRole ? '<p class="notice err">บัญชีนี้ยังไม่มีสิทธิ์ ให้แอดมินสร้างเอกสารใน users ตาม uid ของบัญชีนี้</p>' : ''}
         ${state.loadError && state.page !== 'server' ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}
         ${noRole && state.page !== 'server' ? '' : views[state.page](m)}
-        ${sheetBlock(n)}
       </main>
-    </div></div></div>${state.toast ? `<div class="toast" role="status">${esc(state.toast)}</div>` : ''}`;
+    </div>${drawer()}${state.toast ? `<div class="toast" role="status">${esc(state.toast)}</div>` : ''}`;
 }
 
 // ข้อมูลเรียลไทม์อาจมาตอนคนกำลังพิมพ์หรือกดเมาส์ค้าง จึงพักการวาดใหม่ไว้ก่อน
@@ -565,11 +632,18 @@ document.addEventListener('pointerup', () => { pointerDown = false; setTimeout(f
 document.addEventListener('focusout', () => setTimeout(flush));
 
 let toastTimer;
+// ข้อความแจ้งเตือนวาดแยกจากหน้า จึงขึ้นทันทีแม้คนกำลังพิมพ์อยู่
+function paintToast() {
+  let el = app.querySelector('.toast');
+  if (!state.toast) { el?.remove(); return; }
+  if (!el) { el = Object.assign(document.createElement('div'), { className: 'toast' }); el.setAttribute('role', 'status'); app.append(el); }
+  el.textContent = state.toast;
+}
 function toast(msg) {
   state.toast = msg;
-  refresh();
+  paintToast();
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { state.toast = ''; refresh(); }, 3200);
+  toastTimer = setTimeout(() => { state.toast = ''; paintToast(); }, 3200);
 }
 async function run(task, okMsg) {
   try {
@@ -620,13 +694,19 @@ const actions = {
   'open-wo': (id) => {
     const w = state.workOrders.find((x) => x.id === id);
     if (state.selectedWo !== id) state.close = { cause: w?.cause || '', action: w?.action || '' };
+    if (state.page !== 'work') go('work');
     state.selectedWo = id;
-    if (w && !FILTERS[state.filter][1](w)) state.filter = w.status === 'done' ? 'done' : 'active';
-    if (state.page !== 'work') go('work'); else render();
-    document.querySelector('[aria-label="รายละเอียดใบสั่งงาน"]')?.scrollIntoView({ block: 'start' });
+    render();
+    document.querySelector('.drawer .iconbtn')?.focus();
   },
+  'close-drawer': () => { const id = state.selectedWo; state.selectedWo = null; render(); document.querySelector(`.trow [data-id="${CSS.escape(id || '')}"].check`)?.focus(); },
+  scope: (id) => { state.scope = id; render(); },
+  'toggle-group': (id) => { state.collapsed[id] = !state.collapsed[id]; render(); },
+  'show-done': () => { state.showDone = true; render(); },
+  'quick-open': () => { state.quick = true; state.collapsed.pending = false; state.draft = { asset: state.assets[0]?.id, priority: 'stop' }; render(); document.getElementById('qa-title')?.focus(); },
+  'quick-cancel': () => { state.quick = false; state.draft = {}; render(); },
   'open-asset': (id) => { state.selectedAsset = id; if (state.page !== 'assets') go('assets'); else render(); window.scrollTo(0, 0); },
-  report: () => { go('work'); state.form = 'wo'; state.draft = { asset: state.assets[0]?.id, priority: 'stop' }; render(); document.getElementById('f-title')?.focus(); },
+  report: () => { go('work'); state.selectedWo = null; actions['quick-open'](); },
   add: (id) => { state.form = { pm: 'pmPlans' }[id] || id; state.draft = {}; render(); },
   edit: (id, el) => {
     const coll = el.dataset.coll;
@@ -643,7 +723,7 @@ const actions = {
     run(() => state.backend.calibrate(id, pass, pass ? '' : 'ไม่ผ่านการสอบเทียบ ต้องประเมินผลการวัดย้อนหลัง'), pass ? `บันทึก ${id} ผ่านการสอบเทียบ` : `${id} เปลี่ยนเป็นห้ามใช้`);
   },
   'export-wo': () => {
-    const rows = state.workOrders.filter(FILTERS[state.filter][1]);
+    const rows = scopeList();
     download(`work-orders-${isoDate(Date.now())}.csv`, csv([
       ['เลขที่', 'เครื่อง', 'ประเภท', 'งาน', 'สถานะ', 'ผู้แจ้ง', 'ผู้อนุมัติ', 'ช่าง', 'แจ้งเมื่อ', 'ปิดเมื่อ', 'เวลาหยุด (ชม.)', 'รหัสสาเหตุ', 'การแก้ไข', 'อะไหล่ที่เบิก'],
       ...rows.map((w) => [w.id, w.asset, TYPE[w.type], w.title, STATUS[w.status][0], w.requestedBy, w.approvedBy, w.tech, fmtDateTime(w.startAt), w.endAt ? fmtDateTime(w.endAt) : '', w.type === 'inspect' ? '' : hours((w.endAt ?? Date.now()) - w.startAt), w.cause, w.action, (w.partsUsed || []).map((u) => `${u.id}×${u.qty}`).join(' ')])
@@ -735,6 +815,7 @@ function paintSearch() {
     : '<p class="empty">ไม่พบรายการที่ตรงกัน</p>';
 }
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.selectedWo && state.page === 'work' && !state.q) { actions['close-drawer'](); return; }
   if (e.key === 'Escape' && state.q) { state.q = ''; const i = document.getElementById('q'); if (i) i.value = ''; paintSearch(); }
 });
 
@@ -770,9 +851,20 @@ app.addEventListener('submit', (e) => {
       if (!title) return;
       const me = state.user.name;
       const type = d.priority === 'stop' ? 'breakdown' : 'inspect';
-      const id = await state.backend.createWorkOrder({ asset: d.asset, title, type, requestedBy: me, status: 'pending', log: [{ at: Date.now(), text: `${me} ${type === 'breakdown' ? 'แจ้งซ่อม' : 'แจ้งตรวจสอบ'}` }] });
+      const id = await state.backend.createWorkOrder({ asset: d.asset, title, type, priority: d.priority, requestedBy: me, status: 'pending', log: [{ at: Date.now(), text: `${me} ${type === 'breakdown' ? 'แจ้งซ่อม' : 'แจ้งตรวจสอบ'}` }] });
       state.selectedWo = id; state.filter = 'active'; state.close = { cause: '', action: '' };
       done(`เปิด ${id} แล้ว รออนุมัติ`);
+    }),
+    quick: () => run(async () => {
+      const title = (d.title || '').trim();
+      if (!title) return;
+      const me = state.user.name;
+      const type = d.priority === 'stop' ? 'breakdown' : 'inspect';
+      const id = await state.backend.createWorkOrder({ asset: d.asset, title, type, priority: d.priority, requestedBy: me, status: 'pending', log: [{ at: Date.now(), text: `${me} ${type === 'breakdown' ? 'แจ้งซ่อม' : 'แจ้งตรวจสอบ'}` }] });
+      state.draft = { asset: d.asset, priority: d.priority };
+      render();
+      document.getElementById('qa-title')?.focus();
+      toast(`เพิ่ม ${id} แล้ว รออนุมัติ`);
     }),
     assets: () => run(async () => {
       const id = d.id.trim().toUpperCase();
@@ -866,7 +958,6 @@ app.addEventListener('submit', (e) => {
     state.loadError = '';
     if (user?.role) {
       listen();
-      if (!state.selectedWo) state.selectedWo = state.workOrders.find((w) => w.status !== 'done')?.id ?? null;
       if (user.role === 'admin') {
         try { state.canSeed = await state.backend.isEmpty(); } catch { state.canSeed = false; }
         if (state.canSeed) state.page = 'server';

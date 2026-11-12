@@ -154,7 +154,7 @@ class LocalBackend {
   }
 
   onAuth(cb) {
-    cb({ uid: 'demo', name: 'โหมดตัวอย่าง', role: 'admin' });
+    cb({ uid: 'demo', name: 'อนันต์ ส.', role: 'admin' });
     return () => {};
   }
 
@@ -255,7 +255,7 @@ function calibrationPatch(g, pass, note) {
 function normalizeWorkOrder(data, id) {
   const now = Date.now();
   return {
-    id, asset: data.asset, type: data.type, title: data.title,
+    id, asset: data.asset, type: data.type, title: data.title, priority: data.priority || '',
     status: data.status ?? 'pending', startAt: data.startAt ?? now, endAt: data.endAt ?? null,
     tech: data.tech ?? '', requestedBy: data.requestedBy ?? '', approvedBy: '', approvedAt: null,
     cause: '', action: '', partsUsed: [], log: data.log ?? [{ at: now, text: `${data.requestedBy || 'ผู้ใช้'} แจ้งซ่อม` }]
