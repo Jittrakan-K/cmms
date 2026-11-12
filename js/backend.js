@@ -258,7 +258,7 @@ function normalizeWorkOrder(data, id) {
     id, asset: data.asset, type: data.type, title: data.title, priority: data.priority || '',
     status: data.status ?? 'pending', startAt: data.startAt ?? now, endAt: data.endAt ?? null,
     tech: data.tech ?? '', requestedBy: data.requestedBy ?? '', approvedBy: '', approvedAt: null,
-    team: data.team ?? (data.tech ? [data.tech] : []), dueDate: data.dueDate ?? null, checks: data.checks ?? [], note: data.note ?? '',
+    team: data.team ?? (data.tech ? [data.tech] : []), dueDate: data.dueDate ?? null, checks: data.checks ?? [], note: data.note ?? '', photo: data.photo ?? '',
     cause: '', action: '', partsUsed: [], log: data.log ?? [{ at: now, text: `${data.requestedBy || 'ผู้ใช้'} แจ้งซ่อม` }]
   };
 }

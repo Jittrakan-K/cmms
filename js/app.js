@@ -24,6 +24,7 @@ const FILTERS = {
   done: ['ปิดแล้ว', (w) => w.status === 'done']
 };
 const PAGES = {
+  quick: ['SH-00', 'แจ้งงานด่วน', 'แจ้งงานด่วน'],
   overview: ['SH-01', 'ภาพรวม', 'ภาพรวมโรงงาน'],
   work: ['SH-02', 'งานซ่อม', 'งานซ่อม'],
   assets: ['SH-03', 'เครื่องจักร', 'ทะเบียนเครื่องจักร'],
@@ -39,7 +40,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [],
-  page: 'overview', filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null,
+  page: 'overview', filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
 
@@ -67,6 +68,7 @@ const ini = (name) => { if (!name) return '—'; const first = (w) => [...(w || 
 const avatar = (name, sm = true) => `<span class="avatar ${sm ? 'sm' : ''}" aria-hidden="true">${esc(ini(name))}</span>`;
 const relDate = (t) => { const d0 = startOfToday(); if (t >= d0) return 'วันนี้'; if (t >= d0 - DAY) return 'เมื่อวาน'; return fmtDate(t); };
 const NAV_ICON = {
+  quick: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   overview: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
   work: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>',
   assets: '<path d="M3 21V10l6 4V10l6 4V4h6v17z"/>',
@@ -300,7 +302,8 @@ function woDetail(w) {
             ${w.dueDate ? `<div><dt>กำหนดเสร็จ</dt><dd class="mono ${!done && w.dueDate < startOfToday() ? 'alarm' : ''}">${fmtDateY(w.dueDate)}</dd></div>` : ''}
             ${(w.team || []).length > 1 ? `<div><dt>ทีม</dt><dd>${w.team.map(esc).join(', ')}</dd></div>` : ''}
           </dl>
-          ${w.note ? `<div class="pad" style="gap:4px"><span class="hint">รายละเอียด</span><p style="white-space:pre-line">${esc(w.note)}</p></div>` : ''}</section>
+          ${w.note ? `<div class="pad" style="gap:4px"><span class="hint">รายละเอียด</span><p style="white-space:pre-line">${esc(w.note)}</p></div>` : ''}
+          ${w.photo ? `<div class="pad" style="gap:6px"><span class="hint">รูปจากผู้แจ้ง</span><img src="${esc(w.photo)}" alt="รูปอาการที่ผู้แจ้งถ่าย" style="max-width:100%;border-radius:10px;border:1px solid var(--line)"></div>` : ''}</section>
         ${(w.checks || []).length ? `<section class="box"><div class="bar"><h2>รายการตรวจ</h2><span class="mono dim">${w.checks.filter((c) => c.done).length} / ${w.checks.length}</span></div>
           ${w.checks.map((c, i) => `<label class="list-row" style="grid-template-columns:22px minmax(0,1fr);align-items:center;cursor:${!done && canTech() && approved ? 'pointer' : 'default'}"><input type="checkbox" data-check="${i}" ${c.done ? 'checked' : ''} ${!done && canTech() && approved ? '' : 'disabled'} style="width:18px;height:18px;accent-color:var(--accent)"><span style="${c.done ? 'color:var(--muted);text-decoration:line-through' : ''}">${esc(c.text)}</span></label>`).join('')}
           ${!done && !approved ? '<p class="hint" style="padding:0 18px 14px">ติ๊กได้หลังหัวหน้าอนุมัติ</p>' : ''}</section>` : ''}
@@ -377,6 +380,65 @@ function viewWork() {
       <div class="trow th"><span></span><span></span><span style="padding:0 10px">ชื่องาน</span><span style="padding:0 10px">ประเภท</span><span style="padding:0 10px">เครื่อง</span><span style="padding:0 10px">ผู้รับผิดชอบ</span><span style="padding:0 10px">วันที่</span><span style="padding:0 10px">ความสำคัญ</span></div>
       ${body}
     </div></div></div>`;
+}
+
+/* ---------- SH-00 แจ้งงานด่วน (ฝ่ายผลิต ใช้บนมือถือ) ---------- */
+const SYMPTOMS = ['หยุดทำงาน', 'หยิบชิ้นงานพลาด', 'เสียงผิดปกติ', 'ของเสียเพิ่มขึ้น', 'ร้อนผิดปกติ', 'มีรอยรั่ว', 'มีข้อความ error'];
+function freshQr() {
+  return { asset: '', symptoms: [], stopped: null, note: '', photo: null, sent: null, filter: '' };
+}
+function viewQuick() {
+  const q = state.qr || (state.qr = freshQr());
+  if (q.sent) {
+    const w = state.workOrders.find((x) => x.id === q.sent.id);
+    return `<section class="qr done" aria-live="polite">
+      <span class="okmark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span>
+      <div><h2 style="font-size:24px;line-height:32px">ส่งแจ้งงานแล้ว</h2><span class="mono dim">${esc(q.sent.id)}</span></div>
+      <dl class="kv box" style="padding:16px;border-radius:12px"><dt>เครื่อง</dt><dd class="mono">${esc(q.sent.asset)}</dd><dt>อาการ</dt><dd>${esc(q.sent.title)}</dd><dt>สถานะ</dt><dd>${w ? STATUS[w.status][0] : 'รออนุมัติ'}</dd></dl>
+      <p class="dim">${q.sent.stopped ? 'แจ้งหัวหน้าซ่อมบำรุงแล้ว ถ้าไม่มีช่างมารับงานใน 15 นาที ให้โทรแจ้งห้องซ่อมบำรุง' : 'ช่างจะเข้ามาตรวจภายในกะนี้ ติดตามสถานะได้ที่หน้างานซ่อม'}</p>
+      <div class="actions"><button type="button" class="btn solid big" data-act="qr-again">แจ้งงานอื่น</button><button type="button" class="btn big" data-act="open-wo" data-id="${esc(q.sent.id)}">ดูใบงาน</button></div>
+    </section>`;
+  }
+  const t = q.filter.trim().toLowerCase();
+  const list = state.assets.filter((a) => !t || `${a.id} ${a.name} ${a.line}`.toLowerCase().includes(t));
+  const ready = q.asset && q.symptoms.length && q.stopped !== null;
+  const missing = !q.asset ? 'เลือกเครื่อง' : !q.symptoms.length ? 'เลือกอาการอย่างน้อย 1 ข้อ' : q.stopped === null ? 'บอกว่าเครื่องยังเดินอยู่ไหม' : '';
+  return `<form class="qr" data-form="qr">
+    <p class="hint" style="margin:-8px 0 0">แจ้งได้ใน 3 ขั้น ใบงานจะส่งให้หัวหน้าซ่อมบำรุงอนุมัติทันที · <button type="button" class="link" style="font-family:var(--sans)" data-act="nav" data-id="work">ดูงานซ่อมทั้งหมด</button></p>
+    <fieldset><legend>1 · เครื่องไหน</legend>
+      <label for="qr-filter" class="sr">ค้นหาเครื่อง</label><input id="qr-filter" class="qr-input" data-qr="filter" value="${esc(q.filter)}" placeholder="พิมพ์รหัสหรือชื่อเครื่อง" autocomplete="off">
+      <div class="qr-assets" id="qr-assets">${list.map((a) => `<button type="button" class="opt ${q.asset === a.id ? 'on' : ''}" aria-pressed="${q.asset === a.id}" data-act="qr-asset" data-id="${esc(a.id)}"><span class="mono" style="font-weight:500">${esc(a.id)}</span><span class="hint">${esc(a.name)}</span></button>`).join('') || '<p class="hint">ไม่พบเครื่องที่ค้นหา</p>'}</div>
+    </fieldset>
+    <fieldset><legend>2 · อาการ</legend>
+      <div class="qr-chips">${SYMPTOMS.map((x) => `<button type="button" class="chip ${q.symptoms.includes(x) ? 'on' : ''}" aria-pressed="${q.symptoms.includes(x)}" data-act="qr-sym" data-id="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+      <label for="qr-note" class="sr">รายละเอียดเพิ่มเติม</label><textarea id="qr-note" class="qr-input" data-qr="note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ไม่บังคับ)">${esc(q.note)}</textarea>
+    </fieldset>
+    <fieldset><legend>3 · เครื่องยังเดินอยู่ไหม</legend>
+      <div class="qr-two"><button type="button" class="opt big ${q.stopped === true ? 'stop' : ''}" aria-pressed="${q.stopped === true}" data-act="qr-stop" data-id="1">หยุดแล้ว</button><button type="button" class="opt big ${q.stopped === false ? 'on' : ''}" aria-pressed="${q.stopped === false}" data-act="qr-stop" data-id="0">ยังเดินอยู่</button></div>
+    </fieldset>
+    <div class="qr-photo">${q.photo
+      ? `<img src="${esc(q.photo)}" alt="รูปที่แนบ"><button type="button" class="btn small" data-act="qr-photo-del">เอารูปออก</button>`
+      : `<label class="photo-drop" for="qr-file"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>ถ่ายรูปอาการ <span class="hint">ช่วยให้ช่างเตรียมอะไหล่ถูก</span></label><input id="qr-file" type="file" accept="image/*" capture="environment" class="sr">`}</div>
+    <div class="qr-foot"><span class="hint" id="qr-hint" style="${ready ? '' : 'color:var(--stop-fg)'}">${ready ? (q.stopped ? 'จะแจ้งหัวหน้าซ่อมบำรุงทันทีเพราะเครื่องหยุด' : 'เข้าคิวงานตรวจสอบของกะนี้') : missing}</span>
+      <button class="btn solid big" ${ready ? '' : 'disabled'}>ส่งแจ้งงาน</button></div>
+  </form>`;
+}
+
+// ย่อรูปให้กว้างไม่เกิน 800 px เป็น JPEG เพื่อให้เก็บในใบงานได้ (Firestore จำกัด 1 MB ต่อเอกสาร)
+function shrinkImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 800 / Math.max(img.width, img.height));
+      const c = Object.assign(document.createElement('canvas'), { width: Math.round(img.width * k), height: Math.round(img.height * k) });
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.6));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('อ่านรูปไม่ได้ ลองถ่ายใหม่')); };
+    img.src = url;
+  });
 }
 
 function peopleList() {
@@ -632,14 +694,15 @@ function render() {
   const m = metrics();
   const counts = { work: m.open.length, assets: state.assets.length, pm: m.pmSoon.length, parts: m.low.length, gauges: m.gaugeAlert.length || '' };
   const nav = Object.entries(PAGES).map(([k, [, label]]) => `<button type="button" data-act="nav" data-id="${k}" ${state.page === k ? 'aria-current="page"' : ''}>${icon(NAV_ICON[k])}<span>${label}</span><span class="n">${counts[k] ?? ''}</span></button>`).join('');
-  const views = { overview: viewOverview, work: viewWork, assets: viewAssets, pm: viewPm, parts: viewParts, gauges: viewGauges, report: viewReport, server: viewServer };
+  const views = { quick: viewQuick, overview: viewOverview, work: viewWork, assets: viewAssets, pm: viewPm, parts: viewParts, gauges: viewGauges, report: viewReport, server: viewServer };
   const noRole = !state.user.role;
   const [, , full] = PAGES[state.page];
   const add = canAdmin() && ADD_LABEL[state.page] ? `<button type="button" class="btn" data-act="add" data-id="${state.page}">${ADD_LABEL[state.page]}</button>` : '';
-  const report = noRole ? '' : `<button type="button" class="btn solid" data-act="report">${icon('<path d="M12 5v14M5 12h14"/>')}แจ้งซ่อม</button>`;
+  const report = noRole || state.page === 'quick' ? '' : `<button type="button" class="btn solid" data-act="report">${icon('<path d="M12 5v14M5 12h14"/>')}แจ้งซ่อม</button>`;
   const role = { admin: 'หัวหน้า / แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต' }[state.user.role] || 'ยังไม่มีสิทธิ์';
   const where = state.backend.mode === 'firebase' ? state.backend.projectId : 'ข้อมูลตัวอย่างในเครื่องนี้';
   const sync = state.lastSync ? ` · ซิงก์ ${fmtTime(state.lastSync)}` : '';
+  app.classList.toggle('quickmode', state.page === 'quick');
   app.innerHTML = `<header class="topbar">
       <span class="brand"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>CMMS</span>
       <div class="right">
@@ -758,6 +821,11 @@ const actions = {
     document.getElementById('cp-title')?.focus();
   },
   'panel-close': () => { state.panel = false; render(); },
+  'qr-asset': (id) => { state.qr.asset = id; render(); },
+  'qr-sym': (id) => { const q = state.qr; q.symptoms = q.symptoms.includes(id) ? q.symptoms.filter((x) => x !== id) : [...q.symptoms, id]; render(); },
+  'qr-stop': (id) => { state.qr.stopped = id === '1'; render(); },
+  'qr-photo-del': () => { state.qr.photo = null; render(); },
+  'qr-again': () => { state.qr = freshQr(); render(); window.scrollTo(0, 0); },
   'c-type': (id) => {
     const c = state.create; c.type = id;
     if (id === 'pm' || id === 'improve') c.prio = 'plan';
@@ -883,6 +951,18 @@ document.addEventListener('keydown', (e) => {
 
 app.addEventListener('input', (e) => {
   if (e.target.id === 'q') { state.q = e.target.value; paintSearch(); return; }
+  const qk = e.target.dataset.qr;
+  if (qk && state.qr) {
+    state.qr[qk] = e.target.value;
+    if (qk === 'filter') {
+      const t = e.target.value.trim().toLowerCase();
+      document.querySelectorAll('#qr-assets [data-act="qr-asset"]').forEach((b) => {
+        const a = assetOf(b.dataset.id);
+        b.hidden = !!t && !`${a.id} ${a.name} ${a.line}`.toLowerCase().includes(t);
+      });
+    }
+    return;
+  }
   const ck = e.target.dataset.c;
   if (ck && state.create) {
     state.create[ck] = e.target.value;
@@ -907,6 +987,10 @@ app.addEventListener('keydown', (e) => {
 });
 
 app.addEventListener('change', (e) => {
+  if (e.target.id === 'qr-file' && e.target.files?.[0]) {
+    shrinkImage(e.target.files[0]).then((url) => { state.qr.photo = url; render(); }).catch((err) => toast(err.message));
+    return;
+  }
   if (e.target.dataset.rerender && state.create) { state.create[e.target.dataset.c] = e.target.value; render(); return; }
   if (e.target.dataset.check != null) {
     const w = state.workOrders.find((x) => x.id === state.selectedWo);
@@ -937,6 +1021,22 @@ app.addEventListener('submit', (e) => {
       const id = await state.backend.createWorkOrder({ asset: d.asset, title, type, priority: d.priority, requestedBy: me, status: 'pending', log: [{ at: Date.now(), text: `${me} ${type === 'breakdown' ? 'แจ้งซ่อม' : 'แจ้งตรวจสอบ'}` }] });
       state.selectedWo = id; state.filter = 'active'; state.close = { cause: '', action: '' };
       done(`เปิด ${id} แล้ว รออนุมัติ`);
+    }),
+    qr: () => run(async () => {
+      const q = state.qr;
+      if (!q.asset || !q.symptoms.length || q.stopped === null) return;
+      const me = state.user.name;
+      const title = q.symptoms.join(', ') + (q.note.trim() ? ` · ${q.note.trim()}` : '');
+      const type = q.stopped ? 'breakdown' : 'inspect';
+      const id = await state.backend.createWorkOrder({
+        asset: q.asset, title, type, priority: q.stopped ? 'stop' : 'slow', requestedBy: me, status: 'pending',
+        note: q.note.trim(), photo: q.photo || '',
+        log: [{ at: Date.now(), text: `${me} แจ้งงานด่วน${q.stopped ? ' เครื่องหยุด' : ''}${q.photo ? ' พร้อมรูป' : ''}` }]
+      });
+      q.sent = { id, asset: q.asset, title, stopped: q.stopped };
+      document.activeElement?.blur();
+      render();
+      window.scrollTo(0, 0);
     }),
     create: () => run(async () => {
       const c = state.create;
@@ -1060,6 +1160,7 @@ app.addEventListener('submit', (e) => {
         try { state.canSeed = await state.backend.isEmpty(); } catch { state.canSeed = false; }
         if (state.canSeed) state.page = 'server';
       }
+      if (user.role === 'operator' && !PAGES[location.hash.slice(1)]) state.page = 'quick';
     } else if (user) {
       state.page = 'server';
     }
