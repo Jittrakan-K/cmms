@@ -1,0 +1,398 @@
+// ชั้นเชื่อมต่อข้อมูล: หน้าเว็บคุยกับไฟล์นี้เท่านั้น
+// ถ้าวันหน้าจะย้ายไป Supabase หรือ PocketBase ให้เขียนคลาสใหม่ที่มีเมธอดชุดเดียวกัน
+// แล้วแก้ createBackend() จุดเดียว ไม่ต้องแตะ app.js
+import { firebaseConfig as fileConfig } from './firebase-config.js';
+
+const SDK = 'https://www.gstatic.com/firebasejs/13.1.0';
+const CONFIG_KEY = 'cmms.firebaseConfig';
+const DEMO_KEY = 'cmms.demo.v2';
+const HOUR = 3600000;
+const DAY = 24 * HOUR;
+
+export function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+export function workOrderId(seq, now = Date.now()) {
+  const d = new Date(now);
+  const ym = String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, '0');
+  return `WO-${ym}-${String(seq).padStart(3, '0')}`;
+}
+
+// สถานะใบงาน: pending รออนุมัติ → open อนุมัติแล้ว → doing กำลังซ่อม ⇄ parts รออะไหล่ → done ปิดงาน
+// ประเภท: breakdown ซ่อมฉุกเฉิน, pm บำรุงรักษาตามแผน, inspect แจ้งตรวจสอบ
+export function sampleData(now = Date.now()) {
+  const ago = (h) => now - h * HOUR;
+  const due = (d) => startOfToday() + d * DAY;
+  const done = (seq, asset, type, title, startH, endH, tech, cause, action) => ({
+    id: workOrderId(seq, now), asset, type, title, status: 'done',
+    startAt: ago(startH), endAt: ago(endH), tech, requestedBy: type === 'pm' ? 'แผน PM' : 'ฝ่ายผลิต',
+    approvedBy: 'วิชัย ร.', approvedAt: ago(startH - 0.1), cause, action,
+    log: [{ at: ago(startH), text: 'เปิดใบงาน' }, { at: ago(endH), text: `${tech} ปิดงาน` }]
+  });
+  return {
+    assets: [
+      ['PRN-101', 'เครื่องพิมพ์ครีมบัดกรี', 'ไลน์ SMT 1', 'A'],
+      ['SPI-102', 'เครื่องตรวจครีมบัดกรี', 'ไลน์ SMT 1', 'B'],
+      ['MNT-103', 'เครื่องติดตั้งชิ้นส่วนความเร็วสูง', 'ไลน์ SMT 1', 'A'],
+      ['MNT-104', 'เครื่องติดตั้งชิ้นส่วนอเนกประสงค์', 'ไลน์ SMT 1', 'A'],
+      ['RFL-105', 'เตาอบรีโฟลว์', 'ไลน์ SMT 1', 'A'],
+      ['AOI-106', 'เครื่องตรวจด้วยภาพ', 'ไลน์ SMT 1', 'B'],
+      ['PRN-201', 'เครื่องพิมพ์ครีมบัดกรี', 'ไลน์ SMT 2', 'A'],
+      ['MNT-203', 'เครื่องติดตั้งชิ้นส่วน', 'ไลน์ SMT 2', 'A'],
+      ['RFL-205', 'เตาอบรีโฟลว์', 'ไลน์ SMT 2', 'A'],
+      ['AOI-206', 'เครื่องตรวจด้วยภาพ', 'ไลน์ SMT 2', 'B'],
+      ['CMP-901', 'ปั๊มลม', 'ห้องสาธารณูปโภค', 'A'],
+      ['N2G-902', 'เครื่องผลิตไนโตรเจน', 'ห้องสาธารณูปโภค', 'B']
+    ].map(([id, name, line, cls]) => ({ id, name, line, cls, maker: '', model: '', year: '' })),
+    workOrders: [
+      {
+        id: workOrderId(52, now), asset: 'MNT-103', type: 'breakdown',
+        title: 'หัวดูดหยิบชิ้นงานพลาดต่อเนื่อง เครื่องหยุดด้วย pick-up error',
+        status: 'doing', startAt: ago(1.3), endAt: null, tech: 'อนันต์ ส.', requestedBy: 'สมชาย ก.',
+        approvedBy: 'วิชัย ร.', approvedAt: ago(1.17), cause: '', action: '',
+        log: [
+          { at: ago(1.3), text: 'สมชาย ก. แจ้งซ่อม' },
+          { at: ago(1.17), text: 'วิชัย ร. อนุมัติ มอบหมาย อนันต์ ส.' },
+          { at: ago(0.92), text: 'อนันต์ ส. ทำ LOTO และเริ่มซ่อม' },
+          { at: ago(0.33), text: 'เปลี่ยนไส้กรองหัวดูด 4 ชิ้น และหัวดูด 2 ชิ้น' }
+        ]
+      },
+      {
+        id: workOrderId(51, now), asset: 'AOI-206', type: 'inspect', title: 'ภาพจากกล้องด้านบนมืดเป็นช่วง',
+        status: 'pending', startAt: ago(4.6), endAt: null, tech: '', requestedBy: 'มาลี ท.',
+        approvedBy: '', approvedAt: null, cause: '', action: '', log: [{ at: ago(4.6), text: 'มาลี ท. แจ้งตรวจสอบ' }]
+      },
+      {
+        id: workOrderId(50, now), asset: 'CMP-901', type: 'inspect', title: 'แรงดันลมตกช่วงเปลี่ยนกะ',
+        status: 'open', startAt: ago(9.2), endAt: null, tech: '', requestedBy: 'ประเสริฐ บ.',
+        approvedBy: 'วิชัย ร.', approvedAt: ago(8.5), cause: '', action: '',
+        log: [{ at: ago(9.2), text: 'ประเสริฐ บ. แจ้งตรวจสอบ' }, { at: ago(8.5), text: 'วิชัย ร. อนุมัติ' }]
+      },
+      {
+        id: workOrderId(49, now), asset: 'RFL-205', type: 'breakdown', title: 'มอเตอร์พัดลมโซน 7 มีเสียงดังแล้วหยุดหมุน',
+        status: 'parts', startAt: ago(13), endAt: null, tech: 'วิชัย ร.', requestedBy: 'สมชาย ก.',
+        approvedBy: 'วิชัย ร.', approvedAt: ago(12.9), cause: '', action: '',
+        log: [
+          { at: ago(13), text: 'สมชาย ก. แจ้งซ่อม' },
+          { at: ago(12.9), text: 'วิชัย ร. อนุมัติ' },
+          { at: ago(11), text: 'ตรวจพบลูกปืนมอเตอร์แตก สั่งมอเตอร์ FAN-RF-200W รอ 3–5 วัน' }
+        ]
+      },
+      done(48, 'MNT-203', 'pm', 'PM รายเดือน ทำความสะอาดหัวติดตั้งและตรวจแรงดูด', 39, 36, 'อนันต์ ส.', 'PM', 'ทำตามแผน'),
+      done(47, 'RFL-105', 'breakdown', 'ฮีตเตอร์โซน 4 อุณหภูมิไม่ถึงค่าตั้ง', 43, 40.5, 'อนันต์ ส.', 'C-WEAR', 'เปลี่ยนฮีตเตอร์โซน 4'),
+      done(46, 'PRN-201', 'breakdown', 'ใบปาดสึก พิมพ์ครีมไม่เต็มแผ่น', 53, 51.5, 'วิชัย ร.', 'C-WEAR', 'เปลี่ยนใบปาด เพิ่มการวัดความสึกใน PM'),
+      done(45, 'MNT-104', 'breakdown', 'แกน Z หัวที่ 2 ติดขัด', 65, 63.8, 'สมชาย ก.', 'C-LUB', 'ทำความสะอาดและหล่อลื่นแกน Z'),
+      done(44, 'RFL-105', 'pm', 'PM รายเดือน', 87, 83, 'อนันต์ ส.', 'PM', 'ทำตามแผน'),
+      done(43, 'N2G-902', 'breakdown', 'ความบริสุทธิ์ไนโตรเจนต่ำกว่าเกณฑ์', 103, 99, 'วิชัย ร.', 'C-PM', 'เปลี่ยนไส้กรองอากาศขาเข้าที่เลยรอบ'),
+      done(42, 'PRN-101', 'pm', 'PM รายสัปดาห์ ล้างใบปาดและตรวจแรงกด', 111, 109, 'สมชาย ก.', 'PM', 'ทำตามแผน'),
+      done(41, 'AOI-106', 'breakdown', 'ไฟส่องสว่างกระพริบ', 133, 132.2, 'อนันต์ ส.', 'C-ELEC', 'ขันขั้วต่อสายไฟให้แน่น'),
+      done(40, 'MNT-103', 'breakdown', 'ฟีดเดอร์ช่อง 12 ป้อนเทปไม่เดิน', 149, 146.5, 'สมชาย ก.', 'C-SET', 'ตั้งระยะฟีดเดอร์ใหม่'),
+      done(39, 'CMP-901', 'pm', 'PM รายเดือน ตรวจน้ำมันและไส้กรอง', 155, 153, 'วิชัย ร.', 'PM', 'ทำตามแผน')
+    ],
+    pmPlans: [
+      ['pm-mnt104-nozzle', 'MNT-104', 'ทำความสะอาดหัวดูดและตรวจแรงดูดสุญญากาศ', 7, -2],
+      ['pm-prn201-squeegee', 'PRN-201', 'ล้างใบปาดและตรวจแรงกด', 7, 0],
+      ['pm-n2g902-filter', 'N2G-902', 'เปลี่ยนไส้กรองอากาศขาเข้า', 90, 1],
+      ['pm-rfl105-flux', 'RFL-105', 'ทำความสะอาดระบบดูดไอฟลักซ์', 30, 2],
+      ['pm-cmp901-oil', 'CMP-901', 'ตรวจน้ำมันและไส้กรองน้ำมัน', 30, 4],
+      ['pm-mnt103-filter', 'MNT-103', 'เปลี่ยนไส้กรองหัวดูด', 7, 5],
+      ['pm-aoi206-lens', 'AOI-206', 'ทำความสะอาดเลนส์และตรวจไฟส่องสว่าง', 30, 12],
+      ['pm-rfl205-chain', 'RFL-205', 'ทำความสะอาดและหล่อลื่นโซ่ลำเลียง', 7, 3]
+    ].map(([id, asset, task, intervalDays, d]) => ({ id, asset, task, intervalDays, dueDate: due(d) })),
+    parts: [
+      ['FAN-RF-200W', 'มอเตอร์พัดลมหมุนเวียน รีโฟลว์', 'B-11', 0, 1],
+      ['NZL-1005', 'หัวดูด ขนาด 1005', 'A-02', 2, 6],
+      ['FLT-N2-01', 'ไส้กรองอากาศ เครื่อง N2', 'C-04', 1, 2],
+      ['SQG-300', 'ใบปาด 300 มม.', 'A-07', 2, 2],
+      ['FLT-FX-02', 'ไส้กรองไอฟลักซ์', 'B-03', 2, 4],
+      ['HTR-RF-1.5K', 'ฮีตเตอร์รีโฟลว์ 1.5 kW', 'B-12', 4, 4],
+      ['FLT-NZ-04', 'ไส้กรองหัวดูด', 'A-03', 16, 8],
+      ['CHN-RF-08', 'โซ่ลำเลียงรีโฟลว์', 'D-01', 1, 1]
+    ].map(([id, name, bin, qty, min]) => ({ id, name, bin, qty, min })),
+    seq: 52
+  };
+}
+
+/* ---------- โหมดตัวอย่าง: เก็บในเบราว์เซอร์เครื่องนี้ ---------- */
+class LocalBackend {
+  mode = 'local';
+  listeners = {};
+
+  constructor() {
+    this.db = this.load();
+  }
+
+  load() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(DEMO_KEY));
+      if (saved) return saved;
+    } catch { /* เปิดใหม่จากข้อมูลตัวอย่าง */ }
+    return sampleData();
+  }
+
+  commit(...colls) {
+    try { localStorage.setItem(DEMO_KEY, JSON.stringify(this.db)); } catch { /* ใช้ในหน่วยความจำต่อ */ }
+    colls.forEach((c) => (this.listeners[c] || []).forEach((cb) => cb(structuredClone(this.db[c]))));
+  }
+
+  onAuth(cb) {
+    cb({ uid: 'demo', name: 'โหมดตัวอย่าง', role: 'admin' });
+    return () => {};
+  }
+
+  async signIn() {}
+  async signOut() {}
+
+  subscribe(coll, cb) {
+    (this.listeners[coll] ||= []).push(cb);
+    cb(structuredClone(this.db[coll]));
+    return () => { this.listeners[coll] = this.listeners[coll].filter((x) => x !== cb); };
+  }
+
+  async createWorkOrder(data) {
+    const id = workOrderId(++this.db.seq);
+    this.db.workOrders.unshift(normalizeWorkOrder(data, id));
+    this.commit('workOrders');
+    return id;
+  }
+
+  async updateWorkOrder(id, patch) {
+    this.db.workOrders = this.db.workOrders.map((w) => (w.id === id ? { ...w, ...patch } : w));
+    this.commit('workOrders');
+  }
+
+  async put(coll, id, data) {
+    const docId = id ?? `${coll}-${Date.now()}`;
+    this.db[coll] = [...this.db[coll].filter((x) => x.id !== docId), { ...data, id: docId }];
+    this.commit(coll);
+  }
+
+  async remove(coll, id) {
+    this.db[coll] = this.db[coll].filter((x) => x.id !== id);
+    this.commit(coll);
+  }
+
+  async adjustPart(id, delta) {
+    this.db.parts = this.db.parts.map((p) => (p.id === id ? { ...p, qty: Math.max(0, p.qty + delta) } : p));
+    this.commit('parts');
+  }
+
+  async completePM(id, doneBy) {
+    const plan = this.db.pmPlans.find((p) => p.id === id);
+    if (!plan) return;
+    plan.dueDate = startOfToday() + plan.intervalDays * DAY;
+    plan.lastDone = Date.now();
+    this.db.workOrders.unshift(pmWorkOrder(plan, doneBy, workOrderId(++this.db.seq)));
+    this.commit('pmPlans', 'workOrders');
+  }
+
+  async isEmpty() { return false; }
+  async seed() {}
+
+  reset() {
+    this.db = sampleData();
+    this.commit('assets', 'workOrders', 'pmPlans', 'parts');
+  }
+}
+
+function normalizeWorkOrder(data, id) {
+  const now = Date.now();
+  return {
+    id, asset: data.asset, type: data.type, title: data.title,
+    status: data.status ?? 'pending', startAt: data.startAt ?? now, endAt: data.endAt ?? null,
+    tech: data.tech ?? '', requestedBy: data.requestedBy ?? '', approvedBy: '', approvedAt: null,
+    cause: '', action: '', log: data.log ?? [{ at: now, text: `${data.requestedBy || 'ผู้ใช้'} แจ้งซ่อม` }]
+  };
+}
+
+function pmWorkOrder(plan, doneBy, id) {
+  const now = Date.now();
+  return {
+    id, asset: plan.asset, type: 'pm', title: plan.task, status: 'done', startAt: now, endAt: now,
+    tech: doneBy, requestedBy: 'แผน PM', approvedBy: doneBy, approvedAt: now, cause: 'PM', action: 'ทำตามแผน',
+    log: [{ at: now, text: `${doneBy} บันทึก PM ตามแผน` }]
+  };
+}
+
+/* ---------- Firebase: Firestore + Authentication ---------- */
+class FirebaseBackend {
+  mode = 'firebase';
+
+  constructor(config) {
+    this.config = config;
+  }
+
+  async init() {
+    const [appMod, fs, authMod] = await Promise.all([
+      import(`${SDK}/firebase-app.js`),
+      import(`${SDK}/firebase-firestore.js`),
+      import(`${SDK}/firebase-auth.js`)
+    ]);
+    this.fs = fs;
+    this.authMod = authMod;
+    const app = appMod.initializeApp(this.config);
+    this.projectId = this.config.projectId;
+    const emulator = new URLSearchParams(location.search).get('emulator') === '1' && location.hostname === 'localhost';
+    // แคชลงเครื่อง: เปิดดูข้อมูลล่าสุดได้แม้สัญญาณในโรงงานหลุด
+    this.db = emulator
+      ? fs.initializeFirestore(app, {})
+      : fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) });
+    this.auth = authMod.getAuth(app);
+    if (emulator) {
+      fs.connectFirestoreEmulator(this.db, '127.0.0.1', 8080);
+      authMod.connectAuthEmulator(this.auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+    }
+    return this;
+  }
+
+  onAuth(cb) {
+    const { doc, getDoc } = this.fs;
+    return this.authMod.onAuthStateChanged(this.auth, async (user) => {
+      if (!user) return cb(null);
+      let profile = {};
+      try {
+        const snap = await getDoc(doc(this.db, 'users', user.uid));
+        profile = snap.exists() ? snap.data() : {};
+      } catch (err) {
+        console.warn('อ่านสิทธิ์ผู้ใช้ไม่ได้', err);
+      }
+      cb({ uid: user.uid, name: profile.name || user.email, role: profile.role || null });
+    });
+  }
+
+  async signIn(email, password) {
+    await this.authMod.signInWithEmailAndPassword(this.auth, email, password);
+  }
+
+  signOut() {
+    return this.authMod.signOut(this.auth);
+  }
+
+  subscribe(coll, cb, onError) {
+    const { collection, query, orderBy, limit, onSnapshot } = this.fs;
+    const ref = collection(this.db, coll);
+    // จำกัดจำนวนใบงานที่ฟังแบบเรียลไทม์ เพื่อไม่ให้โควตาการอ่านโตตามอายุระบบ
+    const q = coll === 'workOrders' ? query(ref, orderBy('startAt', 'desc'), limit(300)) : ref;
+    return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ ...d.data(), id: d.id }))), onError);
+  }
+
+  // เลขใบงานมาจากตัวนับใน transaction จึงไม่ซ้ำแม้แจ้งซ่อมพร้อมกันหลายเครื่อง
+  nextId(tx, snap) {
+    const seq = (snap.exists() ? snap.data().seq : 0) + 1;
+    tx.set(snap.ref, { seq });
+    return workOrderId(seq);
+  }
+
+  async createWorkOrder(data) {
+    const { doc, runTransaction, serverTimestamp } = this.fs;
+    return runTransaction(this.db, async (tx) => {
+      const counter = await tx.get(doc(this.db, 'counters', 'workOrders'));
+      const id = this.nextId(tx, counter);
+      const { id: _drop, ...rest } = normalizeWorkOrder(data, id);
+      tx.set(doc(this.db, 'workOrders', id), { ...rest, createdAt: serverTimestamp() });
+      return id;
+    });
+  }
+
+  updateWorkOrder(id, patch) {
+    const { doc, updateDoc } = this.fs;
+    return updateDoc(doc(this.db, 'workOrders', id), patch);
+  }
+
+  put(coll, id, data) {
+    const { doc, collection, setDoc } = this.fs;
+    const ref = id ? doc(this.db, coll, id) : doc(collection(this.db, coll));
+    return setDoc(ref, data);
+  }
+
+  remove(coll, id) {
+    const { doc, deleteDoc } = this.fs;
+    return deleteDoc(doc(this.db, coll, id));
+  }
+
+  async adjustPart(id, delta) {
+    const { doc, runTransaction } = this.fs;
+    await runTransaction(this.db, async (tx) => {
+      const ref = doc(this.db, 'parts', id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('ไม่พบอะไหล่');
+      tx.update(ref, { qty: Math.max(0, snap.data().qty + delta) });
+    });
+  }
+
+  async completePM(id, doneBy) {
+    const { doc, runTransaction, serverTimestamp } = this.fs;
+    await runTransaction(this.db, async (tx) => {
+      const planRef = doc(this.db, 'pmPlans', id);
+      const counter = await tx.get(doc(this.db, 'counters', 'workOrders'));
+      const plan = await tx.get(planRef);
+      if (!plan.exists()) throw new Error('ไม่พบแผน PM');
+      const p = plan.data();
+      tx.update(planRef, { dueDate: startOfToday() + p.intervalDays * DAY, lastDone: Date.now() });
+      const woId = this.nextId(tx, counter);
+      const { id: _drop, ...rest } = pmWorkOrder(p, doneBy, woId);
+      tx.set(doc(this.db, 'workOrders', woId), { ...rest, createdAt: serverTimestamp() });
+    });
+  }
+
+  async isEmpty() {
+    const { collection, getDocs, limit, query } = this.fs;
+    const snap = await getDocs(query(collection(this.db, 'assets'), limit(1)));
+    return snap.empty;
+  }
+
+  async seed() {
+    const { doc, writeBatch, serverTimestamp } = this.fs;
+    const data = sampleData();
+    const batch = writeBatch(this.db);
+    ['assets', 'workOrders', 'pmPlans', 'parts'].forEach((c) => {
+      data[c].forEach(({ id, ...rest }) => {
+        batch.set(doc(this.db, c, id), c === 'workOrders' ? { ...rest, createdAt: serverTimestamp() } : rest);
+      });
+    });
+    batch.set(doc(this.db, 'counters', 'workOrders'), { seq: data.seq });
+    await batch.commit();
+  }
+}
+
+/* ---------- เลือกโหมด ---------- */
+export function savedConfig() {
+  try {
+    return JSON.parse(localStorage.getItem(CONFIG_KEY));
+  } catch {
+    return null;
+  }
+}
+
+export function saveConfig(config) {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+}
+
+export function clearConfig() {
+  try { localStorage.removeItem(CONFIG_KEY); } catch { /* ไม่มีอะไรต้องลบ */ }
+}
+
+// รับได้ทั้ง JSON และโค้ด const firebaseConfig = {...} ที่คัดลอกจาก console
+export function parseConfig(text) {
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('ไม่พบ { ... } ในข้อความ');
+  const json = match[0]
+    .replace(/\/\/.*$/gm, '')
+    .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
+    .replace(/'/g, '"')
+    .replace(/,\s*}/g, '}');
+  const config = JSON.parse(json);
+  ['apiKey', 'projectId', 'appId'].forEach((k) => {
+    if (!config[k]) throw new Error(`ค่า ${k} หายไป`);
+  });
+  return config;
+}
+
+export async function createBackend() {
+  const config = fileConfig || savedConfig();
+  if (!config) return new LocalBackend();
+  return new FirebaseBackend(config).init();
+}

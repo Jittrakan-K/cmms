@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function userDoc() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+    function isMember() {
+      return request.auth != null && exists(userDoc());
+    }
+    function role() {
+      return get(userDoc()).data.role;
+    }
+    function isAdmin() {
+      return isMember() && role() == 'admin';
+    }
+    function isTech() {
+      return isMember() && role() in ['admin', 'tech'];
+    }
+    function changedOnly(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+    function validStatus() {
+      return request.resource.data.status in ['pending', 'open', 'doing', 'parts', 'done'];
+    }
+    // ปิดงานได้เมื่อมีรหัสสาเหตุและการแก้ไขที่ต้นเหตุ
+    function closesProperly() {
+      return request.resource.data.status != 'done'
+        || (request.resource.data.cause is string && request.resource.data.cause.size() > 0
+            && request.resource.data.action is string && request.resource.data.action.size() > 0);
+    }
+
+    // role: admin = หัวหน้า อนุมัติและจัดการทุกอย่าง, tech = ช่าง ซ่อมและปิดงาน, operator = แจ้งซ่อมและดูข้อมูล
+    match /users/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /assets/{id} {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+
+    match /workOrders/{id} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && (request.resource.data.status == 'pending' || isTech())
+        && validStatus()
+        && existsAfter(/databases/$(database)/documents/assets/$(request.resource.data.asset));
+      // ช่างทำงานได้หลังหัวหน้าอนุมัติแล้วเท่านั้น
+      allow update: if isTech()
+        && resource.data.status != 'pending'
+        && changedOnly(['status', 'endAt', 'tech', 'log', 'cause', 'action'])
+        && request.resource.data.status != 'pending'
+        && validStatus() && closesProperly();
+      allow update: if isAdmin() && validStatus() && closesProperly();
+      allow delete: if isAdmin();
+    }
+
+    match /pmPlans/{id} {
+      allow read: if isMember();
+      allow update: if isTech() && changedOnly(['dueDate', 'lastDone']);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /parts/{id} {
+      allow read: if isMember();
+      allow update: if isTech() && changedOnly(['qty'])
+        && request.resource.data.qty is number
+        && request.resource.data.qty >= 0;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /counters/workOrders {
+      allow read: if isMember();
+      allow write: if isMember()
+        && request.resource.data.seq is int
+        && (!exists(/databases/$(database)/documents/counters/workOrders)
+            || request.resource.data.seq == resource.data.seq + 1
+            || isAdmin());
+    }
+  }
+}

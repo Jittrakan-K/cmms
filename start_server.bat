@@ -1,17 +1,10 @@
 @echo off
 chcp 65001 > nul
-title PTN ORBRAY MAINTENANCE - Host Web Server
-color 0B
-echo =====================================================================
-echo       PTN ORBRAY MAINTENANCE - STARTING HOST WEB SERVER
-echo =====================================================================
-echo.
-echo กำลังเริ่มต้น Web Server เพื่อแชร์หน้าเว็บให้เครื่องอื่นในเครือข่าย...
-echo.
-
-python server.py
+title CMMS
+cd /d "%~dp0"
+python serve.py
 if errorlevel 1 (
     echo.
-    echo [ERROR] ไม่สามารถเริ่ม Python ได้ กรุณาตรวจสอบว่าติดตั้ง Python แล้ว
+    echo [ERROR] เริ่ม Python ไม่ได้ ตรวจสอบว่าติดตั้ง Python แล้ว
     pause
 )
