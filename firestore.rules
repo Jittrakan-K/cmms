@@ -21,7 +21,8 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
     function validStatus() {
-      return request.resource.data.status in ['pending', 'open', 'doing', 'parts', 'done'];
+      return request.resource.data.status in ['pending', 'open', 'doing', 'parts', 'done']
+        && (!('type' in request.resource.data) || request.resource.data.type in ['breakdown', 'pm', 'inspect', 'improve']);
     }
     // ปิดงานได้เมื่อมีรหัสสาเหตุและการแก้ไขที่ต้นเหตุ
     function closesProperly() {
@@ -52,7 +53,7 @@ service cloud.firestore {
       // ช่างทำงานได้หลังหัวหน้าอนุมัติแล้วเท่านั้น
       allow update: if isTech()
         && resource.data.status != 'pending'
-        && changedOnly(['status', 'endAt', 'tech', 'log', 'cause', 'action', 'partsUsed'])
+        && changedOnly(['status', 'endAt', 'tech', 'log', 'cause', 'action', 'partsUsed', 'checks'])
         && request.resource.data.status != 'pending'
         && validStatus() && closesProperly();
       allow update: if isAdmin() && validStatus() && closesProperly();

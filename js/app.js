@@ -11,7 +11,7 @@ const STATUS = {
   parts: ['รออะไหล่', 'var(--wait)', '0'],
   done: ['ปิดงานแล้ว', 'var(--run)', '0']
 };
-const TYPE = { breakdown: 'ซ่อมฉุกเฉิน', pm: 'บำรุงรักษาตามแผน', inspect: 'แจ้งตรวจสอบ' };
+const TYPE = { breakdown: 'ซ่อมฉุกเฉิน', pm: 'บำรุงรักษาตามแผน', inspect: 'แจ้งตรวจสอบ', improve: 'ปรับปรุง' };
 const CAUSES = [
   ['C-LUB', 'ขาดการหล่อลื่น/ทำความสะอาด'], ['C-WEAR', 'ชิ้นส่วนสึกหรอตามอายุ'], ['C-PM', 'ไม่ได้ทำ PM ตามรอบ'],
   ['C-SET', 'ตั้งค่าหรือปรับแต่งผิด'], ['C-ELEC', 'ระบบไฟฟ้า/เซนเซอร์'], ['C-OPR', 'การใช้งานผิดวิธี'], ['C-OTH', 'อื่นๆ (ระบุในการแก้ไข)']
@@ -39,7 +39,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [],
-  page: 'overview', filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '',
+  page: 'overview', filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
 
@@ -59,7 +59,7 @@ const assetOf = (id) => state.assets.find((a) => a.id === id);
 const partOf = (id) => state.parts.find((p) => p.id === id);
 const isoDate = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const PRIO = { stop: ['สูง', 'var(--stop-bg)', 'var(--stop-fg)'], slow: ['กลาง', 'var(--wait-bg)', 'var(--wait-fg)'], plan: ['ต่ำ', 'var(--grey-bg)', 'var(--grey-fg)'] };
-const TYPE_STYLE = { breakdown: ['var(--stop)', 'var(--stop-bg)', 'var(--stop-fg)'], pm: ['var(--pm)', 'var(--pm-bg)', 'var(--pm-fg)'], inspect: ['var(--wait)', 'var(--grey-bg)', 'var(--grey-fg)'] };
+const TYPE_STYLE = { breakdown: ['var(--stop)', 'var(--stop-bg)', 'var(--stop-fg)'], pm: ['var(--pm)', 'var(--pm-bg)', 'var(--pm-fg)'], inspect: ['var(--wait)', 'var(--grey-bg)', 'var(--grey-fg)'], improve: ['var(--ok)', 'var(--ok-bg)', 'var(--ok-fg)'] };
 const priOf = (w) => w.priority || { breakdown: 'stop', inspect: 'slow', pm: 'plan' }[w.type] || 'plan';
 const pill = (label, b, f) => `<span class="pill" style="--b:${b};--f:${f}">${esc(label)}</span>`;
 // ตัวย่อชื่อ ข้ามสระหน้าเพื่อให้ได้พยัญชนะต้น
@@ -104,7 +104,7 @@ const logo = '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke
 /* ---------- ตัวเลข ---------- */
 function mergedDown(assetId, from, to) {
   const spans = state.workOrders
-    .filter((w) => w.asset === assetId && w.type !== 'inspect')
+    .filter((w) => w.asset === assetId && !['inspect', 'improve'].includes(w.type))
     .map((w) => [Math.max(w.startAt, from), Math.min(w.endAt ?? to, to)])
     .filter(([a, b]) => b > a)
     .sort((a, b) => a[0] - b[0]);
@@ -173,7 +173,7 @@ function viewOverview(m) {
   const days = Array.from({ length: 7 }, (_, i) => `<span>${fmtDate(m.from + i * DAY)}</span>`).join('');
   const rows = state.assets.map((a) => {
     const spans = state.workOrders
-      .filter((w) => w.asset === a.id && w.type !== 'inspect' && (w.endAt ?? m.now) >= m.from)
+      .filter((w) => w.asset === a.id && !['inspect', 'improve'].includes(w.type) && (w.endAt ?? m.now) >= m.from)
       .map((w) => {
         const a0 = Math.max(w.startAt, m.from), a1 = w.endAt ?? m.now;
         const style = w.type === 'pm' ? '--c:#fff;--b:2px solid var(--accent)' : `--c:${w.status === 'parts' ? 'var(--wait)' : 'var(--stop)'}`;
@@ -296,8 +296,14 @@ function woDetail(w) {
             <div><dt>เครื่อง</dt><dd><button type="button" class="link" data-act="open-asset" data-id="${esc(w.asset)}">${esc(w.asset)}</button> ${esc(a?.name)}</dd></div>
             <div><dt>ตำแหน่ง</dt><dd>${esc(a?.line || '—')}</dd></div>
             <div><dt>ระดับเครื่อง</dt><dd>${esc(a?.cls || '—')}</dd></div>
-            <div><dt>เครื่องหยุด</dt><dd class="mono">${w.type === 'inspect' ? 'ไม่หยุด' : `${hm((w.endAt ?? now) - w.startAt)} ชม.`}</dd></div>
-          </dl></section>
+            <div><dt>เครื่องหยุด</dt><dd class="mono">${w.type === 'inspect' || w.type === 'improve' ? 'ไม่หยุด' : `${hm((w.endAt ?? now) - w.startAt)} ชม.`}</dd></div>
+            ${w.dueDate ? `<div><dt>กำหนดเสร็จ</dt><dd class="mono ${!done && w.dueDate < startOfToday() ? 'alarm' : ''}">${fmtDateY(w.dueDate)}</dd></div>` : ''}
+            ${(w.team || []).length > 1 ? `<div><dt>ทีม</dt><dd>${w.team.map(esc).join(', ')}</dd></div>` : ''}
+          </dl>
+          ${w.note ? `<div class="pad" style="gap:4px"><span class="hint">รายละเอียด</span><p style="white-space:pre-line">${esc(w.note)}</p></div>` : ''}</section>
+        ${(w.checks || []).length ? `<section class="box"><div class="bar"><h2>รายการตรวจ</h2><span class="mono dim">${w.checks.filter((c) => c.done).length} / ${w.checks.length}</span></div>
+          ${w.checks.map((c, i) => `<label class="list-row" style="grid-template-columns:22px minmax(0,1fr);align-items:center;cursor:${!done && canTech() && approved ? 'pointer' : 'default'}"><input type="checkbox" data-check="${i}" ${c.done ? 'checked' : ''} ${!done && canTech() && approved ? '' : 'disabled'} style="width:18px;height:18px;accent-color:var(--accent)"><span style="${c.done ? 'color:var(--muted);text-decoration:line-through' : ''}">${esc(c.text)}</span></label>`).join('')}
+          ${!done && !approved ? '<p class="hint" style="padding:0 18px 14px">ติ๊กได้หลังหัวหน้าอนุมัติ</p>' : ''}</section>` : ''}
         <section class="box"><div class="bar"><h2>บันทึกการเปลี่ยนแปลง</h2></div>
           <table><thead><tr><th scope="col" style="width:48px">REV</th><th scope="col" style="width:140px">เวลา</th><th scope="col">รายการ</th></tr></thead>
           <tbody>${log.map((l) => `<tr><td class="mono">${l.rev}</td><td class="mono" style="white-space:nowrap">${fmtDateTime(l.at)}</td><td>${esc(l.text)}</td></tr>`).join('')}</tbody></table></section>
@@ -373,10 +379,47 @@ function viewWork() {
     </div></div></div>`;
 }
 
+function peopleList() {
+  const names = new Set([state.user.name]);
+  state.workOrders.forEach((w) => { if (w.tech) names.add(w.tech); (w.team || []).forEach((n) => names.add(n)); });
+  return [...names].filter((n) => n && n !== 'แผน PM').slice(0, 10);
+}
+
+function createPanel() {
+  const c = state.create;
+  if (!state.panel || !c) return '';
+  const opt = (on) => `aria-pressed="${on}" class="opt ${on ? 'on' : ''}"`;
+  const a = assetOf(c.asset);
+  const ready = c.title.trim() && c.asset;
+  const P = [['stop', 'เครื่องหยุด', 'ไลน์หยุดหรือของเสียหลุด ต้องเริ่มทันที', 'var(--stop)'], ['slow', 'เดินได้แต่ผิดปกติ', 'ทำภายในกะนี้ก่อนจะลามเป็นเครื่องหยุด', 'var(--wait)'], ['plan', 'ทำตามแผนได้', 'นัดทำช่วงหยุดเปลี่ยนรุ่นหรือวันซ่อมบำรุง', 'var(--run)']];
+  return `<div class="drawer-wrap"><button type="button" class="scrim" data-act="panel-close" aria-label="ปิด" tabindex="-1"></button>
+    <form class="drawer create" role="dialog" aria-modal="true" aria-labelledby="cp-h" data-form="create">
+      <div class="dhead"><div><h2 id="cp-h" style="font-size:19px;line-height:26px">สร้างงานใหม่</h2><span class="mono dim" style="font-size:12px">ร่าง · ส่งแล้วจะรอหัวหน้าอนุมัติ</span></div>
+        <button type="button" class="iconbtn" data-act="panel-close" aria-label="ปิด"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <div class="dbody cbody">
+        <div class="field"><label for="cp-title">ชื่องาน</label><input id="cp-title" data-c="title" value="${esc(c.title)}" placeholder="เช่น เปลี่ยนไส้กรองหัวดูด MNT-103" style="min-height:48px;font-size:16px" autocomplete="off"></div>
+        <fieldset><legend>ประเภทงาน</legend><div class="optgrid">${Object.entries(TYPE).map(([k, l]) => `<button type="button" ${opt(c.type === k)} data-act="c-type" data-id="${k}">${l}</button>`).join('')}</div></fieldset>
+        <div class="cgrid">
+          <div class="field"><label for="cp-asset">เครื่องจักร</label><select id="cp-asset" data-c="asset" data-rerender="1"><option value="">เลือกเครื่อง</option>${state.assets.map((x) => `<option value="${esc(x.id)}" ${c.asset === x.id ? 'selected' : ''}>${esc(x.id)} · ${esc(x.name)}</option>`).join('')}</select>
+            <span class="hint">${a ? `${esc(a.line)} · ระดับความสำคัญ ${esc(a.cls)}` : 'งานต้องผูกกับเครื่องเพื่อเก็บประวัติ'}</span></div>
+          <div class="field"><label for="cp-due">กำหนดเสร็จ</label><input id="cp-due" type="date" data-c="due" value="${esc(c.due)}"><span class="hint">ไม่บังคับ</span></div>
+        </div>
+        <fieldset><legend>ผลกระทบ</legend><div style="display:flex;flex-direction:column;gap:8px">${P.map(([k, l, d, col]) => `<button type="button" ${opt(c.prio === k)} data-act="c-prio" data-id="${k}" style="display:grid;grid-template-columns:12px minmax(0,1fr);gap:12px;text-align:left;align-items:start;padding:12px 14px"><span style="width:12px;height:12px;margin-top:4px;border-radius:6px;background:${col}"></span><span style="display:flex;flex-direction:column;gap:2px"><b style="font-weight:500">${l}</b><span class="hint">${d}</span></span></button>`).join('')}</div></fieldset>
+        <fieldset><legend>มอบหมายให้ <span class="hint" style="font-weight:400">เลือกได้หลายคน คนแรกเป็นผู้รับผิดชอบหลัก</span></legend><div style="display:flex;flex-wrap:wrap;gap:8px">${peopleList().map((n) => { const on = c.people.includes(n); return `<button type="button" ${opt(on)} data-act="c-person" data-id="${esc(n)}" style="height:44px;padding:0 14px 0 6px;border-radius:22px;display:inline-flex;align-items:center;gap:8px">${avatar(n, false).replace('class="avatar ', `class="avatar ${on ? 'dark ' : ''}`)}${esc(n)}</button>`; }).join('')}</div></fieldset>
+        <div class="field"><span style="font-size:13px;font-weight:500">รายการตรวจ <span class="hint" style="font-weight:400">${c.checks.filter((x) => x.done).length} / ${c.checks.length}</span></span>
+          <div class="box" style="border-radius:12px">${c.checks.map((x, i) => `<div class="list-row" style="grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:6px 8px 6px 14px"><span>${esc(x.text)}</span><button type="button" class="iconbtn" style="width:32px;height:32px" data-act="c-uncheck" data-id="${i}" aria-label="ลบรายการ ${esc(x.text)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}
+            <div style="display:flex;gap:8px;padding:6px 8px 6px 14px;background:var(--hover)"><label for="cp-new" class="sr">เพิ่มรายการตรวจ</label><input id="cp-new" data-c="newCheck" value="${esc(c.newCheck)}" placeholder="เพิ่มรายการตรวจ แล้วกด Enter" style="flex:1;min-width:0;height:40px;border:0;background:transparent" autocomplete="off"><button type="button" class="btn small" data-act="c-add">เพิ่ม</button></div></div></div>
+        <div class="field"><label for="cp-note">รายละเอียดเพิ่มเติม</label><textarea id="cp-note" data-c="note" rows="3" placeholder="อาการที่พบ สิ่งที่ต้องระวัง">${esc(c.note)}</textarea></div>
+      </div>
+      <div class="cfoot"><span class="hint" id="cp-hint" style="${ready ? '' : 'color:var(--stop-fg)'}">${ready ? (c.people.length ? `มอบหมาย ${c.people.length} คน` : 'ยังไม่มอบหมาย งานจะเข้าคิวรวม') : 'ใส่ชื่องานและเลือกเครื่องก่อนสร้าง'}</span>
+        <div class="actions"><button type="button" class="btn" data-act="panel-close">ยกเลิก</button><button class="btn solid" id="cp-submit" ${ready ? '' : 'disabled'}>สร้างงาน</button></div></div>
+    </form></div>`;
+}
+
 function drawer() {
   const w = state.page === 'work' && state.workOrders.find((x) => x.id === state.selectedWo);
-  document.body.style.overflow = w ? 'hidden' : '';
-  if (!w) return '';
+  document.body.style.overflow = w || state.panel ? 'hidden' : '';
+  if (!w) return createPanel();
   return `<div class="drawer-wrap"><button type="button" class="scrim" data-act="close-drawer" aria-label="ปิดรายละเอียด" tabindex="-1"></button>
     <aside class="drawer" role="dialog" aria-modal="true" aria-label="ใบสั่งงาน ${esc(w.id)}">
       <div class="dhead"><span class="mono dim">${esc(w.id)}</span><button type="button" class="iconbtn" data-act="close-drawer" aria-label="ปิด"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
@@ -445,7 +488,7 @@ function viewAssets(m) {
       </section>
       <section class="box w3" style="gap:0"><div class="bar"><h2>ประวัติงาน</h2></div>
         ${hist.length ? `<div class="scroll"><table style="min-width:520px"><thead><tr><th scope="col">วันที่</th><th scope="col">งาน</th><th scope="col">สาเหตุ</th><th scope="col" class="num">หยุด (ชม.)</th></tr></thead><tbody>
-          ${hist.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono" style="white-space:nowrap">${fmtDate(w.startAt)}</td><td>${esc(w.title)}<span class="sub">${esc(w.id)} · ${STATUS[w.status][0]}</span></td><td class="mono">${esc(w.cause || '—')}</td><td class="mono num">${w.type === 'inspect' ? '—' : hours((w.endAt ?? m.now) - w.startAt)}</td></tr>`).join('')}
+          ${hist.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono" style="white-space:nowrap">${fmtDate(w.startAt)}</td><td>${esc(w.title)}<span class="sub">${esc(w.id)} · ${STATUS[w.status][0]}</span></td><td class="mono">${esc(w.cause || '—')}</td><td class="mono num">${['inspect', 'improve'].includes(w.type) ? '—' : hours((w.endAt ?? m.now) - w.startAt)}</td></tr>`).join('')}
         </tbody></table></div>` : '<p class="empty">ยังไม่มีงาน</p>'}</section></div>`;
   }
   return `${form}<section class="box" aria-label="ทะเบียนเครื่องจักร">${rows ? `<div class="scroll"><table style="min-width:640px"><thead><tr><th scope="col">รหัส</th><th scope="col">ชื่อเครื่อง</th><th scope="col">ตำแหน่ง</th><th scope="col">ระดับ</th><th scope="col" class="num">หยุด 7 วัน</th><th scope="col">สถานะ</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีเครื่องจักร</p>'}</section>${detail}`;
@@ -706,7 +749,25 @@ const actions = {
   'quick-open': () => { state.quick = true; state.collapsed.pending = false; state.draft = { asset: state.assets[0]?.id, priority: 'stop' }; render(); document.getElementById('qa-title')?.focus(); },
   'quick-cancel': () => { state.quick = false; state.draft = {}; render(); },
   'open-asset': (id) => { state.selectedAsset = id; if (state.page !== 'assets') go('assets'); else render(); window.scrollTo(0, 0); },
-  report: () => { go('work'); state.selectedWo = null; actions['quick-open'](); },
+  report: () => {
+    if (state.page !== 'work') go('work');
+    state.selectedWo = null;
+    state.panel = true;
+    state.create = { title: '', type: 'breakdown', asset: state.assets[0]?.id || '', due: '', prio: 'stop', people: [state.user.name], checks: [{ text: 'ทำ LOTO ก่อนเริ่มงาน', done: false }], newCheck: '', note: '' };
+    render();
+    document.getElementById('cp-title')?.focus();
+  },
+  'panel-close': () => { state.panel = false; render(); },
+  'c-type': (id) => {
+    const c = state.create; c.type = id;
+    if (id === 'pm' || id === 'improve') c.prio = 'plan';
+    if (id === 'breakdown') c.prio = 'stop';
+    render();
+  },
+  'c-prio': (id) => { state.create.prio = id; render(); },
+  'c-person': (id) => { const c = state.create; c.people = c.people.includes(id) ? c.people.filter((x) => x !== id) : [...c.people, id]; render(); },
+  'c-add': () => { const c = state.create; const t = c.newCheck.trim(); if (!t) return; c.checks.push({ text: t, done: false }); c.newCheck = ''; render(); document.getElementById('cp-new')?.focus(); },
+  'c-uncheck': (id) => { state.create.checks.splice(Number(id), 1); render(); },
   add: (id) => { state.form = { pm: 'pmPlans' }[id] || id; state.draft = {}; render(); },
   edit: (id, el) => {
     const coll = el.dataset.coll;
@@ -726,7 +787,7 @@ const actions = {
     const rows = scopeList();
     download(`work-orders-${isoDate(Date.now())}.csv`, csv([
       ['เลขที่', 'เครื่อง', 'ประเภท', 'งาน', 'สถานะ', 'ผู้แจ้ง', 'ผู้อนุมัติ', 'ช่าง', 'แจ้งเมื่อ', 'ปิดเมื่อ', 'เวลาหยุด (ชม.)', 'รหัสสาเหตุ', 'การแก้ไข', 'อะไหล่ที่เบิก'],
-      ...rows.map((w) => [w.id, w.asset, TYPE[w.type], w.title, STATUS[w.status][0], w.requestedBy, w.approvedBy, w.tech, fmtDateTime(w.startAt), w.endAt ? fmtDateTime(w.endAt) : '', w.type === 'inspect' ? '' : hours((w.endAt ?? Date.now()) - w.startAt), w.cause, w.action, (w.partsUsed || []).map((u) => `${u.id}×${u.qty}`).join(' ')])
+      ...rows.map((w) => [w.id, w.asset, TYPE[w.type], w.title, STATUS[w.status][0], w.requestedBy, w.approvedBy, w.tech, fmtDateTime(w.startAt), w.endAt ? fmtDateTime(w.endAt) : '', ['inspect', 'improve'].includes(w.type) ? '' : hours((w.endAt ?? Date.now()) - w.startAt), w.cause, w.action, (w.partsUsed || []).map((u) => `${u.id}×${u.qty}`).join(' ')])
     ]));
   },
   'export-kpi': () => {
@@ -815,12 +876,22 @@ function paintSearch() {
     : '<p class="empty">ไม่พบรายการที่ตรงกัน</p>';
 }
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.panel && !state.q) { actions['panel-close'](); return; }
   if (e.key === 'Escape' && state.selectedWo && state.page === 'work' && !state.q) { actions['close-drawer'](); return; }
   if (e.key === 'Escape' && state.q) { state.q = ''; const i = document.getElementById('q'); if (i) i.value = ''; paintSearch(); }
 });
 
 app.addEventListener('input', (e) => {
   if (e.target.id === 'q') { state.q = e.target.value; paintSearch(); return; }
+  const ck = e.target.dataset.c;
+  if (ck && state.create) {
+    state.create[ck] = e.target.value;
+    const ready = state.create.title.trim() && state.create.asset;
+    const btn = document.getElementById('cp-submit'); if (btn) btn.disabled = !ready;
+    const hint = document.getElementById('cp-hint');
+    if (hint) { hint.textContent = ready ? (state.create.people.length ? `มอบหมาย ${state.create.people.length} คน` : 'ยังไม่มอบหมาย งานจะเข้าคิวรวม') : 'ใส่ชื่องานและเลือกเครื่องก่อนสร้าง'; hint.style.color = ready ? '' : 'var(--stop-fg)'; }
+    return;
+  }
   const key = e.target.dataset.close;
   if (!key) return;
   state.close[key] = e.target.value;
@@ -831,7 +902,19 @@ app.addEventListener('input', (e) => {
   if (hint) hint.textContent = ready ? 'ปิดงานแล้วระบบจะบันทึกเวลาและเพิ่มเข้าประวัติเครื่อง' : 'เลือกรหัสสาเหตุและกรอกการแก้ไขที่ต้นเหตุก่อนปิดงาน';
 });
 
+app.addEventListener('keydown', (e) => {
+  if (e.target.id === 'cp-new' && e.key === 'Enter') { e.preventDefault(); actions['c-add'](); }
+});
+
 app.addEventListener('change', (e) => {
+  if (e.target.dataset.rerender && state.create) { state.create[e.target.dataset.c] = e.target.value; render(); return; }
+  if (e.target.dataset.check != null) {
+    const w = state.workOrders.find((x) => x.id === state.selectedWo);
+    if (!w) return;
+    const checks = (w.checks || []).map((c, i) => (i === Number(e.target.dataset.check) ? { ...c, done: e.target.checked } : c));
+    run(() => state.backend.updateWorkOrder(w.id, { checks }));
+    return;
+  }
   if (e.target.dataset.close) { e.target.dispatchEvent(new Event('input', { bubbles: true })); return; }
   const key = e.target.dataset.save;
   if (!key) return;
@@ -854,6 +937,21 @@ app.addEventListener('submit', (e) => {
       const id = await state.backend.createWorkOrder({ asset: d.asset, title, type, priority: d.priority, requestedBy: me, status: 'pending', log: [{ at: Date.now(), text: `${me} ${type === 'breakdown' ? 'แจ้งซ่อม' : 'แจ้งตรวจสอบ'}` }] });
       state.selectedWo = id; state.filter = 'active'; state.close = { cause: '', action: '' };
       done(`เปิด ${id} แล้ว รออนุมัติ`);
+    }),
+    create: () => run(async () => {
+      const c = state.create;
+      const title = c.title.trim();
+      if (!title || !c.asset) return;
+      const me = state.user.name;
+      const id = await state.backend.createWorkOrder({
+        asset: c.asset, title, type: c.type, priority: c.prio, requestedBy: me, status: 'pending',
+        tech: c.people[0] || '', team: c.people, dueDate: c.due ? new Date(`${c.due}T00:00:00`).getTime() : null,
+        checks: c.checks.map((x) => ({ text: x.text, done: false })), note: c.note.trim(),
+        log: [{ at: Date.now(), text: `${me} สร้างงาน${c.people.length ? ` มอบหมาย ${c.people.join(', ')}` : ''}` }]
+      });
+      state.panel = false; state.create = null; state.collapsed.pending = false;
+      render();
+      toast(`สร้าง ${id} แล้ว รออนุมัติ`);
     }),
     quick: () => run(async () => {
       const title = (d.title || '').trim();

@@ -231,3 +231,16 @@ form.quick select { flex: 0 1 220px; min-width: 0; }
 }
 .drawer .split { flex-direction: column-reverse; align-items: stretch; }
 .drawer .split > * { flex-basis: auto; }
+
+/* แผงสร้างงาน */
+.drawer.create { background: var(--card); }
+.cbody { display: flex; flex-direction: column; gap: 20px; padding: 20px 24px 28px; }
+.cbody fieldset { margin: 0; padding: 0; border: 0; }
+.cbody legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 500; }
+.optgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.opt { min-height: 44px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--card); transition: border-color .12s ease, background-color .12s ease; }
+.opt:hover { border-color: #b4b9c0; }
+.opt.on { border-color: var(--ink); background: var(--hover); font-weight: 600; }
+.cgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.cfoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 24px; border-top: 1px solid var(--line); background: var(--card); }
+.avatar.dark { background: var(--ink); color: #fff; }
