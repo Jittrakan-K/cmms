@@ -52,7 +52,7 @@ service cloud.firestore {
       // ช่างทำงานได้หลังหัวหน้าอนุมัติแล้วเท่านั้น
       allow update: if isTech()
         && resource.data.status != 'pending'
-        && changedOnly(['status', 'endAt', 'tech', 'log', 'cause', 'action'])
+        && changedOnly(['status', 'endAt', 'tech', 'log', 'cause', 'action', 'partsUsed'])
         && request.resource.data.status != 'pending'
         && validStatus() && closesProperly();
       allow update: if isAdmin() && validStatus() && closesProperly();
@@ -70,6 +70,14 @@ service cloud.firestore {
       allow update: if isTech() && changedOnly(['qty'])
         && request.resource.data.qty is number
         && request.resource.data.qty >= 0;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // เครื่องมือวัด: ช่างบันทึกผลสอบเทียบได้ หัวหน้าจัดการทะเบียน
+    match /gauges/{id} {
+      allow read: if isMember();
+      allow update: if isTech() && changedOnly(['status', 'lastCal', 'dueDate', 'note'])
+        && request.resource.data.status in ['ok', 'hold'];
       allow create, update, delete: if isAdmin();
     }
 

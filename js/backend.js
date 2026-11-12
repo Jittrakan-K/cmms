@@ -5,7 +5,7 @@ import { firebaseConfig as fileConfig } from './firebase-config.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/13.1.0';
 const CONFIG_KEY = 'cmms.firebaseConfig';
-const DEMO_KEY = 'cmms.demo.v2';
+const DEMO_KEY = 'cmms.demo.v3';
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
 
@@ -29,7 +29,8 @@ export function sampleData(now = Date.now()) {
   const done = (seq, asset, type, title, startH, endH, tech, cause, action) => ({
     id: workOrderId(seq, now), asset, type, title, status: 'done',
     startAt: ago(startH), endAt: ago(endH), tech, requestedBy: type === 'pm' ? 'แผน PM' : 'ฝ่ายผลิต',
-    approvedBy: 'วิชัย ร.', approvedAt: ago(startH - 0.1), cause, action,
+    approvedBy: 'วิชัย ร.', approvedAt: ago(startH - 0.1), cause, action, partsUsed: [],
+    ...(type === 'pm' ? { onTime: true } : {}),
     log: [{ at: ago(startH), text: 'เปิดใบงาน' }, { at: ago(endH), text: `${tech} ปิดงาน` }]
   });
   return {
@@ -53,6 +54,7 @@ export function sampleData(now = Date.now()) {
         title: 'หัวดูดหยิบชิ้นงานพลาดต่อเนื่อง เครื่องหยุดด้วย pick-up error',
         status: 'doing', startAt: ago(1.3), endAt: null, tech: 'อนันต์ ส.', requestedBy: 'สมชาย ก.',
         approvedBy: 'วิชัย ร.', approvedAt: ago(1.17), cause: '', action: '',
+        partsUsed: [{ id: 'FLT-NZ-04', qty: 4 }, { id: 'NZL-1005', qty: 2 }],
         log: [
           { at: ago(1.3), text: 'สมชาย ก. แจ้งซ่อม' },
           { at: ago(1.17), text: 'วิชัย ร. อนุมัติ มอบหมาย อนันต์ ส.' },
@@ -63,18 +65,18 @@ export function sampleData(now = Date.now()) {
       {
         id: workOrderId(51, now), asset: 'AOI-206', type: 'inspect', title: 'ภาพจากกล้องด้านบนมืดเป็นช่วง',
         status: 'pending', startAt: ago(4.6), endAt: null, tech: '', requestedBy: 'มาลี ท.',
-        approvedBy: '', approvedAt: null, cause: '', action: '', log: [{ at: ago(4.6), text: 'มาลี ท. แจ้งตรวจสอบ' }]
+        approvedBy: '', approvedAt: null, cause: '', action: '', partsUsed: [], log: [{ at: ago(4.6), text: 'มาลี ท. แจ้งตรวจสอบ' }]
       },
       {
         id: workOrderId(50, now), asset: 'CMP-901', type: 'inspect', title: 'แรงดันลมตกช่วงเปลี่ยนกะ',
         status: 'open', startAt: ago(9.2), endAt: null, tech: '', requestedBy: 'ประเสริฐ บ.',
-        approvedBy: 'วิชัย ร.', approvedAt: ago(8.5), cause: '', action: '',
+        approvedBy: 'วิชัย ร.', approvedAt: ago(8.5), cause: '', action: '', partsUsed: [],
         log: [{ at: ago(9.2), text: 'ประเสริฐ บ. แจ้งตรวจสอบ' }, { at: ago(8.5), text: 'วิชัย ร. อนุมัติ' }]
       },
       {
         id: workOrderId(49, now), asset: 'RFL-205', type: 'breakdown', title: 'มอเตอร์พัดลมโซน 7 มีเสียงดังแล้วหยุดหมุน',
         status: 'parts', startAt: ago(13), endAt: null, tech: 'วิชัย ร.', requestedBy: 'สมชาย ก.',
-        approvedBy: 'วิชัย ร.', approvedAt: ago(12.9), cause: '', action: '',
+        approvedBy: 'วิชัย ร.', approvedAt: ago(12.9), cause: '', action: '', partsUsed: [],
         log: [
           { at: ago(13), text: 'สมชาย ก. แจ้งซ่อม' },
           { at: ago(12.9), text: 'วิชัย ร. อนุมัติ' },
@@ -103,15 +105,28 @@ export function sampleData(now = Date.now()) {
       ['pm-rfl205-chain', 'RFL-205', 'ทำความสะอาดและหล่อลื่นโซ่ลำเลียง', 7, 3]
     ].map(([id, asset, task, intervalDays, d]) => ({ id, asset, task, intervalDays, dueDate: due(d) })),
     parts: [
-      ['FAN-RF-200W', 'มอเตอร์พัดลมหมุนเวียน รีโฟลว์', 'B-11', 0, 1],
-      ['NZL-1005', 'หัวดูด ขนาด 1005', 'A-02', 2, 6],
-      ['FLT-N2-01', 'ไส้กรองอากาศ เครื่อง N2', 'C-04', 1, 2],
-      ['SQG-300', 'ใบปาด 300 มม.', 'A-07', 2, 2],
-      ['FLT-FX-02', 'ไส้กรองไอฟลักซ์', 'B-03', 2, 4],
-      ['HTR-RF-1.5K', 'ฮีตเตอร์รีโฟลว์ 1.5 kW', 'B-12', 4, 4],
-      ['FLT-NZ-04', 'ไส้กรองหัวดูด', 'A-03', 16, 8],
-      ['CHN-RF-08', 'โซ่ลำเลียงรีโฟลว์', 'D-01', 1, 1]
-    ].map(([id, name, bin, qty, min]) => ({ id, name, bin, qty, min })),
+      ['FAN-RF-200W', 'มอเตอร์พัดลมหมุนเวียน รีโฟลว์', 'B-11', 0, 1, 2],
+      ['NZL-1005', 'หัวดูด ขนาด 1005', 'A-02', 2, 6, 12],
+      ['FLT-N2-01', 'ไส้กรองอากาศ เครื่อง N2', 'C-04', 1, 2, 4],
+      ['SQG-300', 'ใบปาด 300 มม.', 'A-07', 2, 2, 4],
+      ['FLT-FX-02', 'ไส้กรองไอฟลักซ์', 'B-03', 2, 4, 8],
+      ['HTR-RF-1.5K', 'ฮีตเตอร์รีโฟลว์ 1.5 kW', 'B-12', 4, 4, 6],
+      ['FLT-NZ-04', 'ไส้กรองหัวดูด', 'A-03', 16, 8, 24],
+      ['CHN-RF-08', 'โซ่ลำเลียงรีโฟลว์', 'D-01', 1, 1, 2]
+    ].map(([id, name, bin, qty, min, max]) => ({ id, name, bin, qty, min, max })),
+    // เครื่องมือวัด (ISO 9001 ข้อ 7.1.5): status ok ใช้งานได้, hold ห้ามใช้
+    gauges: [
+      ['GAU-001', 'ไมโครมิเตอร์', '0–25 มม.', 'QC ไลน์ SMT 1', 365, 65, 'ok'],
+      ['GAU-002', 'เวอร์เนียร์คาลิปเปอร์', '0–150 มม.', 'ห้องซ่อมบำรุง', 365, -5, 'ok'],
+      ['GAU-003', 'เกจวัดแรงดันสุญญากาศหัวดูด', '-100–0 kPa', 'MNT-103', 180, 12, 'ok'],
+      ['GAU-004', 'เครื่องวัดโปรไฟล์อุณหภูมิรีโฟลว์', '0–350 °C', 'ไลน์ SMT 1', 365, 20, 'ok'],
+      ['GAU-005', 'มัลติมิเตอร์', '1000 V / 10 A', 'ห้องซ่อมบำรุง', 365, 140, 'ok'],
+      ['GAU-006', 'เกจวัดแรงดันลม', '0–10 bar', 'CMP-901', 365, 200, 'hold'],
+      ['GAU-007', 'ทอร์กไขควง', '0.1–1.2 N·m', 'ห้องซ่อมบำรุง', 180, 90, 'ok']
+    ].map(([id, name, range, location, intervalDays, d, status]) => ({
+      id, name, range, location, intervalDays, status, dueDate: due(d), lastCal: due(d) - intervalDays * DAY,
+      note: status === 'hold' ? 'ค่าคลาดเกินเกณฑ์ตอนตรวจเทียบกับเกจมาตรฐาน รอส่งสอบเทียบ' : ''
+    })),
     seq: 52
   };
 }
@@ -175,18 +190,43 @@ class LocalBackend {
     this.commit(coll);
   }
 
+  async update(coll, id, patch) {
+    this.db[coll] = this.db[coll].map((x) => (x.id === id ? { ...x, ...patch } : x));
+    this.commit(coll);
+  }
+
   async adjustPart(id, delta) {
     this.db.parts = this.db.parts.map((p) => (p.id === id ? { ...p, qty: Math.max(0, p.qty + delta) } : p));
     this.commit('parts');
   }
 
+  // เบิกอะไหล่เข้าใบงาน: ตัดสต็อกและบันทึกในใบงานพร้อมกัน
+  async issuePart(woId, partId, qty, text) {
+    const part = this.db.parts.find((p) => p.id === partId);
+    const wo = this.db.workOrders.find((w) => w.id === woId);
+    if (!part || !wo) throw new Error('ไม่พบอะไหล่หรือใบงาน');
+    if (part.qty < qty) throw new Error(`คงเหลือ ${part.qty} ไม่พอเบิก ${qty}`);
+    part.qty -= qty;
+    wo.partsUsed = mergeParts(wo.partsUsed, partId, qty);
+    wo.log = [...(wo.log || []), { at: Date.now(), text }];
+    this.commit('parts', 'workOrders');
+  }
+
   async completePM(id, doneBy) {
     const plan = this.db.pmPlans.find((p) => p.id === id);
     if (!plan) return;
+    const wo = pmWorkOrder(plan, doneBy, workOrderId(++this.db.seq));
     plan.dueDate = startOfToday() + plan.intervalDays * DAY;
     plan.lastDone = Date.now();
-    this.db.workOrders.unshift(pmWorkOrder(plan, doneBy, workOrderId(++this.db.seq)));
+    this.db.workOrders.unshift(wo);
     this.commit('pmPlans', 'workOrders');
+  }
+
+  async calibrate(id, pass, note) {
+    const g = this.db.gauges.find((x) => x.id === id);
+    if (!g) return;
+    Object.assign(g, calibrationPatch(g, pass, note));
+    this.commit('gauges');
   }
 
   async isEmpty() { return false; }
@@ -194,8 +234,22 @@ class LocalBackend {
 
   reset() {
     this.db = sampleData();
-    this.commit('assets', 'workOrders', 'pmPlans', 'parts');
+    this.commit(...COLLECTIONS);
   }
+}
+
+export const COLLECTIONS = ['assets', 'workOrders', 'pmPlans', 'parts', 'gauges'];
+
+function mergeParts(list = [], id, qty) {
+  const found = list.find((x) => x.id === id);
+  return found ? list.map((x) => (x.id === id ? { ...x, qty: x.qty + qty } : x)) : [...list, { id, qty }];
+}
+
+function calibrationPatch(g, pass, note) {
+  const now = Date.now();
+  return pass
+    ? { status: 'ok', lastCal: now, dueDate: startOfToday() + g.intervalDays * DAY, note: note || '' }
+    : { status: 'hold', note: note || 'ไม่ผ่านการสอบเทียบ' };
 }
 
 function normalizeWorkOrder(data, id) {
@@ -204,15 +258,17 @@ function normalizeWorkOrder(data, id) {
     id, asset: data.asset, type: data.type, title: data.title,
     status: data.status ?? 'pending', startAt: data.startAt ?? now, endAt: data.endAt ?? null,
     tech: data.tech ?? '', requestedBy: data.requestedBy ?? '', approvedBy: '', approvedAt: null,
-    cause: '', action: '', log: data.log ?? [{ at: now, text: `${data.requestedBy || 'ผู้ใช้'} แจ้งซ่อม` }]
+    cause: '', action: '', partsUsed: [], log: data.log ?? [{ at: now, text: `${data.requestedBy || 'ผู้ใช้'} แจ้งซ่อม` }]
   };
 }
 
+// onTime: ทำภายในวันครบกำหนดหรือก่อน ใช้คิด PM compliance
 function pmWorkOrder(plan, doneBy, id) {
   const now = Date.now();
   return {
     id, asset: plan.asset, type: 'pm', title: plan.task, status: 'done', startAt: now, endAt: now,
     tech: doneBy, requestedBy: 'แผน PM', approvedBy: doneBy, approvedAt: now, cause: 'PM', action: 'ทำตามแผน',
+    partsUsed: [], onTime: plan.dueDate >= startOfToday(), planDue: plan.dueDate,
     log: [{ at: now, text: `${doneBy} บันทึก PM ตามแผน` }]
   };
 }
@@ -313,6 +369,32 @@ class FirebaseBackend {
     return deleteDoc(doc(this.db, coll, id));
   }
 
+  update(coll, id, patch) {
+    const { doc, updateDoc } = this.fs;
+    return updateDoc(doc(this.db, coll, id), patch);
+  }
+
+  async issuePart(woId, partId, qty, text) {
+    const { doc, runTransaction } = this.fs;
+    await runTransaction(this.db, async (tx) => {
+      const pRef = doc(this.db, 'parts', partId);
+      const wRef = doc(this.db, 'workOrders', woId);
+      const [p, w] = [await tx.get(pRef), await tx.get(wRef)];
+      if (!p.exists() || !w.exists()) throw new Error('ไม่พบอะไหล่หรือใบงาน');
+      if (p.data().qty < qty) throw new Error(`คงเหลือ ${p.data().qty} ไม่พอเบิก ${qty}`);
+      tx.update(pRef, { qty: p.data().qty - qty });
+      tx.update(wRef, { partsUsed: mergeParts(w.data().partsUsed, partId, qty), log: [...(w.data().log || []), { at: Date.now(), text }] });
+    });
+  }
+
+  async calibrate(id, pass, note) {
+    const { doc, getDoc, updateDoc } = this.fs;
+    const ref = doc(this.db, 'gauges', id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('ไม่พบเครื่องมือวัด');
+    await updateDoc(ref, calibrationPatch(snap.data(), pass, note));
+  }
+
   async adjustPart(id, delta) {
     const { doc, runTransaction } = this.fs;
     await runTransaction(this.db, async (tx) => {
@@ -331,9 +413,9 @@ class FirebaseBackend {
       const plan = await tx.get(planRef);
       if (!plan.exists()) throw new Error('ไม่พบแผน PM');
       const p = plan.data();
-      tx.update(planRef, { dueDate: startOfToday() + p.intervalDays * DAY, lastDone: Date.now() });
       const woId = this.nextId(tx, counter);
       const { id: _drop, ...rest } = pmWorkOrder(p, doneBy, woId);
+      tx.update(planRef, { dueDate: startOfToday() + p.intervalDays * DAY, lastDone: Date.now() });
       tx.set(doc(this.db, 'workOrders', woId), { ...rest, createdAt: serverTimestamp() });
     });
   }
@@ -348,7 +430,7 @@ class FirebaseBackend {
     const { doc, writeBatch, serverTimestamp } = this.fs;
     const data = sampleData();
     const batch = writeBatch(this.db);
-    ['assets', 'workOrders', 'pmPlans', 'parts'].forEach((c) => {
+    COLLECTIONS.forEach((c) => {
       data[c].forEach(({ id, ...rest }) => {
         batch.set(doc(this.db, c, id), c === 'workOrders' ? { ...rest, createdAt: serverTimestamp() } : rest);
       });
