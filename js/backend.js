@@ -132,6 +132,20 @@ export function sampleData(now = Date.now()) {
 }
 
 /* ---------- โหมดตัวอย่าง: เก็บในเบราว์เซอร์เครื่องนี้ ---------- */
+/* ---------- ล็อกอินด้วยรหัสพนักงาน ----------
+   Firebase ต้องมีอีเมล จึงสร้างอีเมลเบื้องหลังที่ไม่มีใครใช้จริง และเก็บคู่ รหัสพนักงาน → อีเมล ไว้ใน logins/{รหัส} */
+export const EMP_RE = /^[A-Z0-9][A-Z0-9._-]{1,19}$/;
+export const normEmpId = (s) => String(s || '').trim().toUpperCase();
+export function checkEmpId(s) {
+  const id = normEmpId(s);
+  if (!EMP_RE.test(id)) throw new Error('รหัสพนักงานใช้ได้แค่ A-Z 0-9 . _ - ยาว 2–20 ตัว');
+  return id;
+}
+const rand = (n, chars) => Array.from(crypto.getRandomValues(new Uint32Array(n)), (x) => chars[x % chars.length]).join('');
+const loginEmail = (empId) => `${empId.toLowerCase().replace(/[^a-z0-9]/g, '-')}.${rand(6, 'abcdefghijkmnpqrstuvwxyz23456789')}@cmms.example.com`;
+// ตัด 0/O 1/I/L ออก อ่านบอกกันได้ไม่สับสน
+export const tempPassword = () => rand(8, 'ABCDEFGHJKMNPQRSTUVWXYZ23456789');
+
 class LocalBackend {
   mode = 'local';
   listeners = {};
@@ -154,20 +168,21 @@ class LocalBackend {
   }
 
   onAuth(cb) {
-    cb({ uid: 'demo', name: 'อนันต์ ส.', role: 'admin', email: 'demo@example.com' });
+    cb({ uid: 'demo', name: 'อนันต์ ส.', role: 'admin', empId: 'DEMO' });
     return () => {};
   }
 
   async signIn() {}
   async signOut() {}
   async getSetup() { return { plant: 'โรงงานตัวอย่าง', demo: true }; }
-  async resetPassword() { throw new Error('โหมดตัวอย่างไม่มีระบบอีเมล'); }
+  async changePassword() { throw new Error('โหมดตัวอย่างไม่มีรหัสผ่าน'); }
+  async resetUser() { throw new Error('โหมดตัวอย่างรีเซ็ตรหัสผ่านไม่ได้ ต้องเชื่อม Firebase ก่อน'); }
   async createUser() { throw new Error('โหมดตัวอย่างเพิ่มผู้ใช้ไม่ได้ ต้องเชื่อม Firebase ก่อน'); }
   async updateUser() { throw new Error('โหมดตัวอย่างแก้ผู้ใช้ไม่ได้ ต้องเชื่อม Firebase ก่อน'); }
   async updateSetup() { throw new Error('โหมดตัวอย่างแก้ชื่อโรงงานไม่ได้'); }
   subscribeUsers(cb) {
-    cb([['demo', 'อนันต์ ส.', 'admin'], ['u2', 'วิชัย ร.', 'tech'], ['u3', 'สมชาย ก.', 'tech'], ['u4', 'มาลี ท.', 'operator'], ['u5', 'ประเสริฐ บ.', 'operator']]
-      .map(([id, name, role]) => ({ id, name, role, email: `${id}@example.com` })));
+    cb([['demo', 'อนันต์ ส.', 'admin', 'DEMO'], ['u2', 'วิชัย ร.', 'tech', 'M0112'], ['u3', 'สมชาย ก.', 'tech', 'M0127'], ['u4', 'มาลี ท.', 'operator', 'P0451'], ['u5', 'ประเสริฐ บ.', 'operator', 'P0466']]
+      .map(([id, name, role, empId]) => ({ id, name, role, empId })));
     return () => {};
   }
 
@@ -317,7 +332,6 @@ class FirebaseBackend {
       ? fs.initializeFirestore(app, {})
       : fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) });
     this.auth = authMod.getAuth(app);
-    this.auth.languageCode = 'th'; // อีเมลรีเซ็ตรหัสผ่านเป็นภาษาไทย
     if (emulator) {
       fs.connectFirestoreEmulator(this.db, '127.0.0.1', 8080);
       authMod.connectAuthEmulator(this.auth, 'http://127.0.0.1:9099', { disableWarnings: true });
@@ -343,7 +357,7 @@ class FirebaseBackend {
       console.warn('อ่านสิทธิ์ผู้ใช้ไม่ได้', err);
     }
     const role = ['admin', 'tech', 'operator'].includes(profile.role) ? profile.role : null;
-    this.authCb({ uid: user.uid, email: user.email, name: profile.name || user.email, role, disabled: profile.role === 'disabled' });
+    this.authCb({ uid: user.uid, empId: profile.empId || '', name: profile.name || profile.empId || 'ผู้ใช้', role, disabled: profile.role === 'disabled', mustChange: !!profile.mustChange });
   }
 
   async getSetup() {
@@ -353,17 +367,20 @@ class FirebaseBackend {
   }
 
   // ตั้งค่าครั้งแรก: บัญชีแรกเป็นแอดมิน และล็อกไม่ให้ใครตั้งซ้ำ (กฎใน firestore.rules บังคับ)
-  async setupFirstAdmin({ plant, name, email, password }) {
+  async setupFirstAdmin({ plant, name, empId, password }) {
     const { doc, writeBatch, serverTimestamp } = this.fs;
+    empId = checkEmpId(empId);
+    const email = loginEmail(empId);
     const cred = await this.authMod.createUserWithEmailAndPassword(this.auth, email, password);
     const uid = cred.user.uid;
     const batch = writeBatch(this.db);
-    batch.set(doc(this.db, 'users', uid), { name, email, role: 'admin', createdAt: serverTimestamp() });
+    batch.set(doc(this.db, 'users', uid), { name, empId, role: 'admin', createdAt: serverTimestamp() });
     batch.set(doc(this.db, 'config', 'setup'), { plant, adminUid: uid, createdAt: serverTimestamp() });
+    batch.set(doc(this.db, 'logins', empId), { email, uid });
     try {
       await batch.commit();
     } catch (err) {
-      // บันทึกสิทธิ์ไม่สำเร็จ (เช่น ยังไม่ได้ใส่กฎ) ลบบัญชีที่เพิ่งสร้างทิ้ง จะได้ลองใหม่ด้วยอีเมลเดิมได้
+      // บันทึกสิทธิ์ไม่สำเร็จ (เช่น ยังไม่ได้ใส่กฎ) ลบบัญชีที่เพิ่งสร้างทิ้ง จะได้ลองใหม่ได้
       await this.authMod.deleteUser(cred.user).catch(() => {});
       throw err;
     }
@@ -378,25 +395,73 @@ class FirebaseBackend {
     return updateDoc(doc(this.db, 'config', 'setup'), patch);
   }
 
-  resetPassword(email) {
-    return this.authMod.sendPasswordResetEmail(this.auth, email);
-  }
-
-  // สร้างบัญชีให้พนักงานด้วยแอปสำรอง แอดมินจึงไม่หลุดออกจากระบบ แล้วส่งอีเมลให้เจ้าของบัญชีตั้งรหัสเอง
-  async createUser({ name, email, role }) {
-    const { doc, setDoc, serverTimestamp } = this.fs;
-    const sec = this.appMod.initializeApp(this.config, `invite-${Date.now()}`);
+  // สร้างบัญชีล็อกอินด้วยแอปสำรอง แอดมินจึงไม่หลุดออกจากระบบ
+  // write(uid, email) บันทึกเอกสาร ถ้าบันทึกไม่ผ่านจะลบบัญชีที่เพิ่งสร้างทิ้ง
+  async withNewAccount(empId, password, write) {
+    const sec = this.appMod.initializeApp(this.config, `acct-${Date.now()}`);
     const secAuth = this.authMod.getAuth(sec);
     if (this.emulator) this.authMod.connectAuthEmulator(secAuth, 'http://127.0.0.1:9099', { disableWarnings: true });
     try {
-      const temp = crypto.getRandomValues(new Uint32Array(4)).join('-') + 'Aa!';
-      const cred = await this.authMod.createUserWithEmailAndPassword(secAuth, email, temp);
-      await setDoc(doc(this.db, 'users', cred.user.uid), { name, email, role, createdAt: serverTimestamp() });
+      const email = loginEmail(empId);
+      const cred = await this.authMod.createUserWithEmailAndPassword(secAuth, email, password);
+      try {
+        await write(cred.user.uid, email);
+      } catch (err) {
+        await this.authMod.deleteUser(cred.user).catch(() => {});
+        throw err;
+      }
       await this.authMod.signOut(secAuth);
     } finally {
       await this.appMod.deleteApp(sec);
     }
-    await this.authMod.sendPasswordResetEmail(this.auth, email);
+  }
+
+  // คืนรหัสผ่านชั่วคราวให้แอดมินแจ้งพนักงาน พนักงานต้องตั้งรหัสใหม่ตอนเข้าครั้งแรก
+  async createUser({ name, empId, role }) {
+    const { doc, getDoc, writeBatch, serverTimestamp } = this.fs;
+    empId = checkEmpId(empId);
+    if ((await getDoc(doc(this.db, 'logins', empId))).exists()) throw new Error(`มีรหัสพนักงาน ${empId} อยู่แล้ว`);
+    const temp = tempPassword();
+    await this.withNewAccount(empId, temp, (uid, email) => {
+      const batch = writeBatch(this.db);
+      batch.set(doc(this.db, 'users', uid), { name, empId, role, mustChange: true, createdAt: serverTimestamp() });
+      batch.set(doc(this.db, 'logins', empId), { email, uid });
+      return batch.commit();
+    });
+    return temp;
+  }
+
+  // รีเซ็ตรหัสผ่านโดยไม่ใช้อีเมล: สร้างบัญชีล็อกอินใหม่ให้รหัสพนักงานเดิม แล้วย้ายข้อมูลผู้ใช้ไป
+  // บัญชีเก่าใช้ต่อไม่ได้ เพราะไม่มีเอกสารใน users แล้ว (กฎ isMember)
+  async resetUser(uid) {
+    const { doc, getDoc, writeBatch, serverTimestamp } = this.fs;
+    const snap = await getDoc(doc(this.db, 'users', uid));
+    if (!snap.exists()) throw new Error('ไม่พบผู้ใช้นี้');
+    const profile = snap.data();
+    if (!profile.empId) throw new Error('ผู้ใช้นี้ไม่มีรหัสพนักงาน');
+    const temp = tempPassword();
+    await this.withNewAccount(profile.empId, temp, (newUid, email) => {
+      const batch = writeBatch(this.db);
+      batch.set(doc(this.db, 'users', newUid), { ...profile, mustChange: true, resetAt: serverTimestamp() });
+      batch.set(doc(this.db, 'logins', profile.empId), { email, uid: newUid });
+      batch.delete(doc(this.db, 'users', uid));
+      return batch.commit();
+    });
+    return temp;
+  }
+
+  // current = รหัสเดิม (ไม่ใส่ได้ตอนเพิ่งล็อกอินด้วยรหัสชั่วคราว)
+  async changePassword(current, next) {
+    const { doc, updateDoc } = this.fs;
+    const user = this.auth.currentUser;
+    if (!user) throw new Error('ยังไม่ได้เข้าสู่ระบบ');
+    if (current) {
+      const cred = this.authMod.EmailAuthProvider.credential(user.email, current);
+      await this.authMod.reauthenticateWithCredential(user, cred);
+    }
+    await this.authMod.updatePassword(user, next);
+    await updateDoc(doc(this.db, 'users', user.uid), { mustChange: false });
+    await this.refreshUser();
   }
 
   updateUser(uid, patch) {
@@ -419,8 +484,15 @@ class FirebaseBackend {
     }
   }
 
-  async signIn(email, password) {
-    await this.authMod.signInWithEmailAndPassword(this.auth, email, password);
+  // หาอีเมลเบื้องหลังจากรหัสพนักงาน ถ้าไม่มีให้ตอบเหมือนรหัสผ่านผิด จะได้เดารายชื่อไม่ได้
+  async signIn(empId, password) {
+    const { doc, getDoc } = this.fs;
+    const id = normEmpId(empId);
+    const bad = () => Object.assign(new Error('invalid'), { code: 'auth/invalid-credential' });
+    if (!EMP_RE.test(id)) throw bad();
+    const snap = await getDoc(doc(this.db, 'logins', id));
+    if (!snap.exists()) throw bad();
+    await this.authMod.signInWithEmailAndPassword(this.auth, snap.data().email, password);
   }
 
   signOut() {

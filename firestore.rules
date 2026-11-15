@@ -40,6 +40,13 @@ service cloud.firestore {
     function validRole() {
       return request.resource.data.role in ['admin', 'tech', 'operator', 'disabled'];
     }
+    // ผู้ทำตั้งค่าครั้งแรก (ยังไม่มี config/setup แต่จะมีหลัง batch นี้ โดยตัวเองเป็นแอดมิน)
+    function isFirstSetup() {
+      return request.auth != null
+        && !exists(setupDoc())
+        && existsAfter(setupDoc())
+        && getAfter(setupDoc()).data.adminUid == request.auth.uid;
+    }
 
     // ตั้งค่าครั้งแรก: ใครก็อ่านได้ว่าตั้งค่าแล้วหรือยัง (มีแค่ชื่อโรงงาน)
     // สร้างได้ครั้งเดียว พร้อมกับเอกสารผู้ใช้แอดมินคนแรกใน batch เดียวกัน
@@ -66,7 +73,20 @@ service cloud.firestore {
             && getAfter(setupDoc()).data.adminUid == uid));
       allow update: if isAdmin() && validRole()
         && (uid != request.auth.uid || request.resource.data.role == 'admin');
+      // เจ้าของบัญชีบอกว่าตั้งรหัสผ่านของตัวเองแล้ว (แก้ได้แค่ช่องนี้)
+      allow update: if request.auth != null && request.auth.uid == uid
+        && changedOnly(['mustChange']) && request.resource.data.mustChange == false;
       allow delete: if isAdmin() && uid != request.auth.uid;
+    }
+
+    // รหัสพนักงาน → อีเมลเบื้องหลังของ Firebase ใครก็อ่านทีละรหัสได้ (ใช้ตอนล็อกอิน) แต่ดึงรายชื่อทั้งหมดไม่ได้
+    match /logins/{empId} {
+      allow get: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['email', 'uid'])
+        && request.resource.data.email is string
+        && request.resource.data.uid is string
+        && (isAdmin() || (isFirstSetup() && request.resource.data.uid == request.auth.uid));
+      allow delete: if isAdmin();
     }
 
     match /assets/{id} {

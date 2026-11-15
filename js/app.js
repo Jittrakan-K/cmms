@@ -40,7 +40,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [],
-  page: 'overview', filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, loginMode: 'login', notice: '', importPreview: null,
+  page: 'overview', filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
 
@@ -706,27 +706,43 @@ function importRows(coll, text) {
   return { coll, rows: out, errors };
 }
 
+// รหัสผ่านชั่วคราวแสดงครั้งเดียว ไม่บันทึกที่ไหน
+function issuedBox() {
+  const x = state.issued;
+  if (!x) return '';
+  return `<div class="notice" style="margin:16px 18px 0"><b>${esc(x.title)}</b>
+    <dl class="kv" style="margin:8px 0"><dt>ชื่อ</dt><dd>${esc(x.name)}</dd><dt>รหัสพนักงาน</dt><dd class="mono">${esc(x.empId)}</dd><dt>รหัสผ่านชั่วคราว</dt><dd class="mono" style="font-size:18px;letter-spacing:.08em">${esc(x.temp)}</dd></dl>
+    <p class="hint" style="margin:0 0 8px">จดหรือแจ้งพนักงานตอนนี้ ปิดกล่องนี้แล้วจะดูรหัสนี้อีกไม่ได้ พนักงานต้องตั้งรหัสใหม่ตอนเข้าครั้งแรก</p>
+    <div class="actions"><button type="button" class="btn small" data-act="copy-temp">คัดลอก</button><button type="button" class="btn small" data-act="issued-close">ปิด</button></div></div>`;
+}
+
 function viewServer() {
   const b = state.backend;
   const live = b.mode === 'firebase';
   const admin = canAdmin();
   const colls = { assets: 'เครื่อง', workOrders: 'ใบงาน', pmPlans: 'แผน PM', parts: 'อะไหล่', gauges: 'เครื่องมือวัด' };
   const account = `<section class="box"><div class="bar"><h2>บัญชีของฉัน</h2></div>
-    <dl class="kv" style="padding:16px 18px"><dt>ชื่อ</dt><dd>${esc(state.user.name)}</dd><dt>อีเมล</dt><dd>${esc(state.user.email || '—')}</dd><dt>สิทธิ์</dt><dd>${esc(ROLE_LABEL[state.user.role] || 'ยังไม่มีสิทธิ์')}</dd></dl>
-    ${live ? `<div class="pad" style="padding-top:0"><div class="actions"><button type="button" class="btn" data-act="my-reset">ส่งลิงก์เปลี่ยนรหัสผ่านทางอีเมล</button><button type="button" class="btn" data-act="logout">ออกจากระบบ</button></div></div>` : ''}</section>`;
+    <dl class="kv" style="padding:16px 18px"><dt>ชื่อ</dt><dd>${esc(state.user.name)}</dd><dt>รหัสพนักงาน</dt><dd class="mono">${esc(state.user.empId || '—')}</dd><dt>สิทธิ์</dt><dd>${esc(ROLE_LABEL[state.user.role] || 'ยังไม่มีสิทธิ์')}</dd></dl>
+    ${live ? `<form class="pad stack" data-form="mypass" style="padding-top:0;gap:10px">
+      <div class="field"><label for="m-old">รหัสผ่านเดิม</label><input id="m-old" name="current" type="password" required autocomplete="current-password"></div>
+      <div class="field"><label for="m-new">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</label><input id="m-new" name="next" type="password" minlength="8" required autocomplete="new-password"></div>
+      <div class="field"><label for="m-new2">ยืนยันรหัสผ่านใหม่</label><input id="m-new2" name="next2" type="password" minlength="8" required autocomplete="new-password"></div>
+      <div class="actions"><button class="btn">เปลี่ยนรหัสผ่าน</button><button type="button" class="btn" data-act="logout">ออกจากระบบ</button></div></form>` : ''}</section>`;
   if (!admin) return `<div class="split"><div class="w2" style="max-width:560px">${account}</div></div>`;
 
   const users = [...state.users].sort((x, y) => (x.role === 'disabled') - (y.role === 'disabled') || x.name.localeCompare(y.name, 'th'));
   const usersBox = `<section class="box"><div class="bar"><h2>ผู้ใช้งาน <span class="mono dim" style="font-size:13px;font-weight:400">${users.filter((u) => u.role !== 'disabled').length}</span></h2></div>
     ${live ? `<form class="pad" data-form="user" style="border-bottom:1px solid var(--rule)"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:12px;align-items:end">
       <div class="field"><label for="u-name">ชื่อที่แสดง</label><input id="u-name" name="name" required autocomplete="off"></div>
-      <div class="field"><label for="u-email">อีเมล</label><input id="u-email" name="email" type="email" required autocomplete="off"></div>
+      <div class="field"><label for="u-emp">รหัสพนักงาน</label><input id="u-emp" name="empId" required autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]{1,19}" title="A-Z 0-9 . _ - ยาว 2–20 ตัว" placeholder="เช่น M0112"></div>
       <div class="field"><label for="u-role">สิทธิ์</label><select id="u-role" name="role">${['operator', 'tech', 'admin'].map((r) => `<option value="${r}">${ROLE_LABEL[r]}</option>`).join('')}</select></div>
       <button class="btn solid">เพิ่มผู้ใช้</button></div>
-      <p class="hint">ระบบจะส่งอีเมลให้ผู้ใช้ตั้งรหัสผ่านเอง ไม่ต้องบอกรหัสกันทางแชท</p></form>` : '<p class="notice" style="margin:16px 18px 0">โหมดตัวอย่างแสดงรายชื่อตัวอย่าง เพิ่มผู้ใช้จริงได้หลังเชื่อม Firebase</p>'}
-    <div class="scroll"><table style="min-width:620px"><thead><tr><th scope="col">ชื่อ</th><th scope="col">อีเมล</th><th scope="col">สิทธิ์</th></tr></thead><tbody>
-    ${users.map((u) => `<tr><td><span style="display:flex;align-items:center;gap:8px">${avatar(u.name)}${esc(u.name)}${u.id === state.user.uid ? ' <span class="dim">(คุณ)</span>' : ''}</span></td><td class="dim">${esc(u.email || '—')}</td>
-      <td>${u.id === state.user.uid || !live ? esc(ROLE_LABEL[u.role] || u.role) : `<label for="r-${esc(u.id)}" class="sr">สิทธิ์ของ ${esc(u.name)}</label><select id="r-${esc(u.id)}" data-user-role="${esc(u.id)}" style="height:34px;padding:0 8px;border:1px solid var(--field);border-radius:8px;background:var(--card)">${['admin', 'tech', 'operator', 'disabled'].map((r) => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td></tr>`).join('')}
+      <p class="hint">ระบบจะสร้างรหัสผ่านชั่วคราวให้ แจ้งพนักงานด้วยตัวเอง พนักงานต้องตั้งรหัสใหม่ตอนเข้าครั้งแรก</p></form>
+      ${issuedBox()}` : '<p class="notice" style="margin:16px 18px 0">โหมดตัวอย่างแสดงรายชื่อตัวอย่าง เพิ่มผู้ใช้จริงได้หลังเชื่อม Firebase</p>'}
+    <div class="scroll"><table style="min-width:680px"><thead><tr><th scope="col">ชื่อ</th><th scope="col">รหัสพนักงาน</th><th scope="col">สิทธิ์</th><th scope="col"><span class="sr">รหัสผ่าน</span></th></tr></thead><tbody>
+    ${users.map((u) => `<tr><td><span style="display:flex;align-items:center;gap:8px">${avatar(u.name)}${esc(u.name)}${u.id === state.user.uid ? ' <span class="dim">(คุณ)</span>' : ''}</span></td><td class="mono">${esc(u.empId || '—')}${u.mustChange ? ' <span class="dim" style="font-family:var(--sans)">· ยังไม่ได้ตั้งรหัส</span>' : ''}</td>
+      <td>${u.id === state.user.uid || !live ? esc(ROLE_LABEL[u.role] || u.role) : `<label for="r-${esc(u.id)}" class="sr">สิทธิ์ของ ${esc(u.name)}</label><select id="r-${esc(u.id)}" data-user-role="${esc(u.id)}" style="height:34px;padding:0 8px;border:1px solid var(--field);border-radius:8px;background:var(--card)">${['admin', 'tech', 'operator', 'disabled'].map((r) => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td>
+      <td style="text-align:right">${live && u.id !== state.user.uid && u.empId ? `<button type="button" class="btn small" data-act="reset-user" data-id="${esc(u.id)}">รีเซ็ตรหัสผ่าน</button>` : ''}</td></tr>`).join('')}
     </tbody></table></div></section>`;
 
   const p = state.importPreview;
@@ -771,22 +787,25 @@ function viewLogin() {
   const err = state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : '';
   const note = state.notice ? `<p class="notice">${esc(state.notice)}</p>` : '';
   const fromFile = !savedConfig();
-  if (state.loginMode === 'reset') {
-    return authShell('ตั้งรหัสผ่านใหม่', `<form class="pad" data-form="reset">
-      <p class="dim">ใส่อีเมลที่ใช้ล็อกอิน ระบบจะส่งลิงก์ตั้งรหัสผ่านใหม่ให้</p>
-      <div class="field"><label for="r-email">อีเมล</label><input id="r-email" name="email" type="email" autocomplete="username" required></div>
-      ${err}${note}
-      <button class="btn solid" style="justify-content:center">ส่งลิงก์</button>
-      <button type="button" class="btn" style="justify-content:center" data-act="login-mode" data-id="login">กลับไปหน้าเข้าสู่ระบบ</button></form>`);
-  }
   return authShell('เข้าสู่ระบบ', `<form class="pad" data-form="login">
-    <div class="field"><label for="l-email">อีเมล</label><input id="l-email" name="email" type="email" autocomplete="username" required value="${esc(state.draft.email)}"></div>
+    <div class="field"><label for="l-emp">รหัสพนักงาน</label><input id="l-emp" name="empId" autocomplete="username" autocapitalize="characters" spellcheck="false" required value="${esc(state.draft.empId)}"></div>
     <div class="field"><label for="l-pass">รหัสผ่าน</label><input id="l-pass" name="password" type="password" autocomplete="current-password" required></div>
     ${err}${note}
     <button class="btn solid" style="justify-content:center">เข้าสู่ระบบ</button>
-    <button type="button" class="link" style="font-family:var(--sans);align-self:center" data-act="login-mode" data-id="reset">ลืมรหัสผ่าน</button>
-    <p class="hint" style="text-align:center">ยังไม่มีบัญชี ให้หัวหน้าซ่อมบำรุงเพิ่มให้ในหน้าตั้งค่า</p>
+    <p class="hint" style="text-align:center">ลืมรหัสผ่านหรือยังไม่มีบัญชี ให้หัวหน้าซ่อมบำรุงรีเซ็ตหรือเพิ่มให้ในหน้าตั้งค่า</p>
     ${fromFile ? '' : '<button type="button" class="btn small" style="align-self:center" data-act="disconnect">เลิกเชื่อมต่อเครื่องนี้</button>'}</form>`);
+}
+
+// เข้าด้วยรหัสชั่วคราว ต้องตั้งรหัสของตัวเองก่อนใช้งาน
+function viewFirstPassword() {
+  const err = state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : '';
+  return authShell('ตั้งรหัสผ่านของคุณ', `<form class="pad" data-form="firstpass">
+    <p class="dim">สวัสดี ${esc(state.user.name)} (${esc(state.user.empId)}) คุณเข้าด้วยรหัสผ่านชั่วคราว ตั้งรหัสผ่านของคุณเองก่อนใช้งาน</p>
+    <div class="field"><label for="f-new">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</label><input id="f-new" name="next" type="password" minlength="8" required autocomplete="new-password"></div>
+    <div class="field"><label for="f-new2">ยืนยันรหัสผ่านใหม่</label><input id="f-new2" name="next2" type="password" minlength="8" required autocomplete="new-password"></div>
+    ${err}
+    <button class="btn solid" style="justify-content:center">บันทึกรหัสผ่าน</button>
+    <button type="button" class="btn" style="justify-content:center" data-act="logout">ออกจากระบบ</button></form>`);
 }
 
 function viewSetup() {
@@ -795,7 +814,7 @@ function viewSetup() {
     <p class="dim">ฐานข้อมูลนี้ยังไม่มีผู้ดูแล บัญชีที่สร้างตอนนี้จะเป็นหัวหน้า / แอดมินคนแรก และหน้านี้จะปิดทันทีหลังตั้งค่าเสร็จ</p>
     <div class="field"><label for="s-plant">ชื่อโรงงาน / แผนก</label><input id="s-plant" name="plant" required placeholder="เช่น แผนกซ่อมบำรุง โรงงาน 2" value="${esc(state.draft.plant)}"></div>
     <div class="field"><label for="s-name">ชื่อของคุณ</label><input id="s-name" name="name" required autocomplete="name" value="${esc(state.draft.name)}"></div>
-    <div class="field"><label for="s-email">อีเมล</label><input id="s-email" name="email" type="email" required autocomplete="username" value="${esc(state.draft.email)}"></div>
+    <div class="field"><label for="s-emp">รหัสพนักงานของคุณ (ใช้ล็อกอิน)</label><input id="s-emp" name="empId" required autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="เช่น M0001" value="${esc(state.draft.empId)}"></div>
     <div class="field"><label for="s-pass">รหัสผ่าน (อย่างน้อย 8 ตัว)</label><input id="s-pass" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
     <div class="field"><label for="s-pass2">ยืนยันรหัสผ่าน</label><input id="s-pass2" name="password2" type="password" minlength="8" required autocomplete="new-password"></div>
     ${err}
@@ -807,6 +826,7 @@ function render() {
   if (!state.backend || state.user === undefined) { app.innerHTML = '<p style="padding:24px">กำลังโหลด</p>'; return; }
   if (state.needSetup) { document.body.style.overflow = ''; app.innerHTML = viewSetup(); return; }
   if (!state.user) { document.body.style.overflow = ''; app.innerHTML = viewLogin(); return; }
+  if (state.user.mustChange) { document.body.style.overflow = ''; app.innerHTML = viewFirstPassword(); return; }
   const m = metrics();
   const counts = { work: m.open.length, assets: state.assets.length, pm: m.pmSoon.length, parts: m.low.length, gauges: m.gaugeAlert.length || '' };
   const nav = Object.entries(PAGES).map(([k, [, label]]) => `<button type="button" data-act="nav" data-id="${k}" ${state.page === k ? 'aria-current="page"' : ''}>${icon(NAV_ICON[k])}<span>${label}</span><span class="n">${counts[k] ?? ''}</span></button>`).join('');
@@ -881,12 +901,13 @@ function explain(err) {
   const code = err?.code || '';
   if (code.includes('permission-denied')) return 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้';
   if (code.includes('unavailable') || code.includes('failed-precondition') || code === 'auth/network-request-failed') return 'ต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่เมื่อมีสัญญาณ';
-  if (code === 'auth/email-already-in-use') return 'อีเมลนี้มีบัญชีอยู่แล้ว';
+  if (code === 'auth/email-already-in-use') return 'รหัสพนักงานนี้มีบัญชีอยู่แล้ว';
+  if (code === 'auth/requires-recent-login') return 'ต้องออกจากระบบแล้วเข้าใหม่ก่อนเปลี่ยนรหัสผ่าน';
   if (code === 'auth/weak-password') return 'รหัสผ่านสั้นหรือง่ายเกินไป ใช้อย่างน้อย 8 ตัว';
-  if (code === 'auth/invalid-email') return 'รูปแบบอีเมลไม่ถูกต้อง';
-  if (code === 'auth/too-many-requests') return 'ลองผิดหลายครั้งเกินไป รอสักครู่แล้วลองใหม่ หรือกดลืมรหัสผ่าน';
-  if (code === 'auth/operation-not-allowed') return 'ยังไม่ได้เปิดการล็อกอินด้วยอีเมลใน Firebase console';
-  if (code.startsWith('auth/')) return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+  if (code === 'auth/invalid-email') return 'รหัสพนักงานไม่ถูกต้อง';
+  if (code === 'auth/too-many-requests') return 'ลองผิดหลายครั้งเกินไป รอสักครู่แล้วลองใหม่ หรือให้หัวหน้ารีเซ็ตรหัสผ่าน';
+  if (code === 'auth/operation-not-allowed') return 'ยังไม่ได้เปิด Email/Password ใน Firebase console (ระบบใช้เบื้องหลังสำหรับรหัสพนักงาน)';
+  if (code.startsWith('auth/')) return 'รหัสพนักงานหรือรหัสผ่านไม่ถูกต้อง';
   return err?.message || 'ทำรายการไม่สำเร็จ';
 }
 
@@ -1037,8 +1058,23 @@ const actions = {
   'reset-demo': () => { state.backend.reset(); toast('รีเซ็ตแล้ว'); },
   disconnect: () => { clearConfig(); location.reload(); },
   logout: () => run(() => state.backend.signOut()),
-  'login-mode': (id) => { state.loginMode = id; state.loadError = ''; state.notice = ''; render(); },
-  'my-reset': () => run(() => state.backend.resetPassword(state.user.email), `ส่งลิงก์เปลี่ยนรหัสผ่านไปที่ ${state.user.email} แล้ว`),
+  'reset-user': (id, el) => {
+    const u = state.users.find((x) => x.id === id);
+    if (!u) return;
+    if (!el.dataset.confirm) { el.dataset.confirm = '1'; el.textContent = 'กดอีกครั้งเพื่อยืนยัน'; return; }
+    el.disabled = true;
+    run(async () => {
+      const temp = await state.backend.resetUser(id);
+      state.issued = { title: 'รีเซ็ตรหัสผ่านแล้ว', name: u.name, empId: u.empId, temp };
+      render();
+    });
+  },
+  'issued-close': () => { state.issued = null; render(); },
+  'copy-temp': () => {
+    const x = state.issued;
+    if (!x) return;
+    navigator.clipboard?.writeText(`รหัสพนักงาน ${x.empId} รหัสผ่านชั่วคราว ${x.temp}`).then(() => toast('คัดลอกแล้ว'), () => toast('คัดลอกไม่ได้ จดจากหน้าจอแทน'));
+  },
   tpl: (id) => download(`template-${id}.csv`, csv([IMPORT_COLS[id], ...IMPORT_SAMPLE[id]])),
   'import-cancel': () => { state.importPreview = null; render(); },
   'import-go': () => {
@@ -1273,33 +1309,42 @@ app.addEventListener('submit', (e) => {
     login: async () => {
       try {
         state.loadError = ''; state.notice = '';
-        state.draft = { email: d.email };
-        await state.backend.signIn(d.email.trim(), d.password);
+        state.draft = { empId: d.empId };
+        await state.backend.signIn(d.empId, d.password);
         state.draft = {};
       } catch (err) {
         state.loadError = explain(err);
         render();
       }
     },
-    reset: async () => {
+    firstpass: async () => {
+      state.loadError = '';
+      if (d.next !== d.next2) { state.loadError = 'รหัสผ่านสองช่องไม่ตรงกัน'; render(); return; }
       try {
-        state.loadError = '';
-        await state.backend.resetPassword(d.email.trim());
+        await state.backend.changePassword('', d.next);
+        toast('ตั้งรหัสผ่านแล้ว');
       } catch (err) {
-        // ไม่บอกว่ามีบัญชีหรือไม่ เพื่อไม่ให้ใครใช้หน้านี้เดารายชื่ออีเมล
-        if (!String(err?.code).includes('user-not-found')) { state.loadError = explain(err); render(); return; }
+        state.loadError = explain(err);
+        render();
       }
-      state.notice = 'ถ้ามีบัญชีนี้ ระบบส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลแล้ว ตรวจในกล่องจดหมายขยะด้วย';
-      state.loginMode = 'login';
-      render();
     },
+    mypass: () => run(async () => {
+      if (d.next !== d.next2) throw new Error('รหัสผ่านใหม่สองช่องไม่ตรงกัน');
+      try {
+        await state.backend.changePassword(d.current, d.next);
+      } catch (err) {
+        if (['auth/invalid-credential', 'auth/wrong-password'].includes(err?.code)) throw new Error('รหัสผ่านเดิมไม่ถูกต้อง');
+        throw err;
+      }
+      form.reset();
+    }, 'เปลี่ยนรหัสผ่านแล้ว'),
     setup: async () => {
       state.loadError = '';
-      state.draft = { plant: d.plant, name: d.name, email: d.email };
+      state.draft = { plant: d.plant, name: d.name, empId: d.empId };
       if (d.password !== d.password2) { state.loadError = 'รหัสผ่านสองช่องไม่ตรงกัน'; render(); return; }
       try {
         const plant = d.plant.trim();
-        await state.backend.setupFirstAdmin({ plant, name: d.name.trim(), email: d.email.trim(), password: d.password });
+        await state.backend.setupFirstAdmin({ plant, name: d.name.trim(), empId: d.empId, password: d.password });
         state.setup = { plant };
         state.needSetup = false;
         state.draft = {};
@@ -1310,11 +1355,14 @@ app.addEventListener('submit', (e) => {
       }
     },
     user: () => run(async () => {
-      const email = d.email.trim().toLowerCase();
-      if (state.users.some((u) => (u.email || '').toLowerCase() === email)) throw new Error(`มีผู้ใช้ ${email} อยู่แล้ว`);
-      await state.backend.createUser({ name: d.name.trim(), email, role: d.role });
+      const empId = d.empId.trim().toUpperCase();
+      if (state.users.some((u) => u.empId === empId)) throw new Error(`มีรหัสพนักงาน ${empId} อยู่แล้ว`);
+      const name = d.name.trim();
+      const temp = await state.backend.createUser({ name, empId, role: d.role });
+      state.issued = { title: 'เพิ่มผู้ใช้แล้ว', name, empId, temp };
       form.reset();
-    }, `เพิ่มผู้ใช้แล้ว ระบบส่งอีเมลให้ตั้งรหัสผ่าน`),
+      render();
+    }),
     plant: () => run(async () => {
       const plant = d.plant.trim();
       await state.backend.updateSetup({ plant });
@@ -1351,14 +1399,14 @@ app.addEventListener('submit', (e) => {
     state.unsubs.forEach((u) => u());
     state.unsubs = [];
     state.loadError = '';
-    if (user?.role) {
+    if (user?.role && !user.mustChange) {
       listen();
       if (user.role === 'admin') {
         try { state.canSeed = await state.backend.isEmpty(); } catch { state.canSeed = false; }
         if (state.canSeed) state.page = 'server';
       }
       if (user.role === 'operator' && !PAGES[location.hash.slice(1)]) state.page = 'quick';
-    } else if (user) {
+    } else if (user && !user.mustChange) {
       state.page = 'server';
     }
     render();
