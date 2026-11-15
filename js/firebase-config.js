@@ -1,4 +1,10 @@
-// วางค่าจาก Firebase console ตรงนี้เมื่อขึ้นระบบจริง ทุกเครื่องจะเชื่อมโปรเจกต์เดียวกันอัตโนมัติ
-// ปล่อยเป็น null ได้ถ้าจะวางค่าผ่านหน้า "เชื่อมต่อเซิร์ฟเวอร์" ทีละเครื่อง
-// ค่าชุดนี้ไม่ใช่รหัสลับ สิ่งที่กันข้อมูลคือ firestore.rules
-export const firebaseConfig = null;
+// ค่าการเชื่อมต่อ Firebase ของโรงงาน (ไม่ใช่รหัสลับ สิ่งที่กันข้อมูลคือ firestore.rules)
+export const firebaseConfig = {
+  apiKey: "AIzaSyBdIyIwzhYBNiP_dsfetOysAxdbaCb0g5E",
+  authDomain: "cmmsepic.firebaseapp.com",
+  projectId: "cmmsepic",
+  storageBucket: "cmmsepic.firebasestorage.app",
+  messagingSenderId: "607234875826",
+  appId: "1:607234875826:web:813284068aee9d1a5a44ab",
+  measurementId: "G-XFD0NMR9T3"
+};
