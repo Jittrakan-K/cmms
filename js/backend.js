@@ -174,7 +174,7 @@ class LocalBackend {
 
   async signIn() {}
   async signOut() {}
-  async getSetup() { return { plant: 'โรงงานตัวอย่าง', demo: true }; }
+  async getSetup() { return { plant: 'โรงงานตัวอย่าง', dept: 'ซ่อมบำรุง', demo: true }; }
   async changePassword() { throw new Error('โหมดตัวอย่างไม่มีรหัสผ่าน'); }
   async resetUser() { throw new Error('โหมดตัวอย่างรีเซ็ตรหัสผ่านไม่ได้ ต้องเชื่อม Firebase ก่อน'); }
   async createUser() { throw new Error('โหมดตัวอย่างเพิ่มผู้ใช้ไม่ได้ ต้องเชื่อม Firebase ก่อน'); }
@@ -367,7 +367,7 @@ class FirebaseBackend {
   }
 
   // ตั้งค่าครั้งแรก: บัญชีแรกเป็นแอดมิน และล็อกไม่ให้ใครตั้งซ้ำ (กฎใน firestore.rules บังคับ)
-  async setupFirstAdmin({ plant, name, empId, password }) {
+  async setupFirstAdmin({ plant, dept = '', name, empId, password }) {
     const { doc, writeBatch, serverTimestamp } = this.fs;
     empId = checkEmpId(empId);
     const email = loginEmail(empId);
@@ -375,7 +375,7 @@ class FirebaseBackend {
     const uid = cred.user.uid;
     const batch = writeBatch(this.db);
     batch.set(doc(this.db, 'users', uid), { name, empId, role: 'admin', createdAt: serverTimestamp() });
-    batch.set(doc(this.db, 'config', 'setup'), { plant, adminUid: uid, createdAt: serverTimestamp() });
+    batch.set(doc(this.db, 'config', 'setup'), { plant, dept, adminUid: uid, createdAt: serverTimestamp() });
     batch.set(doc(this.db, 'logins', empId), { email, uid });
     try {
       await batch.commit();

@@ -57,7 +57,7 @@ service cloud.firestore {
         && request.resource.data.adminUid == request.auth.uid
         && existsAfter(userDoc())
         && getAfter(userDoc()).data.role == 'admin';
-      allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plant']);
+      allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plant', 'dept']);
     }
 
     // สมาชิกอ่านรายชื่อได้ (ใช้เลือกผู้รับผิดชอบงาน) แอดมินเพิ่มและเปลี่ยนสิทธิ์

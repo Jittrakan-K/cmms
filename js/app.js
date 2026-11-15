@@ -759,7 +759,7 @@ function viewServer() {
   </div></section>`;
 
   const plantBox = `<section class="box"><div class="bar"><h2>ข้อมูลโรงงาน</h2><span class="lamp" style="--c:${live ? 'var(--ok)' : 'var(--run)'}">${live ? 'เชื่อมฐานข้อมูลจริงแล้ว' : 'โหมดตัวอย่าง'}</span></div><div class="pad">
-    ${live ? `<form class="stack" data-form="plant" style="gap:10px"><div class="field"><label for="p-name">ชื่อโรงงาน / แผนก</label><input id="p-name" name="plant" value="${esc(state.setup?.plant || '')}" required></div><div class="actions"><button class="btn small">บันทึกชื่อ</button></div></form>
+    ${live ? `<form class="stack" data-form="plant" style="gap:10px"><div class="field"><label for="p-name">ชื่อโรงงาน / บริษัท</label><input id="p-name" name="plant" value="${esc(state.setup?.plant || '')}" required></div><div class="field"><label for="p-dept">แผนก</label><input id="p-dept" name="dept" value="${esc(state.setup?.dept || '')}"></div><div class="actions"><button class="btn small">บันทึก</button></div></form>
       <p class="hint">โปรเจกต์ Firebase: <span class="mono">${esc(b.projectId)}</span></p>
       ${state.canSeed ? '<div class="actions"><button type="button" class="btn solid" data-act="seed">ใส่ข้อมูลตัวอย่างเพื่อทดลอง</button></div><p class="hint">ฐานข้อมูลยังว่าง จะใส่ข้อมูลตัวอย่างไว้ลองก่อน หรือนำเข้าข้อมูลจริงจาก Excel ก็ได้</p>' : ''}`
     : `<p class="dim">ข้อมูลตอนนี้เก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ยังไม่มีระบบล็อกอิน ใช้ดูหน้าตาและทดลองก่อนตั้งค่า Firebase</p>
@@ -775,8 +775,14 @@ function viewServer() {
   return `${usersBox}<div class="split">${importBox}<div class="w2">${plantBox}${account}${backupBox}</div></div>`;
 }
 
+// ชื่อที่แสดง: "โรงงาน · แผนก"
+function placeName() {
+  const x = state.setup || {};
+  return [x.plant, x.dept].filter(Boolean).join(' · ');
+}
+
 function authShell(title, body) {
-  const plant = state.setup?.plant;
+  const plant = placeName();
   return `<div class="login"><div class="authcard">
     <div class="bar" style="display:flex;align-items:center;gap:12px"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>
       <div><b style="font-size:17px">CMMS${plant ? ` · ${esc(plant)}` : ''}</b><div class="dim" style="font-size:13px">${title}</div></div></div>
@@ -812,7 +818,8 @@ function viewSetup() {
   const err = state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : '';
   return authShell('ตั้งค่าครั้งแรก', `<form class="pad" data-form="setup">
     <p class="dim">ฐานข้อมูลนี้ยังไม่มีผู้ดูแล บัญชีที่สร้างตอนนี้จะเป็นหัวหน้า / แอดมินคนแรก และหน้านี้จะปิดทันทีหลังตั้งค่าเสร็จ</p>
-    <div class="field"><label for="s-plant">ชื่อโรงงาน / แผนก</label><input id="s-plant" name="plant" required placeholder="เช่น แผนกซ่อมบำรุง โรงงาน 2" value="${esc(state.draft.plant)}"></div>
+    <div class="field"><label for="s-plant">ชื่อโรงงาน / บริษัท</label><input id="s-plant" name="plant" required placeholder="เช่น Orbray โรงงาน 2" value="${esc(state.draft.plant)}"></div>
+    <div class="field"><label for="s-dept">แผนก</label><input id="s-dept" name="dept" placeholder="เช่น ซ่อมบำรุง" value="${esc(state.draft.dept)}"></div>
     <div class="field"><label for="s-name">ชื่อของคุณ</label><input id="s-name" name="name" required autocomplete="name" value="${esc(state.draft.name)}"></div>
     <div class="field"><label for="s-emp">รหัสพนักงานของคุณ (ใช้ล็อกอิน)</label><input id="s-emp" name="empId" required autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="เช่น M0001" value="${esc(state.draft.empId)}"></div>
     <div class="field"><label for="s-pass">รหัสผ่าน (อย่างน้อย 8 ตัว)</label><input id="s-pass" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
@@ -836,11 +843,11 @@ function render() {
   const add = canAdmin() && ADD_LABEL[state.page] ? `<button type="button" class="btn" data-act="add" data-id="${state.page}">${ADD_LABEL[state.page]}</button>` : '';
   const report = noRole || state.page === 'quick' ? '' : `<button type="button" class="btn solid" data-act="report">${icon('<path d="M12 5v14M5 12h14"/>')}แจ้งซ่อม</button>`;
   const role = { admin: 'หัวหน้า / แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต' }[state.user.role] || 'ยังไม่มีสิทธิ์';
-  const where = state.backend.mode === 'firebase' ? (state.setup?.plant || state.backend.projectId) : 'ข้อมูลตัวอย่างในเครื่องนี้';
+  const where = state.backend.mode === 'firebase' ? (placeName() || state.backend.projectId) : 'ข้อมูลตัวอย่างในเครื่องนี้';
   const sync = state.lastSync ? ` · ซิงก์ ${fmtTime(state.lastSync)}` : '';
   app.classList.toggle('quickmode', state.page === 'quick');
   app.innerHTML = `<header class="topbar">
-      <span class="brand" title="${esc(state.setup?.plant || '')}"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>CMMS</span>
+      <span class="brand" title="${esc(placeName())}"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>CMMS</span>
       <div class="right">
         <div class="searchwrap"><label for="q" class="sr">ค้นหาเครื่อง ใบงาน อะไหล่ เครื่องมือวัด</label><input id="q" class="search" type="search" autocomplete="off" placeholder="ค้นหาทั้งระบบ" value="${esc(state.q)}"><div id="q-res" class="qres" hidden></div></div>
         <div class="me">${avatar(state.user.name, false)}<span class="who"><b>${esc(state.user.name)}</b><span>${esc(role)}</span></span>${state.backend.mode === 'firebase' ? '<button type="button" data-act="logout">ออกจากระบบ</button>' : ''}</div>
@@ -1340,12 +1347,13 @@ app.addEventListener('submit', (e) => {
     }, 'เปลี่ยนรหัสผ่านแล้ว'),
     setup: async () => {
       state.loadError = '';
-      state.draft = { plant: d.plant, name: d.name, empId: d.empId };
+      state.draft = { plant: d.plant, dept: d.dept, name: d.name, empId: d.empId };
       if (d.password !== d.password2) { state.loadError = 'รหัสผ่านสองช่องไม่ตรงกัน'; render(); return; }
       try {
         const plant = d.plant.trim();
-        await state.backend.setupFirstAdmin({ plant, name: d.name.trim(), empId: d.empId, password: d.password });
-        state.setup = { plant };
+        const dept = (d.dept || '').trim();
+        await state.backend.setupFirstAdmin({ plant, dept, name: d.name.trim(), empId: d.empId, password: d.password });
+        state.setup = { plant, dept };
         state.needSetup = false;
         state.draft = {};
         await state.backend.refreshUser();
@@ -1365,8 +1373,9 @@ app.addEventListener('submit', (e) => {
     }),
     plant: () => run(async () => {
       const plant = d.plant.trim();
-      await state.backend.updateSetup({ plant });
-      state.setup = { ...(state.setup || {}), plant };
+      const dept = (d.dept || '').trim();
+      await state.backend.updateSetup({ plant, dept });
+      state.setup = { ...(state.setup || {}), plant, dept };
       render();
     }, 'บันทึกชื่อแล้ว')
   };
