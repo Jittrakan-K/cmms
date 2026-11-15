@@ -211,9 +211,11 @@ form.quick select { flex: 0 1 220px; min-width: 0; }
 
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 12px 18px; border-radius: 12px; background: var(--ink); color: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); z-index: 40; }
 .login { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--top); }
-.login form { width: min(400px, 100%); background: var(--card); border-radius: 16px; overflow: hidden; }
+.login > form, .authcard { width: min(420px, 100%); background: var(--card); border-radius: 16px; overflow: hidden; }
 .login .bar { padding: 18px 22px; border-bottom: 1px solid var(--rule); }
 .login .pad { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+.authcard .mark { width: 36px; height: 36px; border-radius: 10px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+.notice.demo { background: var(--wait-bg); color: var(--wait-fg); }
 
 @media (max-width: 860px) {
   .topbar { flex-wrap: wrap; }

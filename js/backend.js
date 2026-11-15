@@ -154,12 +154,29 @@ class LocalBackend {
   }
 
   onAuth(cb) {
-    cb({ uid: 'demo', name: 'อนันต์ ส.', role: 'admin' });
+    cb({ uid: 'demo', name: 'อนันต์ ส.', role: 'admin', email: 'demo@example.com' });
     return () => {};
   }
 
   async signIn() {}
   async signOut() {}
+  async getSetup() { return { plant: 'โรงงานตัวอย่าง', demo: true }; }
+  async resetPassword() { throw new Error('โหมดตัวอย่างไม่มีระบบอีเมล'); }
+  async createUser() { throw new Error('โหมดตัวอย่างเพิ่มผู้ใช้ไม่ได้ ต้องเชื่อม Firebase ก่อน'); }
+  async updateUser() { throw new Error('โหมดตัวอย่างแก้ผู้ใช้ไม่ได้ ต้องเชื่อม Firebase ก่อน'); }
+  async updateSetup() { throw new Error('โหมดตัวอย่างแก้ชื่อโรงงานไม่ได้'); }
+  subscribeUsers(cb) {
+    cb([['demo', 'อนันต์ ส.', 'admin'], ['u2', 'วิชัย ร.', 'tech'], ['u3', 'สมชาย ก.', 'tech'], ['u4', 'มาลี ท.', 'operator'], ['u5', 'ประเสริฐ บ.', 'operator']]
+      .map(([id, name, role]) => ({ id, name, role, email: `${id}@example.com` })));
+    return () => {};
+  }
+
+  async importRows(coll, rows) {
+    const map = new Map(this.db[coll].map((x) => [x.id, x]));
+    rows.forEach((r) => map.set(r.id, { ...(map.get(r.id) || {}), ...r }));
+    this.db[coll] = [...map.values()];
+    this.commit(coll);
+  }
 
   subscribe(coll, cb) {
     (this.listeners[coll] ||= []).push(cb);
@@ -290,7 +307,9 @@ class FirebaseBackend {
     ]);
     this.fs = fs;
     this.authMod = authMod;
+    this.appMod = appMod;
     const app = appMod.initializeApp(this.config);
+    this.emulator = new URLSearchParams(location.search).get('emulator') === '1' && location.hostname === 'localhost';
     this.projectId = this.config.projectId;
     const emulator = new URLSearchParams(location.search).get('emulator') === '1' && location.hostname === 'localhost';
     // แคชลงเครื่อง: เปิดดูข้อมูลล่าสุดได้แม้สัญญาณในโรงงานหลุด
@@ -298,6 +317,7 @@ class FirebaseBackend {
       ? fs.initializeFirestore(app, {})
       : fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) });
     this.auth = authMod.getAuth(app);
+    this.auth.languageCode = 'th'; // อีเมลรีเซ็ตรหัสผ่านเป็นภาษาไทย
     if (emulator) {
       fs.connectFirestoreEmulator(this.db, '127.0.0.1', 8080);
       authMod.connectAuthEmulator(this.auth, 'http://127.0.0.1:9099', { disableWarnings: true });
@@ -306,18 +326,97 @@ class FirebaseBackend {
   }
 
   onAuth(cb) {
+    this.authCb = cb;
+    return this.authMod.onAuthStateChanged(this.auth, (user) => this.emitUser(user));
+  }
+
+  // อ่านสิทธิ์จาก users/{uid} สิทธิ์ disabled หรือไม่มีเอกสาร = เข้าใช้ไม่ได้
+  async emitUser(user) {
+    if (!this.authCb) return;
+    if (!user) return this.authCb(null);
     const { doc, getDoc } = this.fs;
-    return this.authMod.onAuthStateChanged(this.auth, async (user) => {
-      if (!user) return cb(null);
-      let profile = {};
-      try {
-        const snap = await getDoc(doc(this.db, 'users', user.uid));
-        profile = snap.exists() ? snap.data() : {};
-      } catch (err) {
-        console.warn('อ่านสิทธิ์ผู้ใช้ไม่ได้', err);
-      }
-      cb({ uid: user.uid, name: profile.name || user.email, role: profile.role || null });
-    });
+    let profile = {};
+    try {
+      const snap = await getDoc(doc(this.db, 'users', user.uid));
+      profile = snap.exists() ? snap.data() : {};
+    } catch (err) {
+      console.warn('อ่านสิทธิ์ผู้ใช้ไม่ได้', err);
+    }
+    const role = ['admin', 'tech', 'operator'].includes(profile.role) ? profile.role : null;
+    this.authCb({ uid: user.uid, email: user.email, name: profile.name || user.email, role, disabled: profile.role === 'disabled' });
+  }
+
+  async getSetup() {
+    const { doc, getDoc } = this.fs;
+    const snap = await getDoc(doc(this.db, 'config', 'setup'));
+    return snap.exists() ? snap.data() : null;
+  }
+
+  // ตั้งค่าครั้งแรก: บัญชีแรกเป็นแอดมิน และล็อกไม่ให้ใครตั้งซ้ำ (กฎใน firestore.rules บังคับ)
+  async setupFirstAdmin({ plant, name, email, password }) {
+    const { doc, writeBatch, serverTimestamp } = this.fs;
+    const cred = await this.authMod.createUserWithEmailAndPassword(this.auth, email, password);
+    const uid = cred.user.uid;
+    const batch = writeBatch(this.db);
+    batch.set(doc(this.db, 'users', uid), { name, email, role: 'admin', createdAt: serverTimestamp() });
+    batch.set(doc(this.db, 'config', 'setup'), { plant, adminUid: uid, createdAt: serverTimestamp() });
+    try {
+      await batch.commit();
+    } catch (err) {
+      // บันทึกสิทธิ์ไม่สำเร็จ (เช่น ยังไม่ได้ใส่กฎ) ลบบัญชีที่เพิ่งสร้างทิ้ง จะได้ลองใหม่ด้วยอีเมลเดิมได้
+      await this.authMod.deleteUser(cred.user).catch(() => {});
+      throw err;
+    }
+  }
+
+  refreshUser() {
+    return this.emitUser(this.auth.currentUser);
+  }
+
+  updateSetup(patch) {
+    const { doc, updateDoc } = this.fs;
+    return updateDoc(doc(this.db, 'config', 'setup'), patch);
+  }
+
+  resetPassword(email) {
+    return this.authMod.sendPasswordResetEmail(this.auth, email);
+  }
+
+  // สร้างบัญชีให้พนักงานด้วยแอปสำรอง แอดมินจึงไม่หลุดออกจากระบบ แล้วส่งอีเมลให้เจ้าของบัญชีตั้งรหัสเอง
+  async createUser({ name, email, role }) {
+    const { doc, setDoc, serverTimestamp } = this.fs;
+    const sec = this.appMod.initializeApp(this.config, `invite-${Date.now()}`);
+    const secAuth = this.authMod.getAuth(sec);
+    if (this.emulator) this.authMod.connectAuthEmulator(secAuth, 'http://127.0.0.1:9099', { disableWarnings: true });
+    try {
+      const temp = crypto.getRandomValues(new Uint32Array(4)).join('-') + 'Aa!';
+      const cred = await this.authMod.createUserWithEmailAndPassword(secAuth, email, temp);
+      await setDoc(doc(this.db, 'users', cred.user.uid), { name, email, role, createdAt: serverTimestamp() });
+      await this.authMod.signOut(secAuth);
+    } finally {
+      await this.appMod.deleteApp(sec);
+    }
+    await this.authMod.sendPasswordResetEmail(this.auth, email);
+  }
+
+  updateUser(uid, patch) {
+    const { doc, updateDoc } = this.fs;
+    return updateDoc(doc(this.db, 'users', uid), patch);
+  }
+
+  subscribeUsers(cb, onError) {
+    const { collection, onSnapshot } = this.fs;
+    return onSnapshot(collection(this.db, 'users'), (snap) => cb(snap.docs.map((d) => ({ ...d.data(), id: d.id }))), onError);
+  }
+
+  // นำเข้าทีละไม่เกิน 400 แถวต่อ batch (Firestore จำกัด 500 การเขียนต่อครั้ง)
+  async importRows(coll, rows) {
+    const { doc, writeBatch } = this.fs;
+    for (let i = 0; i < rows.length; i += 400) {
+      const batch = writeBatch(this.db);
+      rows.slice(i, i + 400).forEach(({ id, ...rest }) => batch.set(doc(this.db, coll, id), rest, { merge: true }));
+      await batch.commit();
+    }
   }
 
   async signIn(email, password) {

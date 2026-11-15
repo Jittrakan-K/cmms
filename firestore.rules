@@ -5,8 +5,13 @@ service cloud.firestore {
     function userDoc() {
       return /databases/$(database)/documents/users/$(request.auth.uid);
     }
+    function setupDoc() {
+      return /databases/$(database)/documents/config/setup;
+    }
+    // สมาชิก = มีเอกสารใน users และสิทธิ์ไม่ใช่ disabled
     function isMember() {
-      return request.auth != null && exists(userDoc());
+      return request.auth != null && exists(userDoc())
+        && get(userDoc()).data.role in ['admin', 'tech', 'operator'];
     }
     function role() {
       return get(userDoc()).data.role;
@@ -32,9 +37,36 @@ service cloud.firestore {
     }
 
     // role: admin = หัวหน้า อนุมัติและจัดการทุกอย่าง, tech = ช่าง ซ่อมและปิดงาน, operator = แจ้งซ่อมและดูข้อมูล
+    function validRole() {
+      return request.resource.data.role in ['admin', 'tech', 'operator', 'disabled'];
+    }
+
+    // ตั้งค่าครั้งแรก: ใครก็อ่านได้ว่าตั้งค่าแล้วหรือยัง (มีแค่ชื่อโรงงาน)
+    // สร้างได้ครั้งเดียว พร้อมกับเอกสารผู้ใช้แอดมินคนแรกใน batch เดียวกัน
+    match /config/setup {
+      allow get: if true;
+      allow create: if request.auth != null
+        && !exists(setupDoc())
+        && request.resource.data.adminUid == request.auth.uid
+        && existsAfter(userDoc())
+        && getAfter(userDoc()).data.role == 'admin';
+      allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plant']);
+    }
+
+    // สมาชิกอ่านรายชื่อได้ (ใช้เลือกผู้รับผิดชอบงาน) แอดมินเพิ่มและเปลี่ยนสิทธิ์
+    // แอดมินลดสิทธิ์หรือลบบัญชีตัวเองไม่ได้ กันไม่ให้ระบบไม่มีแอดมินเหลือ
     match /users/{uid} {
-      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow write: if isAdmin();
+      allow read: if request.auth != null && (request.auth.uid == uid || isMember());
+      allow create: if validRole() && (
+        isAdmin()
+        || (request.auth != null && request.auth.uid == uid
+            && request.resource.data.role == 'admin'
+            && !exists(setupDoc())
+            && existsAfter(setupDoc())
+            && getAfter(setupDoc()).data.adminUid == uid));
+      allow update: if isAdmin() && validRole()
+        && (uid != request.auth.uid || request.resource.data.role == 'admin');
+      allow delete: if isAdmin() && uid != request.auth.uid;
     }
 
     match /assets/{id} {

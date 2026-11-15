@@ -1,4 +1,4 @@
-import { createBackend, parseConfig, saveConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -40,7 +40,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [],
-  page: 'overview', filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null,
+  page: 'overview', filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, loginMode: 'login', notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
 
@@ -442,6 +442,8 @@ function shrinkImage(file) {
 }
 
 function peopleList() {
+  const fromUsers = state.users.filter((u) => ['admin', 'tech'].includes(u.role)).map((u) => u.name);
+  if (fromUsers.length) return [...new Set([state.user.name, ...fromUsers])];
   const names = new Set([state.user.name]);
   state.workOrders.forEach((w) => { if (w.tech) names.add(w.tech); (w.team || []).forEach((n) => names.add(n)); });
   return [...names].filter((n) => n && n !== 'แผน PM').slice(0, 10);
@@ -655,41 +657,155 @@ function viewReport() {
     </div>`;
 }
 
-/* ---------- SH-08 เชื่อมต่อเซิร์ฟเวอร์ ---------- */
+/* ---------- SH-08 ตั้งค่า ---------- */
+const ROLE_LABEL = { admin: 'หัวหน้า / แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต', disabled: 'ปิดใช้งาน' };
+const IMPORT_COLS = {
+  assets: ['id', 'name', 'line', 'cls', 'maker', 'model', 'year'],
+  parts: ['id', 'name', 'bin', 'qty', 'min', 'max']
+};
+const IMPORT_SAMPLE = {
+  assets: [['MNT-103', 'เครื่องติดตั้งชิ้นส่วนความเร็วสูง', 'ไลน์ SMT 1', 'A', '', '', '2562']],
+  parts: [['NZL-1005', 'หัวดูด ขนาด 1005', 'A-02', '2', '6', '12']]
+};
+
+// อ่าน CSV รองรับเครื่องหมายคำพูด และ BOM จาก Excel (บันทึกแบบ CSV UTF-8)
+function parseCsv(text) {
+  const rows = []; let row = []; let cell = ''; let q = false;
+  const t = text.replace(/^﻿/, '');
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (q) {
+      if (ch === '"' && t[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') q = false;
+      else cell += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && t[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim()));
+}
+
+function importRows(coll, text) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) throw new Error('ไฟล์ต้องมีหัวตารางและข้อมูลอย่างน้อย 1 แถว');
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  if (!head.includes('id') || !head.includes('name')) throw new Error(`หัวตารางต้องมีคอลัมน์ ${IMPORT_COLS[coll].join(', ')}`);
+  const out = []; const errors = [];
+  rows.slice(1).forEach((r, i) => {
+    const o = {};
+    head.forEach((h, j) => { if (IMPORT_COLS[coll].includes(h)) o[h] = (r[j] ?? '').trim(); });
+    o.id = (o.id || '').toUpperCase();
+    if (!/^[A-Z0-9.\-]+$/.test(o.id)) { errors.push(`แถว ${i + 2}: รหัส "${o.id}" ใช้ได้แค่ A-Z 0-9 . -`); return; }
+    if (!o.name) { errors.push(`แถว ${i + 2}: ไม่มีชื่อ`); return; }
+    if (coll === 'assets') o.cls = ['A', 'B', 'C'].includes((o.cls || '').toUpperCase()) ? o.cls.toUpperCase() : 'B';
+    if (coll === 'parts') ['qty', 'min', 'max'].forEach((k) => { o[k] = Math.max(0, Number(o[k]) || 0); });
+    out.push(o);
+  });
+  return { coll, rows: out, errors };
+}
+
 function viewServer() {
   const b = state.backend;
   const live = b.mode === 'firebase';
+  const admin = canAdmin();
   const colls = { assets: 'เครื่อง', workOrders: 'ใบงาน', pmPlans: 'แผน PM', parts: 'อะไหล่', gauges: 'เครื่องมือวัด' };
-  return `<div class="split">
-    <section class="box w3" style="gap:0"><div class="bar"><h2>เชื่อม Firebase</h2><span class="lamp" style="--c:${live ? 'var(--ok)' : 'var(--run)'}">${live ? `เชื่อมโปรเจกต์ ${esc(b.projectId)} แล้ว` : 'ยังไม่เชื่อมต่อ'}</span></div>
-      <div class="pad">
-      ${live ? `<p>ข้อมูลทุกหน้าอัปเดตแบบเรียลไทม์จาก Firestore</p>` : `<p class="dim">ตอนนี้ใช้ข้อมูลตัวอย่างที่เก็บในเบราว์เซอร์เครื่องนี้ วางค่าจาก Firebase console เพื่อใช้ข้อมูลจริงร่วมกันทุกเครื่อง</p>
-        <form class="stack" data-form="config"><div class="field"><label for="s-config">firebaseConfig</label>
-        <textarea id="s-config" name="config" class="code" rows="8" spellcheck="false" required placeholder='const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", appId: "..." };'>${esc(state.draft.config)}</textarea></div>
-        <div class="actions"><button class="btn solid">บันทึกและเชื่อมต่อ</button><button type="button" class="btn" data-act="reset-demo">รีเซ็ตข้อมูลตัวอย่าง</button></div></form>`}
-      ${live ? `<div class="actions">${state.canSeed ? '<button type="button" class="btn solid" data-act="seed">ใส่ข้อมูลตัวอย่างลง Firestore</button>' : ''}<button type="button" class="btn" data-act="disconnect">เลิกเชื่อมต่อเครื่องนี้</button></div>` : ''}
-      ${state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}</div>
-    </section>
-    <section class="box w2" style="gap:0"><div class="bar"><h2>สำรองข้อมูล</h2></div>
-      <div class="pad"><p class="dim">ดาวน์โหลดข้อมูลทั้งหมด ${COLLECTIONS.map((c) => `${state[c].length.toLocaleString()} ${colls[c]}`).join(', ')} เป็นไฟล์ JSON เก็บไว้เป็นหลักฐานหรือย้ายระบบ</p>
-      <div class="actions"><button type="button" class="btn" data-act="backup">ดาวน์โหลดไฟล์สำรอง</button></div></div></section>
-  </div>`;
+  const account = `<section class="box"><div class="bar"><h2>บัญชีของฉัน</h2></div>
+    <dl class="kv" style="padding:16px 18px"><dt>ชื่อ</dt><dd>${esc(state.user.name)}</dd><dt>อีเมล</dt><dd>${esc(state.user.email || '—')}</dd><dt>สิทธิ์</dt><dd>${esc(ROLE_LABEL[state.user.role] || 'ยังไม่มีสิทธิ์')}</dd></dl>
+    ${live ? `<div class="pad" style="padding-top:0"><div class="actions"><button type="button" class="btn" data-act="my-reset">ส่งลิงก์เปลี่ยนรหัสผ่านทางอีเมล</button><button type="button" class="btn" data-act="logout">ออกจากระบบ</button></div></div>` : ''}</section>`;
+  if (!admin) return `<div class="split"><div class="w2" style="max-width:560px">${account}</div></div>`;
+
+  const users = [...state.users].sort((x, y) => (x.role === 'disabled') - (y.role === 'disabled') || x.name.localeCompare(y.name, 'th'));
+  const usersBox = `<section class="box"><div class="bar"><h2>ผู้ใช้งาน <span class="mono dim" style="font-size:13px;font-weight:400">${users.filter((u) => u.role !== 'disabled').length}</span></h2></div>
+    ${live ? `<form class="pad" data-form="user" style="border-bottom:1px solid var(--rule)"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:12px;align-items:end">
+      <div class="field"><label for="u-name">ชื่อที่แสดง</label><input id="u-name" name="name" required autocomplete="off"></div>
+      <div class="field"><label for="u-email">อีเมล</label><input id="u-email" name="email" type="email" required autocomplete="off"></div>
+      <div class="field"><label for="u-role">สิทธิ์</label><select id="u-role" name="role">${['operator', 'tech', 'admin'].map((r) => `<option value="${r}">${ROLE_LABEL[r]}</option>`).join('')}</select></div>
+      <button class="btn solid">เพิ่มผู้ใช้</button></div>
+      <p class="hint">ระบบจะส่งอีเมลให้ผู้ใช้ตั้งรหัสผ่านเอง ไม่ต้องบอกรหัสกันทางแชท</p></form>` : '<p class="notice" style="margin:16px 18px 0">โหมดตัวอย่างแสดงรายชื่อตัวอย่าง เพิ่มผู้ใช้จริงได้หลังเชื่อม Firebase</p>'}
+    <div class="scroll"><table style="min-width:620px"><thead><tr><th scope="col">ชื่อ</th><th scope="col">อีเมล</th><th scope="col">สิทธิ์</th></tr></thead><tbody>
+    ${users.map((u) => `<tr><td><span style="display:flex;align-items:center;gap:8px">${avatar(u.name)}${esc(u.name)}${u.id === state.user.uid ? ' <span class="dim">(คุณ)</span>' : ''}</span></td><td class="dim">${esc(u.email || '—')}</td>
+      <td>${u.id === state.user.uid || !live ? esc(ROLE_LABEL[u.role] || u.role) : `<label for="r-${esc(u.id)}" class="sr">สิทธิ์ของ ${esc(u.name)}</label><select id="r-${esc(u.id)}" data-user-role="${esc(u.id)}" style="height:34px;padding:0 8px;border:1px solid var(--field);border-radius:8px;background:var(--card)">${['admin', 'tech', 'operator', 'disabled'].map((r) => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td></tr>`).join('')}
+    </tbody></table></div></section>`;
+
+  const p = state.importPreview;
+  const importBox = `<section class="box w3"><div class="bar"><h2>นำเข้าข้อมูลจาก Excel</h2></div><div class="pad">
+    <p class="dim">บันทึกไฟล์ Excel เป็น "CSV UTF-8" ใช้หัวตารางตามไฟล์ตัวอย่าง รหัสซ้ำจะอัปเดตข้อมูลเดิม</p>
+    <div class="actions"><button type="button" class="btn small" data-act="tpl" data-id="assets">ไฟล์ตัวอย่าง เครื่องจักร</button><button type="button" class="btn small" data-act="tpl" data-id="parts">ไฟล์ตัวอย่าง อะไหล่</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:12px">
+      <div class="field"><label for="imp-assets">นำเข้าเครื่องจักร</label><input id="imp-assets" type="file" accept=".csv,text/csv" data-import="assets"></div>
+      <div class="field"><label for="imp-parts">นำเข้าอะไหล่</label><input id="imp-parts" type="file" accept=".csv,text/csv" data-import="parts"></div>
+    </div>
+    ${p ? `<div class="notice ${p.errors.length && !p.rows.length ? 'err' : ''}"><b>${p.coll === 'assets' ? 'เครื่องจักร' : 'อะไหล่'} ${p.rows.length} รายการพร้อมนำเข้า</b>${p.rows.length ? ` · ${p.rows.slice(0, 3).map((r) => esc(r.id)).join(', ')}${p.rows.length > 3 ? ' …' : ''}` : ''}
+      ${p.errors.length ? `<ul style="margin:6px 0 0;padding-left:18px">${p.errors.slice(0, 5).map((e) => `<li>${esc(e)}</li>`).join('')}${p.errors.length > 5 ? `<li>และอีก ${p.errors.length - 5} แถว</li>` : ''}</ul>` : ''}</div>
+      <div class="actions"><button type="button" class="btn solid" data-act="import-go" ${p.rows.length ? '' : 'disabled'}>นำเข้า ${p.rows.length} รายการ</button><button type="button" class="btn" data-act="import-cancel">ยกเลิก</button></div>` : ''}
+  </div></section>`;
+
+  const plantBox = `<section class="box"><div class="bar"><h2>ข้อมูลโรงงาน</h2><span class="lamp" style="--c:${live ? 'var(--ok)' : 'var(--run)'}">${live ? 'เชื่อมฐานข้อมูลจริงแล้ว' : 'โหมดตัวอย่าง'}</span></div><div class="pad">
+    ${live ? `<form class="stack" data-form="plant" style="gap:10px"><div class="field"><label for="p-name">ชื่อโรงงาน / แผนก</label><input id="p-name" name="plant" value="${esc(state.setup?.plant || '')}" required></div><div class="actions"><button class="btn small">บันทึกชื่อ</button></div></form>
+      <p class="hint">โปรเจกต์ Firebase: <span class="mono">${esc(b.projectId)}</span></p>
+      ${state.canSeed ? '<div class="actions"><button type="button" class="btn solid" data-act="seed">ใส่ข้อมูลตัวอย่างเพื่อทดลอง</button></div><p class="hint">ฐานข้อมูลยังว่าง จะใส่ข้อมูลตัวอย่างไว้ลองก่อน หรือนำเข้าข้อมูลจริงจาก Excel ก็ได้</p>' : ''}`
+    : `<p class="dim">ข้อมูลตอนนี้เก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ยังไม่มีระบบล็อกอิน ใช้ดูหน้าตาและทดลองก่อนตั้งค่า Firebase</p>
+      <form class="stack" data-form="config" style="gap:10px"><div class="field"><label for="s-config">firebaseConfig (ถ้ามีแล้ว)</label>
+      <textarea id="s-config" name="config" class="code" rows="6" spellcheck="false" required placeholder='const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", appId: "..." };'>${esc(state.draft.config)}</textarea></div>
+      <div class="actions"><button class="btn solid">เชื่อมต่อเครื่องนี้</button><button type="button" class="btn" data-act="reset-demo">รีเซ็ตข้อมูลตัวอย่าง</button></div></form>`}
+    ${state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}</div></section>`;
+
+  const backupBox = `<section class="box"><div class="bar"><h2>สำรองข้อมูล</h2></div>
+    <div class="pad"><p class="dim">ดาวน์โหลดข้อมูลทั้งหมด ${COLLECTIONS.map((c) => `${state[c].length.toLocaleString()} ${colls[c]}`).join(', ')} เป็นไฟล์ JSON เก็บไว้เป็นหลักฐานหรือย้ายระบบ</p>
+    <div class="actions"><button type="button" class="btn" data-act="backup">ดาวน์โหลดไฟล์สำรอง</button></div></div></section>`;
+
+  return `${usersBox}<div class="split">${importBox}<div class="w2">${plantBox}${account}${backupBox}</div></div>`;
+}
+
+function authShell(title, body) {
+  const plant = state.setup?.plant;
+  return `<div class="login"><div class="authcard">
+    <div class="bar" style="display:flex;align-items:center;gap:12px"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>
+      <div><b style="font-size:17px">CMMS${plant ? ` · ${esc(plant)}` : ''}</b><div class="dim" style="font-size:13px">${title}</div></div></div>
+    ${body}</div></div>`;
 }
 
 function viewLogin() {
-  return `<div class="login"><form data-form="login">
-    <div class="bar" style="display:flex;align-items:center;gap:10px">${logo}<div><b style="font-size:17px">CMMS</b><div class="mono dim" style="font-size:12px">${esc(state.backend.projectId)}</div></div></div>
-    <div class="pad">
-    <div class="field"><label for="l-email">อีเมล</label><input id="l-email" name="email" type="email" autocomplete="username" required></div>
+  const err = state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : '';
+  const note = state.notice ? `<p class="notice">${esc(state.notice)}</p>` : '';
+  const fromFile = !savedConfig();
+  if (state.loginMode === 'reset') {
+    return authShell('ตั้งรหัสผ่านใหม่', `<form class="pad" data-form="reset">
+      <p class="dim">ใส่อีเมลที่ใช้ล็อกอิน ระบบจะส่งลิงก์ตั้งรหัสผ่านใหม่ให้</p>
+      <div class="field"><label for="r-email">อีเมล</label><input id="r-email" name="email" type="email" autocomplete="username" required></div>
+      ${err}${note}
+      <button class="btn solid" style="justify-content:center">ส่งลิงก์</button>
+      <button type="button" class="btn" style="justify-content:center" data-act="login-mode" data-id="login">กลับไปหน้าเข้าสู่ระบบ</button></form>`);
+  }
+  return authShell('เข้าสู่ระบบ', `<form class="pad" data-form="login">
+    <div class="field"><label for="l-email">อีเมล</label><input id="l-email" name="email" type="email" autocomplete="username" required value="${esc(state.draft.email)}"></div>
     <div class="field"><label for="l-pass">รหัสผ่าน</label><input id="l-pass" name="password" type="password" autocomplete="current-password" required></div>
-    ${state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}
+    ${err}${note}
     <button class="btn solid" style="justify-content:center">เข้าสู่ระบบ</button>
-    <button type="button" class="btn" style="justify-content:center" data-act="disconnect">เลิกเชื่อมต่อเครื่องนี้</button></div></form></div>`;
+    <button type="button" class="link" style="font-family:var(--sans);align-self:center" data-act="login-mode" data-id="reset">ลืมรหัสผ่าน</button>
+    <p class="hint" style="text-align:center">ยังไม่มีบัญชี ให้หัวหน้าซ่อมบำรุงเพิ่มให้ในหน้าตั้งค่า</p>
+    ${fromFile ? '' : '<button type="button" class="btn small" style="align-self:center" data-act="disconnect">เลิกเชื่อมต่อเครื่องนี้</button>'}</form>`);
+}
+
+function viewSetup() {
+  const err = state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : '';
+  return authShell('ตั้งค่าครั้งแรก', `<form class="pad" data-form="setup">
+    <p class="dim">ฐานข้อมูลนี้ยังไม่มีผู้ดูแล บัญชีที่สร้างตอนนี้จะเป็นหัวหน้า / แอดมินคนแรก และหน้านี้จะปิดทันทีหลังตั้งค่าเสร็จ</p>
+    <div class="field"><label for="s-plant">ชื่อโรงงาน / แผนก</label><input id="s-plant" name="plant" required placeholder="เช่น แผนกซ่อมบำรุง โรงงาน 2" value="${esc(state.draft.plant)}"></div>
+    <div class="field"><label for="s-name">ชื่อของคุณ</label><input id="s-name" name="name" required autocomplete="name" value="${esc(state.draft.name)}"></div>
+    <div class="field"><label for="s-email">อีเมล</label><input id="s-email" name="email" type="email" required autocomplete="username" value="${esc(state.draft.email)}"></div>
+    <div class="field"><label for="s-pass">รหัสผ่าน (อย่างน้อย 8 ตัว)</label><input id="s-pass" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
+    <div class="field"><label for="s-pass2">ยืนยันรหัสผ่าน</label><input id="s-pass2" name="password2" type="password" minlength="8" required autocomplete="new-password"></div>
+    ${err}
+    <button class="btn solid" style="justify-content:center">สร้างบัญชีแอดมินและเริ่มใช้งาน</button></form>`);
 }
 
 /* ---------- วาดหน้า ---------- */
 function render() {
   if (!state.backend || state.user === undefined) { app.innerHTML = '<p style="padding:24px">กำลังโหลด</p>'; return; }
+  if (state.needSetup) { document.body.style.overflow = ''; app.innerHTML = viewSetup(); return; }
   if (!state.user) { document.body.style.overflow = ''; app.innerHTML = viewLogin(); return; }
   const m = metrics();
   const counts = { work: m.open.length, assets: state.assets.length, pm: m.pmSoon.length, parts: m.low.length, gauges: m.gaugeAlert.length || '' };
@@ -700,11 +816,11 @@ function render() {
   const add = canAdmin() && ADD_LABEL[state.page] ? `<button type="button" class="btn" data-act="add" data-id="${state.page}">${ADD_LABEL[state.page]}</button>` : '';
   const report = noRole || state.page === 'quick' ? '' : `<button type="button" class="btn solid" data-act="report">${icon('<path d="M12 5v14M5 12h14"/>')}แจ้งซ่อม</button>`;
   const role = { admin: 'หัวหน้า / แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต' }[state.user.role] || 'ยังไม่มีสิทธิ์';
-  const where = state.backend.mode === 'firebase' ? state.backend.projectId : 'ข้อมูลตัวอย่างในเครื่องนี้';
+  const where = state.backend.mode === 'firebase' ? (state.setup?.plant || state.backend.projectId) : 'ข้อมูลตัวอย่างในเครื่องนี้';
   const sync = state.lastSync ? ` · ซิงก์ ${fmtTime(state.lastSync)}` : '';
   app.classList.toggle('quickmode', state.page === 'quick');
   app.innerHTML = `<header class="topbar">
-      <span class="brand"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>CMMS</span>
+      <span class="brand" title="${esc(state.setup?.plant || '')}"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>CMMS</span>
       <div class="right">
         <div class="searchwrap"><label for="q" class="sr">ค้นหาเครื่อง ใบงาน อะไหล่ เครื่องมือวัด</label><input id="q" class="search" type="search" autocomplete="off" placeholder="ค้นหาทั้งระบบ" value="${esc(state.q)}"><div id="q-res" class="qres" hidden></div></div>
         <div class="me">${avatar(state.user.name, false)}<span class="who"><b>${esc(state.user.name)}</b><span>${esc(role)}</span></span>${state.backend.mode === 'firebase' ? '<button type="button" data-act="logout">ออกจากระบบ</button>' : ''}</div>
@@ -715,7 +831,8 @@ function render() {
       <main>
         <header class="head"><div><h1>${full}</h1><span class="meta">${today()} · ${esc(where)}${sync}</span></div>
           <div class="actions">${add}${report}</div></header>
-        ${noRole ? '<p class="notice err">บัญชีนี้ยังไม่มีสิทธิ์ ให้แอดมินสร้างเอกสารใน users ตาม uid ของบัญชีนี้</p>' : ''}
+        ${state.backend.mode === 'local' ? `<p class="notice demo">โหมดตัวอย่าง: ข้อมูลอยู่ในเบราว์เซอร์เครื่องนี้เท่านั้นและไม่มีล็อกอิน ${canAdmin() ? '<button type="button" class="link" style="font-family:var(--sans)" data-act="nav" data-id="server">ตั้งค่าเพื่อใช้งานจริง</button>' : ''}</p>` : ''}
+        ${noRole ? `<p class="notice err">${state.user.disabled ? 'บัญชีนี้ถูกปิดใช้งาน ติดต่อหัวหน้าซ่อมบำรุง' : 'บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อหัวหน้าซ่อมบำรุงให้เพิ่มในหน้าตั้งค่า'}</p>` : ''}
         ${state.loadError && state.page !== 'server' ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}
         ${noRole && state.page !== 'server' ? '' : views[state.page](m)}
       </main>
@@ -764,18 +881,25 @@ function explain(err) {
   const code = err?.code || '';
   if (code.includes('permission-denied')) return 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้';
   if (code.includes('unavailable') || code.includes('failed-precondition') || code === 'auth/network-request-failed') return 'ต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่เมื่อมีสัญญาณ';
+  if (code === 'auth/email-already-in-use') return 'อีเมลนี้มีบัญชีอยู่แล้ว';
+  if (code === 'auth/weak-password') return 'รหัสผ่านสั้นหรือง่ายเกินไป ใช้อย่างน้อย 8 ตัว';
+  if (code === 'auth/invalid-email') return 'รูปแบบอีเมลไม่ถูกต้อง';
+  if (code === 'auth/too-many-requests') return 'ลองผิดหลายครั้งเกินไป รอสักครู่แล้วลองใหม่ หรือกดลืมรหัสผ่าน';
+  if (code === 'auth/operation-not-allowed') return 'ยังไม่ได้เปิดการล็อกอินด้วยอีเมลใน Firebase console';
   if (code.startsWith('auth/')) return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
   return err?.message || 'ทำรายการไม่สำเร็จ';
 }
 
 function listen() {
   state.unsubs.forEach((u) => u());
+  const usersUnsub = state.backend.subscribeUsers((rows) => { state.users = rows; refresh(); }, (err) => console.warn('อ่านรายชื่อผู้ใช้ไม่ได้', err));
   state.unsubs = COLLECTIONS.map((c) => state.backend.subscribe(c, (rows) => {
     state[c] = c === 'assets' ? rows.sort((a, b) => a.id.localeCompare(b.id)) : (c === 'workOrders' ? rows.sort((a, b) => b.startAt - a.startAt) : rows);
     state.loadError = '';
     state.lastSync = Date.now();
     refresh();
   }, (err) => { console.error(err); state.loadError = explain(err); refresh(); }));
+  state.unsubs.push(usersUnsub);
 }
 
 function go(page) {
@@ -912,7 +1036,16 @@ const actions = {
   seed: () => run(async () => { await state.backend.seed(); state.canSeed = false; }, 'ใส่ข้อมูลตัวอย่างแล้ว'),
   'reset-demo': () => { state.backend.reset(); toast('รีเซ็ตแล้ว'); },
   disconnect: () => { clearConfig(); location.reload(); },
-  logout: () => run(() => state.backend.signOut())
+  logout: () => run(() => state.backend.signOut()),
+  'login-mode': (id) => { state.loginMode = id; state.loadError = ''; state.notice = ''; render(); },
+  'my-reset': () => run(() => state.backend.resetPassword(state.user.email), `ส่งลิงก์เปลี่ยนรหัสผ่านไปที่ ${state.user.email} แล้ว`),
+  tpl: (id) => download(`template-${id}.csv`, csv([IMPORT_COLS[id], ...IMPORT_SAMPLE[id]])),
+  'import-cancel': () => { state.importPreview = null; render(); },
+  'import-go': () => {
+    const p = state.importPreview;
+    if (!p?.rows.length) return;
+    run(async () => { await state.backend.importRows(p.coll, p.rows); state.importPreview = null; state.canSeed = false; render(); }, `นำเข้า ${p.rows.length} รายการแล้ว`);
+  }
 };
 
 app.addEventListener('click', (e) => {
@@ -987,6 +1120,20 @@ app.addEventListener('keydown', (e) => {
 });
 
 app.addEventListener('change', (e) => {
+  if (e.target.dataset.import && e.target.files?.[0]) {
+    const coll = e.target.dataset.import;
+    e.target.files[0].text().then((text) => {
+      try { state.importPreview = importRows(coll, text); } catch (err) { state.importPreview = null; toast(err.message); }
+      render();
+    });
+    return;
+  }
+  if (e.target.dataset.userRole) {
+    const uid = e.target.dataset.userRole;
+    const role = e.target.value;
+    run(() => state.backend.updateUser(uid, { role }), `เปลี่ยนสิทธิ์เป็น ${ROLE_LABEL[role]} แล้ว`);
+    return;
+  }
   if (e.target.id === 'qr-file' && e.target.files?.[0]) {
     shrinkImage(e.target.files[0]).then((url) => { state.qr.photo = url; render(); }).catch((err) => toast(err.message));
     return;
@@ -1125,13 +1272,55 @@ app.addEventListener('submit', (e) => {
     },
     login: async () => {
       try {
-        state.loadError = '';
-        await state.backend.signIn(d.email, d.password);
+        state.loadError = ''; state.notice = '';
+        state.draft = { email: d.email };
+        await state.backend.signIn(d.email.trim(), d.password);
+        state.draft = {};
       } catch (err) {
         state.loadError = explain(err);
         render();
       }
-    }
+    },
+    reset: async () => {
+      try {
+        state.loadError = '';
+        await state.backend.resetPassword(d.email.trim());
+      } catch (err) {
+        // ไม่บอกว่ามีบัญชีหรือไม่ เพื่อไม่ให้ใครใช้หน้านี้เดารายชื่ออีเมล
+        if (!String(err?.code).includes('user-not-found')) { state.loadError = explain(err); render(); return; }
+      }
+      state.notice = 'ถ้ามีบัญชีนี้ ระบบส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลแล้ว ตรวจในกล่องจดหมายขยะด้วย';
+      state.loginMode = 'login';
+      render();
+    },
+    setup: async () => {
+      state.loadError = '';
+      state.draft = { plant: d.plant, name: d.name, email: d.email };
+      if (d.password !== d.password2) { state.loadError = 'รหัสผ่านสองช่องไม่ตรงกัน'; render(); return; }
+      try {
+        const plant = d.plant.trim();
+        await state.backend.setupFirstAdmin({ plant, name: d.name.trim(), email: d.email.trim(), password: d.password });
+        state.setup = { plant };
+        state.needSetup = false;
+        state.draft = {};
+        await state.backend.refreshUser();
+      } catch (err) {
+        state.loadError = explain(err);
+        render();
+      }
+    },
+    user: () => run(async () => {
+      const email = d.email.trim().toLowerCase();
+      if (state.users.some((u) => (u.email || '').toLowerCase() === email)) throw new Error(`มีผู้ใช้ ${email} อยู่แล้ว`);
+      await state.backend.createUser({ name: d.name.trim(), email, role: d.role });
+      form.reset();
+    }, `เพิ่มผู้ใช้แล้ว ระบบส่งอีเมลให้ตั้งรหัสผ่าน`),
+    plant: () => run(async () => {
+      const plant = d.plant.trim();
+      await state.backend.updateSetup({ plant });
+      state.setup = { ...(state.setup || {}), plant };
+      render();
+    }, 'บันทึกชื่อแล้ว')
   };
   forms[form.dataset.form]?.();
 });
@@ -1149,7 +1338,15 @@ app.addEventListener('submit', (e) => {
     document.getElementById('fallback').onclick = () => { clearConfig(); location.reload(); };
     return;
   }
+  try {
+    state.setup = await state.backend.getSetup();
+    state.needSetup = state.backend.mode === 'firebase' && !state.setup;
+  } catch (err) {
+    console.error(err);
+    state.loadError = err?.code?.includes('permission-denied') ? 'ยังไม่ได้ใส่กฎความปลอดภัย (firestore.rules) ใน Firebase console' : explain(err);
+  }
   state.backend.onAuth(async (user) => {
+    if (user && state.needSetup) return;
     state.user = user;
     state.unsubs.forEach((u) => u());
     state.unsubs = [];
