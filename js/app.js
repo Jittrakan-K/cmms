@@ -1358,7 +1358,9 @@ app.addEventListener('submit', (e) => {
         state.draft = {};
         await state.backend.refreshUser();
       } catch (err) {
-        state.loadError = explain(err);
+        state.loadError = err?.code?.includes('permission-denied')
+          ? 'ฐานข้อมูลปฏิเสธการสร้างบัญชี (permission-denied) ปิดแท็บ CMMS อื่นทั้งหมด แล้วกด Ctrl+F5 และลองใหม่ ถ้ายังขึ้นอีก ส่งภาพหน้าจอนี้ให้ผู้ดูแลระบบ'
+          : `${explain(err)}${err?.code ? ` (${err.code})` : ''}`;
         render();
       }
     },

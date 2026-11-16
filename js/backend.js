@@ -373,14 +373,28 @@ class FirebaseBackend {
     const email = loginEmail(empId);
     const cred = await this.authMod.createUserWithEmailAndPassword(this.auth, email, password);
     const uid = cred.user.uid;
-    const batch = writeBatch(this.db);
-    batch.set(doc(this.db, 'users', uid), { name, empId, role: 'admin', createdAt: serverTimestamp() });
-    batch.set(doc(this.db, 'config', 'setup'), { plant, dept, adminUid: uid, createdAt: serverTimestamp() });
-    batch.set(doc(this.db, 'logins', empId), { email, uid });
+    const write = () => {
+      const batch = writeBatch(this.db);
+      batch.set(doc(this.db, 'users', uid), { name, empId, role: 'admin', createdAt: serverTimestamp() });
+      batch.set(doc(this.db, 'config', 'setup'), { plant, dept, adminUid: uid, createdAt: serverTimestamp() });
+      batch.set(doc(this.db, 'logins', empId), { email, uid });
+      return batch.commit();
+    };
     try {
-      await batch.commit();
+      // รอให้ฐานข้อมูลได้รับสิทธิ์ของบัญชีที่เพิ่งสร้างก่อน ถ้ายังไม่ทันจะถูกปฏิเสธ จึงลองซ้ำอีก 2 ครั้ง
+      await cred.user.getIdToken(true);
+      for (let i = 0; ; i++) {
+        try {
+          await write();
+          break;
+        } catch (err) {
+          if (err?.code !== 'permission-denied' || i >= 2) throw err;
+          await new Promise((r) => setTimeout(r, 1200));
+        }
+      }
     } catch (err) {
-      // บันทึกสิทธิ์ไม่สำเร็จ (เช่น ยังไม่ได้ใส่กฎ) ลบบัญชีที่เพิ่งสร้างทิ้ง จะได้ลองใหม่ได้
+      // บันทึกสิทธิ์ไม่สำเร็จ ลบบัญชีที่เพิ่งสร้างทิ้ง จะได้ลองใหม่ได้
+      console.error('ตั้งค่าครั้งแรกไม่สำเร็จ', err);
       await this.authMod.deleteUser(cred.user).catch(() => {});
       throw err;
     }
