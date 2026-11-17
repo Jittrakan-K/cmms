@@ -24,9 +24,9 @@ const FILTERS = {
   done: ['ปิดแล้ว', (w) => w.status === 'done']
 };
 const PAGES = {
-  quick: ['SH-00', 'แจ้งซ่อมด่วน', 'แจ้งซ่อมด่วน'],
-  overview: ['SH-01', 'ภาพรวม', 'ภาพรวมโรงงาน'],
   board: ['SH-09', 'แดชบอร์ด', 'แดชบอร์ดสถานะ'],
+  overview: ['SH-01', 'ภาพรวม', 'ภาพรวมโรงงาน'],
+  quick: ['SH-00', 'แจ้งซ่อมด่วน', 'แจ้งซ่อมด่วน'],
   work: ['SH-02', 'งานซ่อม', 'งานซ่อม'],
   assets: ['SH-03', 'เครื่องจักร', 'ทะเบียนเครื่องจักร'],
   pm: ['SH-04', 'แผน PM', 'แผนบำรุงรักษา'],
@@ -41,7 +41,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [],
-  page: 'overview', tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
+  page: 'board', tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
 
@@ -1237,7 +1237,7 @@ function listen() {
 }
 
 function go(page) {
-  state.page = PAGES[page] ? page : 'overview';
+  state.page = PAGES[page] ? page : 'board';
   state.form = null;
   state.draft = {};
   state.q = '';
