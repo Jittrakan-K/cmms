@@ -8,21 +8,25 @@
   --color-error: oklch(52% 0.19 27); --color-success: oklch(50% 0.12 150);
   --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
   --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
-  /* cool light ramp: grey page, white borderless cards; colour belongs to the data and machine state */
-  --color-paper: #eef0f4; --color-paper-2: #f3f4f7; --color-paper-3: #e5e7ed;
-  --color-ink: #161a23; --color-ink-2: #3d4350; --color-muted: #5b6170;
-  --color-rule: #eceef2; --color-rule-2: #d8dbe2;
-  /* accent: royal blue for the primary action, selection, focus and the series that matters; orange is the second series */
-  --color-accent: #3d5af1; --color-accent-hover: #2f4bd8; --color-accent-ink: #ffffff; --color-accent-2: #3d5af1; --color-focus: #3d5af1;
-  --color-accent-soft: #e8ecfe; --color-orange: #f08a24;
-  --color-cotton: #ffffff; --color-desk: #eef0f4; --color-print: #161a23;
-  --color-board: #3d5af1; --color-board-type: #ffffff; --color-paid: #3d5af1;
-  --font-display: "IBM Plex Sans Thai", "Noto Sans Thai", Tahoma, ui-sans-serif, system-ui, sans-serif; --font-body: var(--font-display);
-  --font-outlier: "Geist Mono", "IBM Plex Sans Thai", ui-monospace, monospace;
-  --radius-card: 16px; --radius-input: 10px; --radius-pill: 999px; --radius-stock: 10px; --rule-hair: 1px;
+  /* Cobalt: cool near-white paper, blue-grey ink and hairlines, one electric cobalt signal, graphite as the dark material */
+  --color-paper: oklch(98.6% 0.005 250); --color-paper-2: oklch(96.2% 0.008 252); --color-paper-3: oklch(93% 0.011 252);
+  --color-ink: oklch(21% 0.028 262); --color-ink-2: oklch(36% 0.022 260); --color-muted: oklch(48% 0.018 258);
+  --color-rule: oklch(90% 0.009 252); --color-rule-2: oklch(83% 0.012 252);
+  --color-graphite: oklch(21% 0.024 262); --color-graphite-2: oklch(26.5% 0.026 262); --color-graphite-ink: oklch(93% 0.010 250); --color-graphite-muted: oklch(69% 0.022 256);
+  --color-accent: oklch(52% 0.19 258); --color-accent-hover: oklch(47% 0.2 260); --color-accent-2: oklch(52% 0.19 258); --color-accent-wash: oklch(95% 0.028 256); --color-accent-ink: oklch(98.6% 0.005 250); --color-focus: oklch(52% 0.19 258);
+  --color-accent-soft: oklch(95% 0.028 256); --color-accent-edge: oklch(39% 0.16 260); --color-accent-light: oklch(76% 0.13 254); --color-orange: oklch(68% 0.15 60);
+  --color-key-face: oklch(99.4% 0.003 250); --color-key-edge: oklch(80% 0.016 254);
+  --color-cotton: oklch(99.4% 0.003 250); --color-desk: oklch(98.6% 0.005 250); --color-print: oklch(21% 0.028 262);
+  --color-board: oklch(52% 0.19 258); --color-board-type: oklch(98.6% 0.005 250); --color-paid: oklch(52% 0.19 258);
+  --font-display: "Familjen Grotesk", "IBM Plex Sans Thai", Tahoma, system-ui, sans-serif; --font-body: "IBM Plex Sans Thai", "Noto Sans Thai", Tahoma, system-ui, sans-serif;
+  --font-outlier: "JetBrains Mono", "IBM Plex Sans Thai", ui-monospace, monospace;
+  --radius-card: 8px; --radius-input: 6px; --radius-pill: 999px; --radius-stock: 6px; --cut: 8px; --cut-l: 16px; --rule-hair: 1px;
   --shadow-card: 0 1px 2px oklch(20% 0.01 35 / 0.05);
-  --edge-stock: 0 1px 2px rgb(16 24 40 / 0.05);
-  --cast-stock: 0 1px 2px rgb(16 24 40 / 0.06); --cast-stock-lift: 0 12px 32px rgb(16 24 40 / 0.12);
-  --press-groove: inset 0 1px 2px rgb(16 24 40 / 0.08);
-  --tracking-display: -0.03em; --display-weight: 600;
+  --edge-stock: 0 0 0 1px var(--color-rule), 0 1px 2px oklch(21% 0.028 262 / 0.06);
+  --cast-stock: 0 1px 2px oklch(21% 0.028 262 / 0.06); --cast-stock-lift: 0 12px 28px -8px oklch(21% 0.028 262 / 0.22);
+  --press-groove: inset 0 1px 2px oklch(21% 0.028 262 / 0.14);
+  --shadow-key: 0 3px 0 0 var(--color-key-edge), 0 6px 8px -4px oklch(21% 0.028 262 / 0.28), inset 0 1px 0 oklch(100% 0 0 / 0.9);
+  --shadow-key-accent: 0 3px 0 0 var(--color-accent-edge), 0 6px 8px -4px oklch(30% 0.12 260 / 0.45), inset 0 1px 0 oklch(100% 0 0 / 0.22);
+  --shadow-key-press: inset 0 1px 2px oklch(21% 0.028 262 / 0.14);
+  --tracking-display: -0.028em; --display-weight: 600;
 }

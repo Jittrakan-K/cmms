@@ -1,13 +1,14 @@
-/* Hallmark · shape: app screen · genre: modern-minimal · theme: Coral (deal 1/3, seed maintenance-management-tool-factory-4a57·ada4de5c·2026-11-16·r0), restyled on 2026-11-17 after the user's reference (cool grey page, white borderless cards, royal blue with orange second series, hatched selected bar) · redesign: full
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: Cobalt (by request, after usehallmark.com/made/cobalt-database-client) · redesign: full
  * nav: sidebar kept (9 destinations), light paper rail, becomes a sideways tab row under 60rem · signature: the 7-day machine status board with its figures set into its head · states: loading, empty, error, full (as the app has them)
  * axes: light/grotesk-sans/warm · posture: restrained · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H5 E4 S4 R5 V4 · weakest: P, a calm tool argues little; the status board leads every overview and the four stat cards were folded into it */
-/* Hallmark · waive 64 · .tag, .mono and .tl-days set asset numbers, work order numbers and dates, the codes printed on the machine plates · the team reads them against those plates */
+/* Hallmark · waive 64 · .tag and .mono set machine codes, work order numbers and machine values in JetBrains Mono, which is Cobalt's own material for machine values · the team reads them against the plates on the machines */
 /* Hallmark · waive 39b · .qr-assets .opt stands 64px or more on the operator's phone, and a work row's title sits inside a 52px row that is itself the target · operators tap the picker on the line, often in gloves */
 /* Hallmark · answered F7 · every text field shares one recipe on purpose: the same field everywhere is the familiarity an app screen owes */
 /* Hallmark · dismissed F25 · the machine or name column leads every table and the rest scrolls sideways inside its box on a phone; the phone task is SH-00, which has no table */
 /* Hallmark · reworded "แผนภูมิสถานะเครื่อง 7 วัน" to "สถานะเครื่อง 7 วัน" · the board now holds the figures too, so it names the status, not the chart */
 /* Hallmark · dismissed kept 12:23 · the sync time on the page head changes with every load; the figure is still there */
+/* Hallmark · dismissed F4 · .btn is the paper keycap, .nav current is a selection wash; the one filled primary is .btn.solid */
 @import url("./tokens.css");
 @import url("./base.css");
 
@@ -18,7 +19,10 @@
 @font-face { font-family: "IBM Plex Sans Thai"; font-weight: 400; font-display: swap; src: url("fonts/plex-thai-latin-400.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Sans Thai"; font-weight: 500; font-display: swap; src: url("fonts/plex-thai-latin-500.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Sans Thai"; font-weight: 600; font-display: swap; src: url("fonts/plex-thai-latin-600.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Geist Mono"; font-weight: 400; font-display: swap; src: url("fonts/geist-mono-400.woff2") format("woff2"); }
+@font-face { font-family: "Familjen Grotesk"; font-weight: 500; font-display: swap; src: url("fonts/familjen-500.woff2") format("woff2"); }
+@font-face { font-family: "Familjen Grotesk"; font-weight: 600; font-display: swap; src: url("fonts/familjen-600.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: swap; src: url("fonts/jetbrains-400.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: swap; src: url("fonts/jetbrains-500.woff2") format("woff2"); }
 
 /* ชื่อสีที่หน้าจอใช้ ผูกกับระบบสี Coral */
 :root {
@@ -621,3 +625,79 @@ h1 { font-size: var(--text-xl); font-weight: 600; letter-spacing: 0; }
 .mtile:hover { border-color: var(--color-rule-2); }
 .mtile.s-late { background: var(--card); }
 .mgrid { gap: var(--space-sm); }
+
+/* ---------- Cobalt: กระดาษเย็น เส้นบาง ปุ่มแบบคีย์แคป สัญญาณโคบอลต์เดียว ---------- */
+body { background: var(--color-paper); }
+h1, h2, h3, .cfig, .fig, .stage .fig, .trio dd, .brand .bt b, .authname, .clabel, th, .ghead, .chips button, .seg-ctl button, .btn, .nav button { font-family: var(--font-display); }
+h1, h2, h3 { font-weight: 600; letter-spacing: var(--tracking-display); color: var(--ink); }
+h1 { font-size: var(--text-2xl); line-height: 1.1; }
+.cfig { font-weight: 600; letter-spacing: var(--tracking-display); line-height: 1.05; }
+.brand .bt b { font-size: var(--text-xl); letter-spacing: var(--tracking-display); }
+.mono { font-family: var(--mono); }
+.clabel, th { font-weight: 500; color: var(--muted); }
+
+.shell { background: none; }
+.side { position: sticky; top: 0; height: 100dvh; margin: 0; border-radius: 0; background: var(--color-paper); box-shadow: none; border-right: 1px solid var(--color-rule); }
+.nav button { min-height: 36px; border-radius: var(--radius-input); font-weight: 500; }
+.nav button:hover { background: var(--color-paper-2); }
+.nav button[aria-current=page] { background: var(--color-accent-wash); color: var(--ink); box-shadow: inset 0 0 0 1px var(--color-accent-light); }
+.nav button[aria-current=page] svg { color: var(--accent); }
+.me { border-top: 1px solid var(--color-rule); }
+
+.btn { min-height: 40px; border: 1px solid var(--color-rule-2); border-radius: var(--radius-input); background: var(--color-key-face); color: var(--ink); box-shadow: var(--shadow-key); font-weight: 500; }
+.btn:hover:not(:disabled) { transform: translateY(-1px); background: var(--color-key-face); box-shadow: var(--shadow-key); }
+.btn:active:not(:disabled) { transform: translateY(3px); box-shadow: var(--shadow-key-press); }
+.btn.solid { background: var(--accent); border-color: var(--color-accent-edge); color: var(--color-accent-ink); box-shadow: var(--shadow-key-accent); }
+.btn.solid:hover:not(:disabled) { background: var(--accent); box-shadow: var(--shadow-key-accent); }
+.btn.solid:active:not(:disabled) { box-shadow: var(--shadow-key-press); }
+button:disabled, .btn:disabled { box-shadow: none; transform: none; }
+
+.seg-ctl, .chips { padding: var(--space-2xs); border-radius: var(--radius-input); background: var(--color-paper-3); box-shadow: var(--press-groove); gap: var(--space-2xs); }
+.seg-ctl button, .chips button { border-radius: 4px; background: transparent; color: var(--ink-2); font-weight: 500; }
+.seg-ctl button[aria-pressed=true], .chips button[aria-pressed=true] { background: var(--color-accent-wash); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.box, .card, .tasks, .stats { background: var(--color-key-face); border-radius: var(--radius-card); box-shadow: var(--edge-stock); }
+@supports (corner-shape: bevel) {
+  .card, .box { border-radius: var(--cut-l) 4px var(--cut-l) 4px; corner-shape: bevel round bevel round; }
+}
+.search { height: 40px; border: 1px solid var(--color-muted); border-radius: var(--radius-input); background: var(--color-key-face); }
+.notice.demo { background: var(--color-paper-2); box-shadow: inset 0 0 0 1px var(--color-rule); border-radius: var(--radius-input); }
+
+table td { border-bottom-color: var(--color-rule); }
+.wotable th { background: var(--color-paper-2); }
+tr.pick:hover, .trow.task:hover { background: var(--color-paper-2); }
+tr.pick[aria-current=true], .trow.task[aria-current=true] { background: var(--color-accent-wash); }
+.pill { background: transparent; padding: 0; min-height: 0; color: var(--f, var(--ink-2)); font-weight: 500; }
+.lamp { background: transparent; padding: 0; min-height: 0; color: var(--ink-2); font-weight: 500; }
+
+.pbar, .prog, .sbar, .meter { border-radius: 2px; }
+.pbar.big { height: 12px; border-radius: 3px; }
+.minibars span { border-radius: 3px; background: var(--color-paper-3); }
+.minibars span.on { background: var(--accent); }
+.streak li { border-radius: var(--radius-input); }
+.bars .b span { border-radius: 4px; background: var(--color-paper-3); }
+.bars .b:hover span { background: var(--color-rule-2); }
+.bars .b.sel span { background: var(--accent); }
+.dots i { border-color: var(--color-accent-edge); }
+.line polyline { stroke: var(--color-accent-edge); }
+.k-line { border-color: var(--color-accent-edge); }
+.tip { border-radius: var(--radius-input); box-shadow: 0 0 0 1px var(--color-rule), var(--cast-stock-lift); }
+.mtile { background: var(--color-paper); border: 1px solid var(--color-rule); border-radius: var(--radius-input); }
+.mtile:hover { border-color: var(--color-rule-2); }
+.mtile.s-late { background: var(--color-key-face); }
+.rk:hover { background: var(--color-paper-2); }
+
+/* วัสดุสีเข้ม graphite: บันทึกการเปลี่ยนแปลงของใบงาน อ่านเหมือนบันทึกคำสั่ง */
+.graphite { background: var(--color-graphite); color: var(--color-graphite-ink); box-shadow: none; }
+.graphite > .bar { border-bottom: 1px solid var(--color-graphite-2); }
+.graphite h2 { color: var(--color-graphite-ink); }
+.graphite th { background: var(--color-graphite-2); color: var(--color-graphite-muted); border-bottom: 0; }
+.graphite td { border-bottom-color: var(--color-graphite-2); color: var(--color-graphite-ink); }
+.graphite td.mono { color: var(--color-accent-light); }
+.toast { --color-board: var(--color-graphite); background: var(--color-graphite); color: var(--color-graphite-ink); border-radius: var(--radius-input); }
+.login { background: var(--color-paper-2); }
+.qres { border-radius: var(--radius-input); box-shadow: 0 0 0 1px var(--color-rule), var(--cast-stock-lift); }
+.shell { background: linear-gradient(90deg, transparent calc(var(--rail-w) - 1px), var(--color-rule) 0 var(--rail-w), transparent 0); }
+.side { border-right: 0; }
+@media (max-width: 60rem) { .shell { background: none; } .side { border-bottom: 1px solid var(--color-rule); } }
+html.tv .shell { background: none; }

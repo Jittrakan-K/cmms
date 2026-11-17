@@ -535,7 +535,7 @@ function woDetail(w) {
         ${(w.checks || []).length ? `<section class="box"><div class="bar"><h2>รายการตรวจ</h2><span class="mono dim">${w.checks.filter((c) => c.done).length} / ${w.checks.length}</span></div>
           ${w.checks.map((c, i) => `<label class="list-row" style="grid-template-columns:22px minmax(0,1fr);align-items:center;cursor:${!done && canTech() && approved ? 'pointer' : 'default'}"><input type="checkbox" data-check="${i}" ${c.done ? 'checked' : ''} ${!done && canTech() && approved ? '' : 'disabled'} style="width:18px;height:18px;accent-color:var(--accent)"><span style="${c.done ? 'color:var(--muted);text-decoration:line-through' : ''}">${esc(c.text)}</span></label>`).join('')}
           ${!done && !approved ? '<p class="hint u-pad-b">บันทึกผลได้หลังหัวหน้าแผนกอนุมัติ</p>' : ''}</section>` : ''}
-        <section class="box"><div class="bar"><h2>บันทึกการเปลี่ยนแปลง</h2></div>
+        <section class="box graphite revlog"><div class="bar"><h2>บันทึกการเปลี่ยนแปลง</h2></div>
           <table><thead><tr><th scope="col" style="width:48px">REV</th><th scope="col" style="width:140px">เวลา</th><th scope="col">รายการ</th></tr></thead>
           <tbody>${log.map((l) => `<tr><td class="mono">${l.rev}</td><td class="mono u-nowrap">${fmtDateTime(l.at)}</td><td>${esc(l.text)}</td></tr>`).join('')}</tbody></table></section>
         ${partsBox}
@@ -642,7 +642,7 @@ function viewQuick() {
       <label for="qr-note" class="sr">รายละเอียดเพิ่มเติม</label><textarea id="qr-note" class="qr-input" data-qr="note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)">${esc(q.note)}</textarea>
     </fieldset>
     <fieldset><legend>3. สถานะเครื่องจักรขณะนี้</legend>
-      <div class="qr-two"><button type="button" class="opt big ${q.stopped === true ? 'stop' : ''}" aria-pressed="${q.stopped === true}" data-act="qr-stop" data-id="1">เครื่องหยุดทำงาน</button><button type="button" class="opt big ${q.stopped === false ? 'on' : ''}" aria-pressed="${q.stopped === false}" data-act="qr-stop" data-id="0">ยังทำงานได้</button></div>
+      <div class="qr-two"><button type="button" class="opt big ${q.stopped === true ? 'stop' : ''}" aria-pressed="${q.stopped === true}" data-act="qr-stop" data-id="1">หยุดทำงาน</button><button type="button" class="opt big ${q.stopped === false ? 'on' : ''}" aria-pressed="${q.stopped === false}" data-act="qr-stop" data-id="0">ยังทำงานได้</button></div>
     </fieldset>
     <div class="qr-photo">${q.photo
       ? `<img src="${esc(q.photo)}" alt="ภาพที่แนบ"><button type="button" class="btn small" data-act="qr-photo-del">ลบภาพ</button>`
