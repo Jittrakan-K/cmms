@@ -181,8 +181,8 @@ class LocalBackend {
   async updateUser() { throw new Error('โหมดตัวอย่างไม่รองรับการแก้ไขผู้ใช้ กรุณาเชื่อมต่อ Firebase ก่อน'); }
   async updateSetup() { throw new Error('โหมดตัวอย่างไม่รองรับการแก้ไขข้อมูลโรงงาน'); }
   subscribeUsers(cb) {
-    cb([['demo', 'อนันต์ ส.', 'admin', 'DEMO'], ['u2', 'วิชัย ร.', 'tech', 'M0112'], ['u3', 'สมชาย ก.', 'tech', 'M0127'], ['u4', 'มาลี ท.', 'operator', 'P0451'], ['u5', 'ประเสริฐ บ.', 'operator', 'P0466']]
-      .map(([id, name, role, empId]) => ({ id, name, role, empId })));
+    cb([['demo', 'อนันต์ ส.', 'admin', 'DEMO', 'asst_manager'], ['u2', 'วิชัย ร.', 'tech', 'M0112', 'machine'], ['u3', 'สมชาย ก.', 'tech', 'M0127', 'design'], ['u4', 'มาลี ท.', 'operator', 'P0451', 'document'], ['u5', 'ประเสริฐ บ.', 'admin', 'P0466', 'advisor']]
+      .map(([id, name, role, empId, position]) => ({ id, name, role, empId, position })));
     return () => {};
   }
 
@@ -357,7 +357,7 @@ class FirebaseBackend {
       console.warn('อ่านสิทธิ์ผู้ใช้ไม่ได้', err);
     }
     const role = ['admin', 'tech', 'operator'].includes(profile.role) ? profile.role : null;
-    this.authCb({ uid: user.uid, empId: profile.empId || '', name: profile.name || profile.empId || 'ผู้ใช้', role, disabled: profile.role === 'disabled', mustChange: !!profile.mustChange });
+    this.authCb({ uid: user.uid, empId: profile.empId || '', name: profile.name || profile.empId || 'ผู้ใช้', role, position: profile.position || '', disabled: profile.role === 'disabled', mustChange: !!profile.mustChange });
   }
 
   async getSetup() {
@@ -431,14 +431,14 @@ class FirebaseBackend {
   }
 
   // คืนรหัสผ่านชั่วคราวให้แอดมินแจ้งพนักงาน พนักงานต้องตั้งรหัสใหม่ตอนเข้าครั้งแรก
-  async createUser({ name, empId, role }) {
+  async createUser({ name, empId, role, position = '' }) {
     const { doc, getDoc, writeBatch, serverTimestamp } = this.fs;
     empId = checkEmpId(empId);
     if ((await getDoc(doc(this.db, 'logins', empId))).exists()) throw new Error(`มีรหัสพนักงาน ${empId} อยู่แล้ว`);
     const temp = tempPassword();
     await this.withNewAccount(empId, temp, (uid, email) => {
       const batch = writeBatch(this.db);
-      batch.set(doc(this.db, 'users', uid), { name, empId, role, mustChange: true, createdAt: serverTimestamp() });
+      batch.set(doc(this.db, 'users', uid), { name, empId, role, position, mustChange: true, createdAt: serverTimestamp() });
       batch.set(doc(this.db, 'logins', empId), { email, uid });
       return batch.commit();
     });

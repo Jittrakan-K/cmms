@@ -887,6 +887,9 @@ function viewReport() {
 
 /* ---------- SH-08 ตั้งค่า ---------- */
 const ROLE_LABEL = { admin: 'แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต', disabled: 'ปิดใช้งาน' };
+// ตำแหน่งในแผนก ผูกกับสิทธิ์ในระบบ: admin อนุมัติและจัดการทุกอย่าง, tech ซ่อมและปิดงาน, operator แจ้งซ่อมและดูข้อมูล
+const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], document: ['Document', 'operator'], asst_manager: ['ASST. Manager', 'admin'], advisor: ['Advisor', 'admin'] };
+const userLabel = (u) => (u.role === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[u.position]?.[0] || ROLE_LABEL[u.role] || 'ยังไม่มีสิทธิ์');
 const IMPORT_COLS = {
   assets: ['id', 'name', 'line', 'cls', 'maker', 'model', 'year'],
   parts: ['id', 'name', 'bin', 'qty', 'min', 'max']
@@ -950,7 +953,7 @@ function viewServer() {
   const admin = canAdmin();
   const colls = { assets: 'เครื่อง', workOrders: 'ใบงาน', pmPlans: 'แผน PM', parts: 'อะไหล่', gauges: 'เครื่องมือวัด' };
   const account = `<section class="box"><div class="bar"><h2>บัญชีของฉัน</h2></div>
-    <dl class="kv u-pad"><dt>ชื่อ</dt><dd>${esc(state.user.name)}</dd><dt>รหัสพนักงาน</dt><dd class="mono">${esc(state.user.empId || '—')}</dd><dt>สิทธิ์</dt><dd>${esc(ROLE_LABEL[state.user.role] || 'ยังไม่มีสิทธิ์')}</dd></dl>
+    <dl class="kv u-pad"><dt>ชื่อ</dt><dd>${esc(state.user.name)}</dd><dt>รหัสพนักงาน</dt><dd class="mono">${esc(state.user.empId || '—')}</dd><dt>ตำแหน่ง</dt><dd>${esc(userLabel(state.user))}</dd></dl>
     ${live ? `<form class="pad stack u-pt0" data-form="mypass">
       <div class="field"><label for="m-old">รหัสผ่านเดิม</label><input id="m-old" name="current" type="password" required autocomplete="current-password"></div>
       <div class="field"><label for="m-new">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</label><input id="m-new" name="next" type="password" minlength="8" required autocomplete="new-password"></div>
@@ -963,13 +966,13 @@ function viewServer() {
     ${live ? `<form class="pad" data-form="user" style="border-bottom:1px solid var(--rule)"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:var(--space-sm);align-items:end">
       <div class="field"><label for="u-name">ชื่อที่แสดง</label><input id="u-name" name="name" required autocomplete="off"></div>
       <div class="field"><label for="u-emp">รหัสพนักงาน</label><input id="u-emp" name="empId" required autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]{1,19}" title="A-Z 0-9 . _ - ยาว 2–20 ตัว" placeholder="เช่น M0112"></div>
-      <div class="field"><label for="u-role">สิทธิ์</label><select id="u-role" name="role">${['operator', 'tech', 'admin'].map((r) => `<option value="${r}">${ROLE_LABEL[r]}</option>`).join('')}</select></div>
+      <div class="field"><label for="u-role">ตำแหน่ง</label><select id="u-role" name="position">${Object.entries(POSITIONS).map(([k, [label, r]]) => `<option value="${k}">${label} (${ROLE_LABEL[r]})</option>`).join('')}</select></div>
       <button class="btn solid">เพิ่มผู้ใช้</button></div>
       <p class="hint">ระบบจะสร้างรหัสผ่านชั่วคราวให้ โปรดแจ้งพนักงานโดยตรง พนักงานต้องตั้งรหัสผ่านใหม่เมื่อเข้าสู่ระบบครั้งแรก</p></form>
       ${issuedBox()}` : '<p class="notice u-mbox">โหมดตัวอย่างแสดงรายชื่อตัวอย่าง สามารถเพิ่มผู้ใช้จริงได้หลังเชื่อมต่อ Firebase</p>'}
     <div class="scroll"><table style="min-width:680px"><thead><tr><th scope="col">ชื่อ</th><th scope="col">รหัสพนักงาน</th><th scope="col">สิทธิ์</th><th scope="col"><span class="sr">รหัสผ่าน</span></th></tr></thead><tbody>
     ${users.map((u) => `<tr><td><span class="u-row">${avatar(u.name)}${esc(u.name)}${u.id === state.user.uid ? ' <span class="dim">(คุณ)</span>' : ''}</span></td><td class="mono">${esc(u.empId || '—')}${u.mustChange ? ' <span class="dim u-sans">· ยังไม่ได้ตั้งรหัสผ่าน</span>' : ''}</td>
-      <td>${u.id === state.user.uid || !live ? esc(ROLE_LABEL[u.role] || u.role) : `<label for="r-${esc(u.id)}" class="sr">สิทธิ์ของ ${esc(u.name)}</label><select id="r-${esc(u.id)}" data-user-role="${esc(u.id)}" style="height:34px;padding:0 var(--space-xs);border:1px solid var(--field);border-radius:var(--radius-card);background:var(--card)">${['admin', 'tech', 'operator', 'disabled'].map((r) => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td>
+      <td>${u.id === state.user.uid || !live ? esc(userLabel(u)) : `<label for="r-${esc(u.id)}" class="sr">ตำแหน่งของ ${esc(u.name)}</label><select id="r-${esc(u.id)}" data-user-role="${esc(u.id)}" style="height:34px;padding:0 var(--space-xs);border:1px solid var(--field);border-radius:var(--radius-card);background:var(--card)">${u.role !== 'disabled' && !POSITIONS[u.position] ? `<option value="" selected disabled>${esc(ROLE_LABEL[u.role] || u.role)}</option>` : ''}${Object.entries(POSITIONS).map(([k, [label]]) => `<option value="${k}" ${u.role !== 'disabled' && u.position === k ? 'selected' : ''}>${label}</option>`).join('')}<option value="disabled" ${u.role === 'disabled' ? 'selected' : ''}>${ROLE_LABEL.disabled}</option></select>`}</td>
       <td class="num">${live && u.id !== state.user.uid && u.empId ? `<button type="button" class="btn small" data-act="reset-user" data-id="${esc(u.id)}">รีเซ็ตรหัสผ่าน</button>` : ''}</td></tr>`).join('')}
     </tbody></table></div></section>`;
 
@@ -1070,7 +1073,7 @@ function render() {
   const add = canAdmin() && ADD_LABEL[state.page] ? `<button type="button" class="btn" data-act="add" data-id="${state.page}">${ADD_LABEL[state.page]}</button>` : '';
   const tv = state.page === 'board' ? `<button type="button" class="btn" data-act="tv">${icon('<path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/>')}${state.tv ? 'ออกจากโหมดจอ' : 'โหมดจอทีวี'}</button>` : '';
   const report = noRole || state.page === 'quick' ? '' : `<button type="button" class="btn solid" data-act="report">${icon('<path d="M12 5v14M5 12h14"/>')}แจ้งซ่อม</button>`;
-  const role = { admin: 'แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต' }[state.user.role] || 'ยังไม่มีสิทธิ์';
+  const role = userLabel(state.user);
   const where = state.backend.mode === 'firebase' ? (placeName() || state.backend.projectId) : 'ข้อมูลตัวอย่างในเครื่องนี้';
   const sync = state.lastSync ? `อัปเดตล่าสุด ${fmtTime(state.lastSync)}` : '';
   app.classList.toggle('quickmode', state.page === 'quick');
@@ -1440,8 +1443,9 @@ app.addEventListener('change', (e) => {
   }
   if (e.target.dataset.userRole) {
     const uid = e.target.dataset.userRole;
-    const role = e.target.value;
-    run(() => state.backend.updateUser(uid, { role }), `เปลี่ยนสิทธิ์เป็น ${ROLE_LABEL[role]} แล้ว`);
+    const v = e.target.value;
+    const patch = v === 'disabled' ? { role: 'disabled' } : { role: POSITIONS[v][1], position: v };
+    run(() => state.backend.updateUser(uid, patch), `เปลี่ยนตำแหน่งเป็น ${v === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[v][0]} แล้ว`);
     return;
   }
   if (e.target.id === 'qr-file' && e.target.files?.[0]) {
@@ -1635,7 +1639,8 @@ app.addEventListener('submit', (e) => {
       const empId = d.empId.trim().toUpperCase();
       if (state.users.some((u) => u.empId === empId)) throw new Error(`มีรหัสพนักงาน ${empId} อยู่แล้ว`);
       const name = d.name.trim();
-      const temp = await state.backend.createUser({ name, empId, role: d.role });
+      const pos = POSITIONS[d.position] ? d.position : 'document';
+      const temp = await state.backend.createUser({ name, empId, role: POSITIONS[pos][1], position: pos });
       state.issued = { title: 'เพิ่มผู้ใช้แล้ว', name, empId, temp };
       form.reset();
       render();
