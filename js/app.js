@@ -24,7 +24,7 @@ const FILTERS = {
   done: ['ปิดแล้ว', (w) => w.status === 'done']
 };
 const PAGES = {
-  quick: ['SH-00', 'แจ้งงานด่วน', 'แจ้งงานด่วน'],
+  quick: ['SH-00', 'แจ้งซ่อมด่วน', 'แจ้งซ่อมด่วน'],
   overview: ['SH-01', 'ภาพรวม', 'ภาพรวมโรงงาน'],
   board: ['SH-09', 'แดชบอร์ด', 'แดชบอร์ดสถานะ'],
   work: ['SH-02', 'งานซ่อม', 'งานซ่อม'],
@@ -211,7 +211,7 @@ function viewBoard(m) {
     const act = x.w ? `data-act="open-wo" data-id="${esc(x.w.id)}"` : `data-act="open-asset" data-id="${esc(x.a.id)}"`;
     const cut = (t) => { const c = [...String(t || '')]; return esc(c.length > 56 ? `${c.slice(0, 54).join('').trim()}…` : c.join('')); };
     const detail = x.w ? cut(x.w.title) : x.plan ? cut(x.plan.task) : '';
-    const who = x.w ? (x.w.tech ? esc(x.w.tech) : 'ยังไม่มีช่างรับงาน') : '';
+    const who = x.w ? (x.w.tech ? esc(x.w.tech) : 'ยังไม่มีผู้รับผิดชอบ') : '';
     return `<button type="button" class="mtile s-${x.k}" ${act} aria-label="${esc(`${x.a.id} ${x.a.name} ${label}`)}">
       <span class="mt-top"><span class="u-row">${andon(x.k)}<span class="tag">${esc(x.a.id)}</span></span><span class="mt-state">${label}${x.since && x.k !== 'run' ? ` <span class="mono">${x.k === 'late' ? relDate(x.since) : ago(x.since)}</span>` : ''}</span></span>
       <span class="mt-name">${esc(x.a.name)}</span>
@@ -229,7 +229,7 @@ function viewBoard(m) {
       <ul>${old.slice(0, 3).map((w) => `<li><button type="button" class="link" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.id)}</button><span>${esc(w.asset)}</span></li>`).join('')}</ul>
     </div>`;
   };
-  const oldest = (l) => (l.length ? `เก่าสุด ${ago(l[0].startAt)}` : 'ไม่มีค้าง');
+  const oldest = (l) => (l.length ? `ค้างนานสุด ${ago(l[0].startAt)}` : 'ไม่มีงานค้าง');
   const overdue = open.filter((w) => w.dueDate && w.dueDate < t0);
   const unassigned = open.filter((w) => w.status === 'open' && !w.tech);
   // PM
@@ -258,7 +258,7 @@ function viewBoard(m) {
   const stopN = countM('stop');
   const headline = stopN
     ? `<span class="alarm">เครื่องหยุดเสีย ${stopN} เครื่อง</span> จาก ${state.assets.length} เครื่อง`
-    : countM('wait') ? `<span class="warnt">รออะไหล่ ${countM('wait')} เครื่อง</span> ที่เหลือเดินปกติ` : 'ทุกเครื่องเดินปกติ';
+    : countM('wait') ? `<span class="warnt">รออะไหล่ ${countM('wait')} เครื่อง</span> เครื่องที่เหลือทำงานปกติ` : 'เครื่องจักรทุกเครื่องทำงานปกติ';
   const seeAll = (page, label) => `<button type="button" class="link" data-act="nav" data-id="${page}">${label}</button>`;
 
   return `<section class="now" aria-live="polite">
@@ -273,13 +273,13 @@ function viewBoard(m) {
       </section>
 
       <section class="box dash-flow">
-        <div class="bar"><h2>ใบงานตามขั้นตอน</h2>${seeAll('work', 'เปิดหน้างานซ่อม')}</div>
+        <div class="bar"><h2>ใบงานตามขั้นตอน</h2>${seeAll('work', 'ไปที่หน้างานซ่อม')}</div>
         <div class="stages">
           ${stage('pending', 'รออนุมัติ', open.filter((w) => w.status === 'pending'), oldest)}
-          ${stage('open', 'รอเริ่มงาน', open.filter((w) => w.status === 'open'), (l) => (unassigned.length ? `ยังไม่มอบหมาย ${unassigned.length} ใบ` : oldest(l)))}
+          ${stage('open', 'รอเริ่มงาน', open.filter((w) => w.status === 'open'), (l) => (unassigned.length ? `ยังไม่ได้มอบหมาย ${unassigned.length} ใบ` : oldest(l)))}
           ${stage('doing', 'กำลังซ่อม', open.filter((w) => w.status === 'doing'), oldest)}
           ${stage('parts', 'รออะไหล่', open.filter((w) => w.status === 'parts'), oldest)}
-          ${stage('done', 'ปิดวันนี้', doneToday, (l) => (l.length ? `ล่าสุด ${fmtTime(Math.max(...l.map((w) => w.endAt)))}` : 'ยังไม่มีงานปิด'))}
+          ${stage('done', 'ปิดวันนี้', doneToday, (l) => (l.length ? `ล่าสุด ${fmtTime(Math.max(...l.map((w) => w.endAt)))}` : 'ยังไม่มีงานที่ปิด'))}
         </div>
         ${overdue.length ? `<p class="notice err u-mbox">ใบงานเลยวันกำหนดเสร็จ ${overdue.length} ใบ: ${overdue.slice(0, 4).map((w) => esc(w.id)).join(', ')}</p>` : ''}
       </section>
@@ -289,21 +289,21 @@ function viewBoard(m) {
         <section class="box">
           <div class="bar"><h2>แผน PM</h2>${seeAll('pm', 'ดูแผน PM')}</div>
           <dl class="trio"><div><dt>เลยกำหนด</dt><dd class="${pmLate.length ? 'alarm' : ''}">${pmLate.length}</dd></div><div><dt>ครบวันนี้</dt><dd>${pmToday.length}</dd></div><div><dt>ใน 7 วัน</dt><dd>${pmWeek.length}</dd></div></dl>
-          <div class="pad goal"><p class="kpi">ทำทันกำหนดใน 30 วัน <b class="mono">${comp.pct.toFixed(0)}%</b></p><div class="prog" role="img" aria-label="ทำ PM ทันกำหนด ${comp.pct.toFixed(0)} เปอร์เซ็นต์"><span style="width:${Math.min(100, comp.pct)}%"></span></div></div>
-          <ul class="alist">${[...pmLate, ...pmToday, ...pmWeek].slice(0, 5).map((p) => `<li><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}</span><span class="u-nowrap ${p.dueDate < t0 ? 'alarm' : 'dim'}">${p.dueDate < t0 ? `เลย ${Math.ceil((t0 - p.dueDate) / DAY)} วัน` : relDate(p.dueDate) === 'วันนี้' ? 'วันนี้' : fmtDate(p.dueDate)}</span></li>`).join('') || '<li class="dim">ไม่มี PM ใน 7 วันนี้</li>'}</ul>
+          <div class="pad goal"><p class="kpi">อัตราทำ PM ทันกำหนด (30 วัน) <b class="mono">${comp.pct.toFixed(0)}%</b></p><div class="prog" role="img" aria-label="ทำ PM ทันกำหนด ${comp.pct.toFixed(0)} เปอร์เซ็นต์"><span style="width:${Math.min(100, comp.pct)}%"></span></div></div>
+          <ul class="alist">${[...pmLate, ...pmToday, ...pmWeek].slice(0, 5).map((p) => `<li><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}</span><span class="u-nowrap ${p.dueDate < t0 ? 'alarm' : 'dim'}">${p.dueDate < t0 ? `เลย ${Math.ceil((t0 - p.dueDate) / DAY)} วัน` : relDate(p.dueDate) === 'วันนี้' ? 'วันนี้' : fmtDate(p.dueDate)}</span></li>`).join('') || '<li class="dim">ไม่มีแผน PM ภายใน 7 วัน</li>'}</ul>
         </section>
         <section class="box">
           <div class="bar"><h2>อะไหล่ที่ต้องสั่ง <span class="dim u-w400">${reorder.length} จาก ${state.parts.length}</span></h2>${seeAll('parts', 'ดูคลังอะไหล่')}</div>
-          ${reorder.length ? `<ul class="alist">${[...reorder].sort((a, b) => a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min)).slice(0, 6).map((p) => `<li><span class="tag">${esc(p.id)}</span><span class="t">${esc(p.name)}</span><span class="stock"><span class="sbar"><span style="width:${Math.min(100, (100 * p.qty) / Math.max(1, p.min))}%"></span></span><span class="mono ${p.qty <= 0 ? 'alarm' : ''}">${p.qty <= 0 ? 'หมด' : `${p.qty}/${p.min}`}</span></span></li>`).join('')}</ul>` : '<p class="empty">อะไหล่ทุกรายการอยู่เหนือจุดสั่งซื้อ</p>'}
+          ${reorder.length ? `<ul class="alist">${[...reorder].sort((a, b) => a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min)).slice(0, 6).map((p) => `<li><span class="tag">${esc(p.id)}</span><span class="t">${esc(p.name)}</span><span class="stock"><span class="sbar"><span style="width:${Math.min(100, (100 * p.qty) / Math.max(1, p.min))}%"></span></span><span class="mono ${p.qty <= 0 ? 'alarm' : ''}">${p.qty <= 0 ? 'หมดสต็อก' : `${p.qty}/${p.min}`}</span></span></li>`).join('')}</ul>` : '<p class="empty">อะไหล่ทุกรายการอยู่เหนือจุดสั่งซื้อ</p>'}
         </section>
         <section class="box">
           <div class="bar"><h2>เครื่องมือวัด <span class="dim u-w400">ใช้งานได้ ${gN('ok')} จาก ${state.gauges.length}</span></h2>${seeAll('gauges', 'ดูทะเบียน')}</div>
           ${gAlert.length ? `<ul class="alist">${gAlert.slice(0, 4).map((x) => `<li><span class="tag">${esc(x.g.id)}</span><span class="t">${esc(x.g.name)}</span><span class="u-nowrap ${x.s[0] === 'soon' ? 'dim' : 'alarm'}">${x.s[1]}</span></li>`).join('')}</ul>` : '<p class="empty">ทุกเครื่องมืออยู่ในรอบสอบเทียบ</p>'}
         </section>
         <section class="box">
-          <div class="bar"><h2>ทีมช่าง</h2><span class="dim u-small">งานที่ถืออยู่ / ปิดใน 7 วัน</span></div>
-          ${team.length ? `<ul class="team">${team.map((t) => `<li>${avatar(t.name)}<span class="t"><b>${esc(t.name)}</b><span>${t.holding.length ? t.holding.slice(0, 3).map((w) => esc(w.id)).join(', ') : 'ว่าง'}</span></span><span class="mono">${t.holding.length}<span class="dim"> / ${t.closed}</span></span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีช่างในระบบ เพิ่มได้ในหน้าตั้งค่า</p>'}
-          ${unassigned.length ? `<p class="hint u-pad-b">อนุมัติแล้วแต่ยังไม่มีช่างรับ ${unassigned.length} ใบ</p>` : ''}
+          <div class="bar"><h2>ทีมช่าง</h2><span class="dim u-small">งานที่รับผิดชอบ / ปิดแล้วใน 7 วัน</span></div>
+          ${team.length ? `<ul class="team">${team.map((t) => `<li>${avatar(t.name)}<span class="t"><b>${esc(t.name)}</b><span>${t.holding.length ? t.holding.slice(0, 3).map((w) => esc(w.id)).join(', ') : 'พร้อมรับงาน'}</span></span><span class="mono">${t.holding.length}<span class="dim"> / ${t.closed}</span></span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีข้อมูลช่างในระบบ สามารถเพิ่มได้ที่หน้าตั้งค่า</p>'}
+          ${unassigned.length ? `<p class="hint u-pad-b">อนุมัติแล้วแต่ยังไม่มีผู้รับผิดชอบ ${unassigned.length} ใบ</p>` : ''}
         </section>
       </div>
     </div>`;
@@ -390,7 +390,7 @@ function viewOverview(m) {
     return `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}">
       <td><span class="cellwo">${andon(machineState(state.assets.find((a) => a.id === w.asset) || { id: w.asset }).k)}<span class="t"><button type="button" class="link title" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.title)}</button><span class="sub"><span class="mono">${esc(w.id)}</span><span>${TYPE[w.type]}</span></span></span></span></td>
       <td>${tag(w.asset)}</td>
-      <td>${w.tech ? `<span class="u-row">${avatar(w.tech.split(/,\s*/)[0])}<span class="u-nowrap">${esc(w.tech)}</span></span>` : '<span class="dim">ยังไม่มอบหมาย</span>'}</td>
+      <td>${w.tech ? `<span class="u-row">${avatar(w.tech.split(/,\s*/)[0])}<span class="u-nowrap">${esc(w.tech)}</span></span>` : '<span class="dim">ยังไม่ได้มอบหมาย</span>'}</td>
       <td><span class="progress ${w.status === 'parts' ? 'warn' : ''}"><span class="pbar"><span style="width:${pc}%"></span></span><span class="mono">${pc}%</span></span></td>
       <td>${lamp(w.status)}</td>
       <td class="num mono">${hm(now - w.startAt)}</td></tr>`;
@@ -416,7 +416,7 @@ function viewOverview(m) {
         <ol class="streak">${pmDone.map((w) => `<li class="${w.onTime !== false ? 'ok' : 'late'}" title="${esc(`${w.id} ${w.asset} ${fmtDate(w.endAt)} ${w.onTime !== false ? 'ทันกำหนด' : 'ช้ากว่ากำหนด'}`)}"><span class="d">${new Date(w.endAt).getDate()}</span>${w.onTime !== false ? icon('<path d="m5 12 5 5 9-10"/>') : icon('<path d="M7 7l10 10M17 7 7 17"/>')}</li>`).join('')}</ol>
       </section>
       <section class="card">
-        <h2 class="clabel">หยุดนานที่สุด 7 วัน</h2>
+        <h2 class="clabel">เครื่องที่หยุดนานที่สุด (7 วัน)</h2>
         <p class="cfig">${rank.length ? `#1 ${esc(rank[0].a.id)}` : 'ไม่มีเครื่องหยุด'}</p>
         <ol class="rank">${rank.map((r) => `<li><button type="button" class="rk" data-act="open-asset" data-id="${esc(r.a.id)}">${andon(machineState(r.a).k)}<span class="nm">${esc(r.a.name)}</span><span class="mono">${hours(r.down)} ชม.</span></button></li>`).join('')}</ol>
       </section>
@@ -424,24 +424,24 @@ function viewOverview(m) {
 
     <section class="card chart">
       <div class="chart-head">
-        <div><h2>เวลาหยุดเครื่องและจำนวนครั้งที่เสีย</h2><p class="clabel">เฉลี่ยต่อวัน</p><p class="cfig">${hours(avgDay)} ชม.</p></div>
+        <div><h2>เวลาหยุดเครื่องและจำนวนครั้งที่ขัดข้อง</h2><p class="clabel">เฉลี่ยต่อวัน</p><p class="cfig">${hours(avgDay)} ชม.</p></div>
         <div class="chart-tools">
           <div class="seg-ctl" role="group" aria-label="ช่วงเวลา">${[[90, '90 วัน'], [30, '30 วัน'], [7, '7 วัน']].map(([v, l]) => `<button type="button" data-act="ov-range" data-id="${v}" aria-pressed="${range === v}">${l}</button>`).join('')}</div>
-          <ul class="ckey"><li><i class="k-bar"></i>ชั่วโมงหยุด</li><li><i class="k-line"></i>ครั้งที่เสีย</li></ul>
+          <ul class="ckey"><li><i class="k-bar"></i>ชั่วโมงหยุด</li><li><i class="k-line"></i>ครั้งที่ขัดข้อง</li></ul>
         </div>
       </div>
       <div class="plot" style="--n:${bk.length}">
-        <div class="bars">${bk.map((b, i) => `<button type="button" class="b ${i === selI ? 'sel' : ''}" data-act="ov-sel" data-id="${i}" aria-label="${esc(`${b.label}: หยุด ${hours(b.down)} ชั่วโมง เสีย ${b.fails} ครั้ง`)}" aria-pressed="${i === selI}"><span style="height:${Math.max(6, (b.down / maxD) * 100)}%"></span></button>`).join('')}</div>
+        <div class="bars">${bk.map((b, i) => `<button type="button" class="b ${i === selI ? 'sel' : ''}" data-act="ov-sel" data-id="${i}" aria-label="${esc(`${b.label}: หยุด ${hours(b.down)} ชั่วโมง ขัดข้อง ${b.fails} ครั้ง`)}" aria-pressed="${i === selI}"><span style="height:${Math.max(6, (b.down / maxD) * 100)}%"></span></button>`).join('')}</div>
         <svg class="line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" vector-effect="non-scaling-stroke"/></svg>
         <div class="dots" aria-hidden="true">${bk.map((b, i) => `<i style="left:${((i + 0.5) / bk.length) * 100}%;top:${100 - (b.fails / maxF) * 86}%"></i>`).join('')}</div>
-        <div class="tip" style="left:clamp(80px, ${((selI + 0.5) / bk.length) * 100}%, calc(100% - 80px))"><b>${range === 90 ? `สัปดาห์ ${fmtDate(sel.b0)}` : fmtDate(sel.b0)}</b><span><i class="k-bar"></i>หยุด ${hours(sel.down)} ชม.</span><span><i class="k-line"></i>เสีย ${sel.fails} ครั้ง</span></div>
+        <div class="tip" style="left:clamp(80px, ${((selI + 0.5) / bk.length) * 100}%, calc(100% - 80px))"><b>${range === 90 ? `สัปดาห์ ${fmtDate(sel.b0)}` : fmtDate(sel.b0)}</b><span><i class="k-bar"></i>หยุด ${hours(sel.down)} ชม.</span><span><i class="k-line"></i>ขัดข้อง ${sel.fails} ครั้ง</span></div>
       </div>
       <div class="xlab" style="--n:${bk.length}">${bk.map((b, i) => `<span class="${i === selI ? 'on' : ''}">${range === 30 && i % 3 && i !== selI ? '' : b.label}</span>`).join('')}</div>
     </section>
 
     <section class="card flush">
       <div class="bar"><h2>ใบสั่งงานที่เปิดอยู่ <span class="dim u-w400">${m.open.length} ใบ</span></h2><button type="button" class="link" data-act="nav" data-id="work">ดูทั้งหมด</button></div>
-      ${openRows ? `<div class="scroll"><table class="wotable" style="min-width:860px"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">ผู้รับผิดชอบ</th><th scope="col">ความคืบหน้า</th><th scope="col">สถานะ</th><th scope="col" class="num">เปิดมา</th></tr></thead><tbody>${openRows}</tbody></table></div>` : '<p class="empty">ไม่มีงานค้าง</p>'}
+      ${openRows ? `<div class="scroll"><table class="wotable" style="min-width:860px"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">ผู้รับผิดชอบ</th><th scope="col">ความคืบหน้า</th><th scope="col">สถานะ</th><th scope="col" class="num">ระยะเวลา</th></tr></thead><tbody>${openRows}</tbody></table></div>` : '<p class="empty">ไม่มีงานค้าง</p>'}
     </section>
 
     <section class="card flush board">
@@ -450,7 +450,7 @@ function viewOverview(m) {
       <div class="scroll"><div class="tl">
         <div class="tl-row top"><span>เครื่อง</span><div class="tl-days">${days}</div><span class="num">หยุด (ชม.)</span></div>
         ${rows || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
-        <div class="tl-row foot"><span></span><span class="dim num tl-note">เส้นตั้งคือเวลาปัจจุบัน ${fmtTime(m.now)}  MTBF ${hours(m.mtbf)} ชม.  MTTR ${hours(m.mttr)} ชม.</span><span class="tl-sum tl-total">${hours(m.down)}</span></div>
+        <div class="tl-row foot"><span></span><span class="dim num tl-note">เส้นแนวตั้งแสดงเวลาปัจจุบัน ${fmtTime(m.now)}  MTBF ${hours(m.mtbf)} ชม.  MTTR ${hours(m.mttr)} ชม.</span><span class="tl-sum tl-total">${hours(m.down)}</span></div>
       </div></div>
     </section>`;
 }
@@ -459,7 +459,7 @@ function viewOverview(m) {
 function formWorkOrder() {
   const d = state.draft;
   const opts = state.assets.map((a) => `<option value="${esc(a.id)}" ${d.asset === a.id ? 'selected' : ''}>${esc(a.id)} ${esc(a.name)}</option>`).join('');
-  const pri = [['stop', 'เครื่องหยุด'], ['slow', 'เดินได้แต่ผิดปกติ'], ['plan', 'ซ่อมตามแผนได้']];
+  const pri = [['stop', 'เครื่องหยุด'], ['slow', 'ทำงานได้แต่ผิดปกติ'], ['plan', 'ดำเนินการตามแผนได้']];
   return `<form class="box" data-form="wo"><div class="bar"><h2>แจ้งซ่อมใหม่</h2></div>
     <div class="pad"><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:var(--space-sm) var(--space-md)">
       <div class="field"><label for="f-asset">เครื่องจักร</label><select id="f-asset" name="asset" required>${opts}</select></div>
@@ -477,8 +477,8 @@ function woDetail(w) {
   const repairLabel = w.status === 'parts' ? 'รออะไหล่' : 'ซ่อม';
   const steps = [
     st(1, 'แจ้งซ่อม', w.requestedBy || '—', fmtDateTime(w.startAt), 'done'),
-    st(2, 'อนุมัติ', w.approvedBy || 'รอหัวหน้าอนุมัติ', approved ? fmtDateTime(w.approvedAt) : '—', approved ? 'done' : 'current'),
-    st(3, repairLabel, w.tech || 'ยังไม่มอบหมาย', approved ? TYPE[w.type] : '—', done ? 'done' : (approved ? 'current' : '')),
+    st(2, 'อนุมัติ', w.approvedBy || 'รอหัวหน้าแผนกอนุมัติ', approved ? fmtDateTime(w.approvedAt) : '—', approved ? 'done' : 'current'),
+    st(3, repairLabel, w.tech || 'ยังไม่ได้มอบหมาย', approved ? TYPE[w.type] : '—', done ? 'done' : (approved ? 'current' : '')),
     st(4, 'ปิดงาน', done ? (w.tech || '—') : 'รอผลการซ่อม', done ? fmtDateTime(w.endAt) : '—', done ? 'done' : '')
   ].join('');
   const a = assetOf(w.asset);
@@ -496,8 +496,8 @@ function woDetail(w) {
   let action = '';
   if (!done && w.status === 'pending') {
     action = canAdmin()
-      ? `<div class="actions"><button type="button" class="btn solid" data-act="approve">อนุมัติและมอบหมาย</button></div><p class="hint">อนุมัติแล้วใบงานจะไปอยู่ในคิวช่าง</p>`
-      : '<p class="hint">รอหัวหน้าซ่อมบำรุงอนุมัติ</p>';
+      ? `<div class="actions"><button type="button" class="btn solid" data-act="approve">อนุมัติและมอบหมาย</button></div><p class="hint">เมื่ออนุมัติแล้ว ใบงานจะเข้าสู่คิวงานของช่าง</p>`
+      : '<p class="hint">รอหัวหน้าแผนกซ่อมบำรุงอนุมัติ</p>';
   } else if (!done && canTech()) {
     const c = state.close;
     const ready = c.cause && c.action.trim();
@@ -505,15 +505,15 @@ function woDetail(w) {
       <div class="field"><label for="w-cause">รหัสสาเหตุ</label><select id="w-cause" data-close="cause"><option value="">เลือกรหัสสาเหตุ</option>${CAUSES.map(([k, l]) => `<option value="${k}" ${c.cause === k ? 'selected' : ''}>${k} · ${l}</option>`).join('')}</select></div>
       <div class="field"><label for="w-action">การแก้ไขที่ต้นเหตุ</label><textarea id="w-action" data-close="action" rows="3" placeholder="เช่น เพิ่มรายการเปลี่ยนไส้กรองใน checklist กะ A">${esc(c.action)}</textarea></div>
       <div class="actions">
-        <button type="button" class="btn" data-act="wo-status" data-id="doing" ${w.status === 'doing' ? 'disabled' : ''}>${w.status === 'parts' ? 'กลับมาซ่อมต่อ' : 'เริ่มซ่อม'}</button>
+        <button type="button" class="btn" data-act="wo-status" data-id="doing" ${w.status === 'doing' ? 'disabled' : ''}>${w.status === 'parts' ? 'ดำเนินการซ่อมต่อ' : 'เริ่มซ่อม'}</button>
         <button type="button" class="btn" data-act="wo-status" data-id="parts" ${w.status === 'parts' ? 'disabled' : ''}>รออะไหล่</button>
         <button type="button" class="btn solid" data-act="wo-close" ${ready ? '' : 'disabled'}>ปิดงาน</button>
       </div>
-      <p class="hint">${ready ? 'ปิดงานแล้วระบบจะบันทึกเวลาและเพิ่มเข้าประวัติเครื่อง' : 'เลือกรหัสสาเหตุและกรอกการแก้ไขที่ต้นเหตุก่อนปิดงาน'}</p>`;
+      <p class="hint">${ready ? 'เมื่อปิดงาน ระบบจะบันทึกเวลาและเพิ่มลงในประวัติเครื่องจักร' : 'กรุณาเลือกรหัสสาเหตุและระบุการแก้ไขที่ต้นเหตุก่อนปิดงาน'}</p>`;
   } else if (done) {
     action = `<dl class="kv"><dt>รหัสสาเหตุ</dt><dd class="mono">${esc(w.cause || '—')}</dd><dt>การแก้ไข</dt><dd>${esc(w.action || '—')}</dd><dt>เวลาหยุดรวม</dt><dd class="mono">${hm(w.endAt - w.startAt)} ชม.</dd></dl>`;
   } else {
-    action = '<p class="hint">บัญชีนี้ดูได้อย่างเดียว</p>';
+    action = '<p class="hint">บัญชีนี้มีสิทธิ์ดูข้อมูลเท่านั้น</p>';
   }
   return `<section class="stack" aria-label="รายละเอียดใบสั่งงาน">
     <div class="head" style="border:0;padding:0"><div><span class="doc"><span class="mono">${esc(w.id)}</span><span>${TYPE[w.type]}</span></span><h2 style="font-size:var(--text-xl);line-height:1.35">${esc(w.title)}</h2></div>
@@ -531,10 +531,10 @@ function woDetail(w) {
             ${(w.team || []).length > 1 ? `<div><dt>ทีม</dt><dd>${w.team.map(esc).join(', ')}</dd></div>` : ''}
           </dl>
           ${w.note ? `<div class="pad" style="gap:var(--space-2xs)"><span class="hint">รายละเอียด</span><p class="u-pre">${esc(w.note)}</p></div>` : ''}
-          ${w.photo ? `<div class="pad" style="gap:var(--space-2xs)"><span class="hint">รูปจากผู้แจ้ง</span><img src="${esc(w.photo)}" alt="รูปอาการที่ผู้แจ้งถ่าย" style="max-width:100%;border-radius:var(--radius-card);border:1px solid var(--line)"></div>` : ''}</section>
+          ${w.photo ? `<div class="pad" style="gap:var(--space-2xs)"><span class="hint">ภาพถ่ายจากผู้แจ้ง</span><img src="${esc(w.photo)}" alt="ภาพอาการที่ผู้แจ้งถ่ายไว้" style="max-width:100%;border-radius:var(--radius-card);border:1px solid var(--line)"></div>` : ''}</section>
         ${(w.checks || []).length ? `<section class="box"><div class="bar"><h2>รายการตรวจ</h2><span class="mono dim">${w.checks.filter((c) => c.done).length} / ${w.checks.length}</span></div>
           ${w.checks.map((c, i) => `<label class="list-row" style="grid-template-columns:22px minmax(0,1fr);align-items:center;cursor:${!done && canTech() && approved ? 'pointer' : 'default'}"><input type="checkbox" data-check="${i}" ${c.done ? 'checked' : ''} ${!done && canTech() && approved ? '' : 'disabled'} style="width:18px;height:18px;accent-color:var(--accent)"><span style="${c.done ? 'color:var(--muted);text-decoration:line-through' : ''}">${esc(c.text)}</span></label>`).join('')}
-          ${!done && !approved ? '<p class="hint u-pad-b">ติ๊กได้หลังหัวหน้าอนุมัติ</p>' : ''}</section>` : ''}
+          ${!done && !approved ? '<p class="hint u-pad-b">บันทึกผลได้หลังหัวหน้าแผนกอนุมัติ</p>' : ''}</section>` : ''}
         <section class="box"><div class="bar"><h2>บันทึกการเปลี่ยนแปลง</h2></div>
           <table><thead><tr><th scope="col" style="width:48px">REV</th><th scope="col" style="width:140px">เวลา</th><th scope="col">รายการ</th></tr></thead>
           <tbody>${log.map((l) => `<tr><td class="mono">${l.rev}</td><td class="mono u-nowrap">${fmtDateTime(l.at)}</td><td>${esc(l.text)}</td></tr>`).join('')}</tbody></table></section>
@@ -560,7 +560,7 @@ function taskRow(w) {
     <span class="tname"><button type="button" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.title)}</button><small>${sub}</small></span>
     <span class="cell">${pill(TYPE[w.type], 'var(--grey-bg)', done ? 'var(--muted)' : 'var(--grey-fg)')}</span>
     <span class="cell"><span class="tag">${esc(w.asset)}</span></span>
-    <span class="cell">${w.tech ? `${avatar(w.tech)}<span class="u-ell">${esc(w.tech)}</span>` : '<span class="dim">ยังไม่มอบหมาย</span>'}</span>
+    <span class="cell">${w.tech ? `${avatar(w.tech)}<span class="u-ell">${esc(w.tech)}</span>` : '<span class="dim">ยังไม่ได้มอบหมาย</span>'}</span>
     <span class="cell mono" style="font-size:var(--text-sm)">${relDate(done ? w.endAt : w.startAt)}</span>
     <span class="cell">${done ? pill(pl, 'var(--grey-bg)', 'var(--muted)') : pill(pl, pb, pf)}</span>
   </div>`;
@@ -571,9 +571,9 @@ function quickAdd() {
   if (!state.quick) return `<button type="button" class="addrow" data-act="quick-open"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>เพิ่มงาน</button>`;
   const d = state.draft;
   return `<form class="quick" data-form="quick">
-    <label for="qa-title" class="sr">ชื่องาน</label><input id="qa-title" name="title" placeholder="อาการหรือชื่องาน แล้วกด Enter" value="${esc(d.title)}" required autocomplete="off">
+    <label for="qa-title" class="sr">ชื่องาน</label><input id="qa-title" name="title" placeholder="ระบุอาการหรือชื่องาน แล้วกด Enter" value="${esc(d.title)}" required autocomplete="off">
     <label for="qa-asset" class="sr">เครื่องจักร</label><select id="qa-asset" name="asset" required>${state.assets.map((a) => `<option value="${esc(a.id)}" ${d.asset === a.id ? 'selected' : ''}>${esc(a.id)} ${esc(a.name)}</option>`).join('')}</select>
-    <label for="qa-pri" class="sr">ผลกระทบ</label><select id="qa-pri" name="priority" style="flex-basis:150px">${Object.entries({ stop: 'เครื่องหยุด', slow: 'เดินได้แต่ผิดปกติ', plan: 'ทำตามแผนได้' }).map(([k, l]) => `<option value="${k}" ${(d.priority || 'stop') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <label for="qa-pri" class="sr">ผลกระทบ</label><select id="qa-pri" name="priority" style="flex-basis:150px">${Object.entries({ stop: 'เครื่องหยุด', slow: 'ทำงานได้แต่ผิดปกติ', plan: 'ดำเนินการตามแผนได้' }).map(([k, l]) => `<option value="${k}" ${(d.priority || 'stop') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <button class="btn solid small">เพิ่ม</button><button type="button" class="btn small" data-act="quick-cancel">ยกเลิก</button>
   </form>`;
 }
@@ -598,7 +598,7 @@ function viewWork() {
     return `<section aria-label="${label}">
       <button type="button" class="ghead" data-act="toggle-group" data-id="${k}" aria-expanded="${open}">${chevron}${label}<span class="mono">${items.length}</span></button>
       ${open ? `${shown.map(taskRow).join('')}${!items.length && k !== 'pending' ? '<p class="empty" style="padding-left:var(--space-lg)">ไม่มีงานในกลุ่มนี้</p>' : ''}
-        ${k === 'done' && items.length > shown.length ? `<button type="button" class="more" data-act="show-done">แสดงอีก ${items.length - shown.length} งาน</button>` : ''}
+        ${k === 'done' && items.length > shown.length ? `<button type="button" class="more" data-act="show-done">แสดงเพิ่มเติม ${items.length - shown.length} งาน</button>` : ''}
         ${k === 'pending' ? quickAdd() : ''}` : ''}
     </section>`;
   }).join('');
@@ -610,8 +610,8 @@ function viewWork() {
     </div></div></div>`;
 }
 
-/* ---------- SH-00 แจ้งงานด่วน (ฝ่ายผลิต ใช้บนมือถือ) ---------- */
-const SYMPTOMS = ['หยุดทำงาน', 'หยิบชิ้นงานพลาด', 'เสียงผิดปกติ', 'ของเสียเพิ่มขึ้น', 'ร้อนผิดปกติ', 'มีรอยรั่ว', 'มีข้อความ error'];
+/* ---------- SH-00 แจ้งซ่อมด่วน (ฝ่ายผลิต ใช้บนมือถือ) ---------- */
+const SYMPTOMS = ['หยุดทำงาน', 'หยิบชิ้นงานผิดพลาด', 'เสียงผิดปกติ', 'ของเสียเพิ่มขึ้นผิดปกติ', 'อุณหภูมิสูงผิดปกติ', 'มีการรั่วซึม', 'แสดงข้อความแจ้งเตือน (Error)'];
 function freshQr() {
   return { asset: '', symptoms: [], stopped: null, note: '', photo: null, sent: null, filter: '' };
 }
@@ -621,34 +621,34 @@ function viewQuick() {
     const w = state.workOrders.find((x) => x.id === q.sent.id);
     return `<section class="qr done" aria-live="polite">
       <span class="okmark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span>
-      <div><h2 style="font-size:var(--text-2xl);line-height:1.35">ส่งแจ้งงานแล้ว</h2><span class="mono dim">${esc(q.sent.id)}</span></div>
+      <div><h2 style="font-size:var(--text-2xl);line-height:1.35">ส่งใบแจ้งซ่อมเรียบร้อยแล้ว</h2><span class="mono dim">${esc(q.sent.id)}</span></div>
       <dl class="kv box" style="padding:var(--space-md);border-radius:var(--radius-card)"><dt>เครื่อง</dt><dd class="mono">${esc(q.sent.asset)}</dd><dt>อาการ</dt><dd>${esc(q.sent.title)}</dd><dt>สถานะ</dt><dd>${w ? STATUS[w.status][0] : 'รออนุมัติ'}</dd></dl>
-      <p class="dim">${q.sent.stopped ? 'แจ้งหัวหน้าซ่อมบำรุงแล้ว ถ้าไม่มีช่างมารับงานใน 15 นาที ให้โทรแจ้งห้องซ่อมบำรุง' : 'ช่างจะเข้ามาตรวจภายในกะนี้ ติดตามสถานะได้ที่หน้างานซ่อม'}</p>
-      <div class="actions"><button type="button" class="btn solid big" data-act="qr-again">แจ้งงานอื่น</button><button type="button" class="btn big" data-act="open-wo" data-id="${esc(q.sent.id)}">ดูใบงาน</button></div>
+      <p class="dim">${q.sent.stopped ? 'ระบบแจ้งหัวหน้าแผนกซ่อมบำรุงแล้ว หากไม่มีช่างเข้ารับงานภายใน 15 นาที กรุณาติดต่อแผนกซ่อมบำรุงทางโทรศัพท์' : 'ช่างจะเข้าตรวจสอบภายในกะปัจจุบัน ติดตามสถานะได้ที่หน้างานซ่อม'}</p>
+      <div class="actions"><button type="button" class="btn solid big" data-act="qr-again">แจ้งซ่อมรายการใหม่</button><button type="button" class="btn big" data-act="open-wo" data-id="${esc(q.sent.id)}">ดูใบงาน</button></div>
     </section>`;
   }
   const t = q.filter.trim().toLowerCase();
   const list = state.assets.filter((a) => !t || `${a.id} ${a.name} ${a.line}`.toLowerCase().includes(t));
   const ready = q.asset && q.symptoms.length && q.stopped !== null;
-  const missing = !q.asset ? 'เลือกเครื่อง' : !q.symptoms.length ? 'เลือกอาการอย่างน้อย 1 ข้อ' : q.stopped === null ? 'บอกว่าเครื่องยังเดินอยู่ไหม' : '';
+  const missing = !q.asset ? 'กรุณาเลือกเครื่องจักร' : !q.symptoms.length ? 'กรุณาระบุอาการอย่างน้อย 1 รายการ' : q.stopped === null ? 'กรุณาระบุสถานะเครื่องจักร' : '';
   return `<form class="qr" data-form="qr">
-    <p class="hint" style="margin:calc(-1 * var(--space-xs)) 0 0">แจ้งได้ใน 3 ขั้น ใบงานจะส่งให้หัวหน้าซ่อมบำรุงอนุมัติทันที <button type="button" class="link u-sans" data-act="nav" data-id="work">ดูงานซ่อมทั้งหมด</button></p>
-    <fieldset><legend>1. เครื่องไหน</legend>
-      <label for="qr-filter" class="sr">ค้นหาเครื่อง</label><input id="qr-filter" class="qr-input" data-qr="filter" value="${esc(q.filter)}" placeholder="พิมพ์รหัสหรือชื่อเครื่อง" autocomplete="off">
-      <div class="qr-assets" id="qr-assets">${list.map((a) => `<button type="button" class="opt ${q.asset === a.id ? 'on' : ''}" aria-pressed="${q.asset === a.id}" data-act="qr-asset" data-id="${esc(a.id)}"><span class="mono u-w500">${esc(a.id)}</span><span class="hint">${esc(a.name)}</span></button>`).join('') || '<p class="hint">ไม่พบเครื่องที่ค้นหา</p>'}</div>
+    <p class="hint" style="margin:calc(-1 * var(--space-xs)) 0 0">กรอกข้อมูล 3 ขั้นตอน ระบบจะส่งใบแจ้งซ่อมให้หัวหน้าแผนกซ่อมบำรุงพิจารณาอนุมัติโดยอัตโนมัติ <button type="button" class="link u-sans" data-act="nav" data-id="work">ดูรายการงานซ่อมทั้งหมด</button></p>
+    <fieldset><legend>1. เลือกเครื่องจักร</legend>
+      <label for="qr-filter" class="sr">ค้นหาเครื่อง</label><input id="qr-filter" class="qr-input" data-qr="filter" value="${esc(q.filter)}" placeholder="ค้นหาด้วยรหัสหรือชื่อเครื่องจักร" autocomplete="off">
+      <div class="qr-assets" id="qr-assets">${list.map((a) => `<button type="button" class="opt ${q.asset === a.id ? 'on' : ''}" aria-pressed="${q.asset === a.id}" data-act="qr-asset" data-id="${esc(a.id)}"><span class="mono u-w500">${esc(a.id)}</span><span class="hint">${esc(a.name)}</span></button>`).join('') || '<p class="hint">ไม่พบเครื่องจักรที่ตรงกับคำค้นหา</p>'}</div>
     </fieldset>
-    <fieldset><legend>2. อาการ</legend>
+    <fieldset><legend>2. ระบุอาการผิดปกติ</legend>
       <div class="qr-chips">${SYMPTOMS.map((x) => `<button type="button" class="chip ${q.symptoms.includes(x) ? 'on' : ''}" aria-pressed="${q.symptoms.includes(x)}" data-act="qr-sym" data-id="${esc(x)}">${esc(x)}</button>`).join('')}</div>
-      <label for="qr-note" class="sr">รายละเอียดเพิ่มเติม</label><textarea id="qr-note" class="qr-input" data-qr="note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ไม่บังคับ)">${esc(q.note)}</textarea>
+      <label for="qr-note" class="sr">รายละเอียดเพิ่มเติม</label><textarea id="qr-note" class="qr-input" data-qr="note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)">${esc(q.note)}</textarea>
     </fieldset>
-    <fieldset><legend>3. เครื่องยังเดินอยู่ไหม</legend>
-      <div class="qr-two"><button type="button" class="opt big ${q.stopped === true ? 'stop' : ''}" aria-pressed="${q.stopped === true}" data-act="qr-stop" data-id="1">หยุดแล้ว</button><button type="button" class="opt big ${q.stopped === false ? 'on' : ''}" aria-pressed="${q.stopped === false}" data-act="qr-stop" data-id="0">ยังเดินอยู่</button></div>
+    <fieldset><legend>3. สถานะเครื่องจักรขณะนี้</legend>
+      <div class="qr-two"><button type="button" class="opt big ${q.stopped === true ? 'stop' : ''}" aria-pressed="${q.stopped === true}" data-act="qr-stop" data-id="1">เครื่องหยุดทำงาน</button><button type="button" class="opt big ${q.stopped === false ? 'on' : ''}" aria-pressed="${q.stopped === false}" data-act="qr-stop" data-id="0">ยังทำงานได้</button></div>
     </fieldset>
     <div class="qr-photo">${q.photo
-      ? `<img src="${esc(q.photo)}" alt="รูปที่แนบ"><button type="button" class="btn small" data-act="qr-photo-del">เอารูปออก</button>`
-      : `<label class="photo-drop" for="qr-file"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>ถ่ายรูปอาการ <span class="hint">ช่วยให้ช่างเตรียมอะไหล่ถูก</span></label><input id="qr-file" type="file" accept="image/*" capture="environment" class="sr">`}</div>
-    <div class="qr-foot"><span class="hint" id="qr-hint" style="${ready ? '' : 'color:var(--stop-fg)'}">${ready ? (q.stopped ? 'จะแจ้งหัวหน้าซ่อมบำรุงทันทีเพราะเครื่องหยุด' : 'เข้าคิวงานตรวจสอบของกะนี้') : missing}</span>
-      <button class="btn solid big" ${ready ? '' : 'disabled'}>ส่งแจ้งงาน</button></div>
+      ? `<img src="${esc(q.photo)}" alt="ภาพที่แนบ"><button type="button" class="btn small" data-act="qr-photo-del">ลบภาพ</button>`
+      : `<label class="photo-drop" for="qr-file"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>แนบภาพถ่ายอาการ <span class="hint">ช่วยให้ช่างเตรียมอะไหล่และเครื่องมือได้ถูกต้อง</span></label><input id="qr-file" type="file" accept="image/*" capture="environment" class="sr">`}</div>
+    <div class="qr-foot"><span class="hint" id="qr-hint" style="${ready ? '' : 'color:var(--stop-fg)'}">${ready ? (q.stopped ? 'ระบบจะแจ้งหัวหน้าแผนกซ่อมบำรุงทันที เนื่องจากเครื่องจักรหยุดทำงาน' : 'งานจะเข้าคิวตรวจสอบภายในกะปัจจุบัน') : missing}</span>
+      <button class="btn solid big" ${ready ? '' : 'disabled'}>ส่งใบแจ้งซ่อม</button></div>
   </form>`;
 }
 
@@ -664,7 +664,7 @@ function shrinkImage(file) {
       URL.revokeObjectURL(url);
       resolve(c.toDataURL('image/jpeg', 0.6));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('อ่านรูปไม่ได้ ลองถ่ายใหม่')); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('ไม่สามารถอ่านไฟล์ภาพได้ กรุณาถ่ายภาพใหม่อีกครั้ง')); };
     img.src = url;
   });
 }
@@ -683,27 +683,27 @@ function createPanel() {
   const opt = (on) => `aria-pressed="${on}" class="opt ${on ? 'on' : ''}"`;
   const a = assetOf(c.asset);
   const ready = c.title.trim() && c.asset;
-  const P = [['stop', 'เครื่องหยุด', 'ไลน์หยุดหรือของเสียหลุด ต้องเริ่มทันที', 'var(--stop)'], ['slow', 'เดินได้แต่ผิดปกติ', 'ทำภายในกะนี้ก่อนจะลามเป็นเครื่องหยุด', 'var(--wait)'], ['plan', 'ทำตามแผนได้', 'นัดทำช่วงหยุดเปลี่ยนรุ่นหรือวันซ่อมบำรุง', 'var(--run)']];
+  const P = [['stop', 'เครื่องหยุด', 'ไลน์ผลิตหยุดหรือมีของเสียหลุดรอด ต้องดำเนินการทันที', 'var(--stop)'], ['slow', 'ทำงานได้แต่ผิดปกติ', 'ดำเนินการภายในกะปัจจุบัน ก่อนส่งผลให้เครื่องหยุด', 'var(--wait)'], ['plan', 'ดำเนินการตามแผนได้', 'วางแผนดำเนินการช่วงเปลี่ยนรุ่นหรือวันหยุดซ่อมบำรุง', 'var(--run)']];
   return `<div class="drawer-wrap"><button type="button" class="scrim" data-act="panel-close" aria-label="ปิด" tabindex="-1"></button>
     <form class="drawer create" role="dialog" aria-modal="true" aria-labelledby="cp-h" data-form="create">
-      <div class="dhead"><div><h2 id="cp-h" style="font-size:var(--text-lg);line-height:1.35">สร้างงานใหม่</h2><span class="mono dim" style="font-size:var(--text-xs)">ร่าง ส่งแล้วรอหัวหน้าอนุมัติ</span></div>
+      <div class="dhead"><div><h2 id="cp-h" style="font-size:var(--text-lg);line-height:1.35">สร้างงานใหม่</h2><span class="mono dim" style="font-size:var(--text-xs)">ฉบับร่าง เมื่อส่งแล้วจะรอหัวหน้าแผนกอนุมัติ</span></div>
         <button type="button" class="iconbtn" data-act="panel-close" aria-label="ปิด"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
       <div class="dbody cbody">
         <div class="field"><label for="cp-title">ชื่องาน</label><input id="cp-title" data-c="title" value="${esc(c.title)}" placeholder="เช่น เปลี่ยนไส้กรองหัวดูด MNT-103" style="min-height:48px;font-size:var(--text-md)" autocomplete="off"></div>
         <fieldset><legend>ประเภทงาน</legend><div class="optgrid">${Object.entries(TYPE).map(([k, l]) => `<button type="button" ${opt(c.type === k)} data-act="c-type" data-id="${k}">${l}</button>`).join('')}</div></fieldset>
         <div class="cgrid">
           <div class="field"><label for="cp-asset">เครื่องจักร</label><select id="cp-asset" data-c="asset" data-rerender="1"><option value="">เลือกเครื่อง</option>${state.assets.map((x) => `<option value="${esc(x.id)}" ${c.asset === x.id ? 'selected' : ''}>${esc(x.id)} · ${esc(x.name)}</option>`).join('')}</select>
-            <span class="hint">${a ? `${esc(a.line)}, ระดับความสำคัญ ${esc(a.cls)}` : 'งานต้องผูกกับเครื่องเพื่อเก็บประวัติ'}</span></div>
+            <span class="hint">${a ? `${esc(a.line)}, ระดับความสำคัญ ${esc(a.cls)}` : 'ต้องระบุเครื่องจักรเพื่อบันทึกประวัติการซ่อม'}</span></div>
           <div class="field"><label for="cp-due">กำหนดเสร็จ</label><input id="cp-due" type="date" data-c="due" value="${esc(c.due)}"><span class="hint">ไม่บังคับ</span></div>
         </div>
         <fieldset><legend>ผลกระทบ</legend><div style="display:flex;flex-direction:column;gap:var(--space-xs)">${P.map(([k, l, d, col]) => `<button type="button" ${opt(c.prio === k)} data-act="c-prio" data-id="${k}" style="display:grid;grid-template-columns:12px minmax(0,1fr);gap:var(--space-sm);text-align:left;align-items:start;padding:var(--space-sm) var(--space-sm)"><span style="width:12px;height:12px;margin-top:4px;border-radius:6px;background:${col}"></span><span style="display:flex;flex-direction:column;gap:var(--space-3xs)"><b class="u-w500">${l}</b><span class="hint">${d}</span></span></button>`).join('')}</div></fieldset>
-        <fieldset><legend>มอบหมายให้ <span class="hint u-w400">เลือกได้หลายคน คนแรกเป็นผู้รับผิดชอบหลัก</span></legend><div style="display:flex;flex-wrap:wrap;gap:var(--space-xs)">${peopleList().map((n) => { const on = c.people.includes(n); return `<button type="button" ${opt(on)} data-act="c-person" data-id="${esc(n)}" style="height:44px;padding:0 var(--space-sm) 0 var(--space-2xs);border-radius:22px;display:inline-flex;align-items:center;gap:var(--space-xs)">${avatar(n, false).replace('class="avatar ', `class="avatar ${on ? 'dark ' : ''}`)}${esc(n)}</button>`; }).join('')}</div></fieldset>
+        <fieldset><legend>มอบหมายให้ <span class="hint u-w400">เลือกได้หลายคน โดยคนแรกเป็นผู้รับผิดชอบหลัก</span></legend><div style="display:flex;flex-wrap:wrap;gap:var(--space-xs)">${peopleList().map((n) => { const on = c.people.includes(n); return `<button type="button" ${opt(on)} data-act="c-person" data-id="${esc(n)}" style="height:44px;padding:0 var(--space-sm) 0 var(--space-2xs);border-radius:22px;display:inline-flex;align-items:center;gap:var(--space-xs)">${avatar(n, false).replace('class="avatar ', `class="avatar ${on ? 'dark ' : ''}`)}${esc(n)}</button>`; }).join('')}</div></fieldset>
         <div class="field"><span style="font-size:var(--text-sm);font-weight:500">รายการตรวจ <span class="hint u-w400">${c.checks.filter((x) => x.done).length} / ${c.checks.length}</span></span>
           <div class="box" style="border-radius:var(--radius-card)">${c.checks.map((x, i) => `<div class="list-row" style="grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:var(--space-2xs) var(--space-xs) var(--space-2xs) var(--space-sm)"><span>${esc(x.text)}</span><button type="button" class="iconbtn" style="width:32px;height:32px" data-act="c-uncheck" data-id="${i}" aria-label="ลบรายการ ${esc(x.text)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}
             <div style="display:flex;gap:var(--space-xs);padding:var(--space-2xs) var(--space-xs) var(--space-2xs) var(--space-sm);background:var(--hover)"><label for="cp-new" class="sr">เพิ่มรายการตรวจ</label><input id="cp-new" data-c="newCheck" value="${esc(c.newCheck)}" placeholder="เพิ่มรายการตรวจ แล้วกด Enter" style="flex:1;min-width:0;height:40px;border:0;background:transparent" autocomplete="off"><button type="button" class="btn small" data-act="c-add">เพิ่ม</button></div></div></div>
-        <div class="field"><label for="cp-note">รายละเอียดเพิ่มเติม</label><textarea id="cp-note" data-c="note" rows="3" placeholder="อาการที่พบ สิ่งที่ต้องระวัง">${esc(c.note)}</textarea></div>
+        <div class="field"><label for="cp-note">รายละเอียดเพิ่มเติม</label><textarea id="cp-note" data-c="note" rows="3" placeholder="อาการที่พบและข้อควรระวัง">${esc(c.note)}</textarea></div>
       </div>
-      <div class="cfoot"><span class="hint" id="cp-hint" style="${ready ? '' : 'color:var(--stop-fg)'}">${ready ? (c.people.length ? `มอบหมาย ${c.people.length} คน` : 'ยังไม่มอบหมาย งานจะเข้าคิวรวม') : 'ใส่ชื่องานและเลือกเครื่องก่อนสร้าง'}</span>
+      <div class="cfoot"><span class="hint" id="cp-hint" style="${ready ? '' : 'color:var(--stop-fg)'}">${ready ? (c.people.length ? `มอบหมาย ${c.people.length} คน` : 'ยังไม่ได้มอบหมาย งานจะเข้าสู่คิวงานรวม') : 'กรุณาระบุชื่องานและเลือกเครื่องจักรก่อนสร้างงาน'}</span>
         <div class="actions"><button type="button" class="btn" data-act="panel-close">ยกเลิก</button><button class="btn solid" id="cp-submit" ${ready ? '' : 'disabled'}>สร้างงาน</button></div></div>
     </form></div>`;
 }
@@ -792,7 +792,7 @@ function viewPm() {
   const t0 = startOfToday();
   const c = pmCompliance(Date.now() - 30 * DAY);
   const summary = `<section class="stats" aria-label="สรุปแผน PM">
-    <div class="stat"><span class="label">PM compliance 30 วัน</span><span class="fig ${c.pct < 90 ? 'alarm' : ''}">${c.pct.toFixed(0)}<small>%</small></span><span class="cap">ทันกำหนด ${c.onTime} จาก ${c.done + c.late} งาน · เป้า 90%</span></div>
+    <div class="stat"><span class="label">PM compliance 30 วัน</span><span class="fig ${c.pct < 90 ? 'alarm' : ''}">${c.pct.toFixed(0)}<small>%</small></span><span class="cap">ทันกำหนด ${c.onTime} จาก ${c.done + c.late} งาน (เป้าหมาย 90%)</span></div>
     <div class="stat"><span class="label">เลยกำหนดตอนนี้</span><span class="fig ${c.late ? 'alarm' : ''}">${c.late}<small> งาน</small></span><span class="cap">นับรวมเป็นงานไม่ทันกำหนด</span></div>
     <div class="stat"><span class="label">แผน PM ทั้งหมด</span><span class="fig">${state.pmPlans.length}<small> แผน</small></span><span class="cap">ครอบคลุม ${new Set(state.pmPlans.map((p) => p.asset)).size} จาก ${state.assets.length} เครื่อง</span></div>
   </section>`;
@@ -803,7 +803,7 @@ function viewPm() {
     return `<section class="box"><div class="bar"><h2 class="${late ? 'alarm' : ''}">${label} <span class="mono dim u-small">${items.length}</span></h2></div>
       <div class="scroll"><table style="min-width:640px"><thead><tr><th scope="col">ครบกำหนด</th><th scope="col">เครื่อง</th><th scope="col">งาน</th><th scope="col">รอบ</th><th scope="col"><span class="sr">คำสั่ง</span></th></tr></thead><tbody>
       ${items.map((p) => `<tr><td class="mono ${late ? 'alarm' : ''} u-nowrap">${fmtDate(p.dueDate)}</td><td>${tag(p.asset)}</td><td>${esc(p.task)}</td><td class="dim u-nowrap">ทุก ${p.intervalDays} วัน</td>
-        <td class="num"><span class="actions u-end">${canTech() ? `<button type="button" class="btn small" data-act="pm-done" data-id="${esc(p.id)}">บันทึกว่าทำแล้ว</button>` : ''}${editBtn('pmPlans', p.id)}${delBtn('pmPlans', p.id)}</span></td></tr>`).join('')}
+        <td class="num"><span class="actions u-end">${canTech() ? `<button type="button" class="btn small" data-act="pm-done" data-id="${esc(p.id)}">บันทึกผลการดำเนินการ</button>` : ''}${editBtn('pmPlans', p.id)}${delBtn('pmPlans', p.id)}</span></td></tr>`).join('')}
       </tbody></table></div></section>`;
   }).join('');
   return `${form}${summary}${html || '<section class="box"><p class="empty">ยังไม่มีแผน PM</p></section>'}`;
@@ -817,10 +817,10 @@ function viewParts() {
     <td class="mono u-nowrap">${esc(p.id)}</td><td>${esc(p.name)}</td><td class="mono">${esc(p.bin)}</td>
     <td class="mono num ${p.qty === 0 ? 'alarm' : ''}">${p.qty} / ${p.min}</td><td class="mono num">${p.max || '—'}</td>
     <td class="mono num">${toOrder(p) ? `<b>${toOrder(p)}</b>` : '<span class="dim">—</span>'}</td>
-    <td class="num"><span class="actions u-end">${canTech() ? `<button type="button" class="btn small" data-act="part" data-id="${esc(p.id)}" data-delta="1">รับเข้า 1</button>` : ''}${editBtn('parts', p.id)}${delBtn('parts', p.id)}</span></td></tr>`).join('');
+    <td class="num"><span class="actions u-end">${canTech() ? `<button type="button" class="btn small" data-act="part" data-id="${esc(p.id)}" data-delta="1">รับเข้าสต็อก 1</button>` : ''}${editBtn('parts', p.id)}${delBtn('parts', p.id)}</span></td></tr>`).join('');
   const orders = state.parts.filter(toOrder);
-  return `${form}<section class="box" aria-label="คลังอะไหล่">${rows ? `<div class="scroll"><table style="min-width:860px"><thead><tr><th scope="col">รหัส</th><th scope="col">รายการ</th><th scope="col">ที่เก็บ</th><th scope="col" class="num">คงเหลือ / Min</th><th scope="col" class="num">Max</th><th scope="col" class="num">ควรสั่ง</th><th scope="col"><span class="sr">คำสั่ง</span></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
-    <div class="actions"><button type="button" class="btn" data-act="export-order" ${orders.length ? '' : 'disabled'}>ส่งออกรายการสั่งซื้อ ${orders.length} รายการ (CSV)</button><span class="hint">เบิกอะไหล่ทำผ่านใบสั่งงาน เพื่อให้รู้ว่าใช้กับเครื่องไหน</span></div>`;
+  return `${form}<section class="box" aria-label="คลังอะไหล่">${rows ? `<div class="scroll"><table style="min-width:860px"><thead><tr><th scope="col">รหัส</th><th scope="col">รายการ</th><th scope="col">ที่เก็บ</th><th scope="col" class="num">คงเหลือ / Min</th><th scope="col" class="num">Max</th><th scope="col" class="num">จำนวนที่ควรสั่ง</th><th scope="col"><span class="sr">คำสั่ง</span></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
+    <div class="actions"><button type="button" class="btn" data-act="export-order" ${orders.length ? '' : 'disabled'}>ส่งออกรายการสั่งซื้อ ${orders.length} รายการ (CSV)</button><span class="hint">การเบิกอะไหล่ต้องทำผ่านใบสั่งงาน เพื่อให้ตรวจสอบได้ว่าใช้กับเครื่องจักรใด</span></div>`;
 }
 
 /* ---------- SH-06 เครื่องมือวัด ---------- */
@@ -838,8 +838,8 @@ function viewGauges() {
       <td class="num"><span class="actions u-end">${canTech() ? `<button type="button" class="btn small" data-act="cal" data-id="${esc(g.id)}" data-pass="1">ผ่าน</button><button type="button" class="btn small" data-act="cal" data-id="${esc(g.id)}" data-pass="0" ${g.status === 'hold' ? 'disabled' : ''}>ไม่ผ่าน</button>` : ''}${editBtn('gauges', g.id)}${delBtn('gauges', g.id)}</span></td></tr>`;
   }).join('');
   return `${form}<section class="stats" aria-label="สรุปเครื่องมือวัด">
-      <div class="stat"><span class="label">ห้ามใช้</span><span class="fig ${n('hold') ? 'alarm' : ''}">${n('hold')}</span><span class="cap">ไม่ผ่านสอบเทียบ แยกออกจากไลน์</span></div>
-      <div class="stat"><span class="label">เลยกำหนด</span><span class="fig ${n('late') ? 'alarm' : ''}">${n('late')}</span><span class="cap">ต้องหยุดใช้จนกว่าจะสอบเทียบ</span></div>
+      <div class="stat"><span class="label">ห้ามใช้</span><span class="fig ${n('hold') ? 'alarm' : ''}">${n('hold')}</span><span class="cap">ไม่ผ่านการสอบเทียบ ต้องแยกออกจากไลน์ผลิต</span></div>
+      <div class="stat"><span class="label">เลยกำหนด</span><span class="fig ${n('late') ? 'alarm' : ''}">${n('late')}</span><span class="cap">ต้องระงับการใช้งานจนกว่าจะสอบเทียบ</span></div>
       <div class="stat"><span class="label">ครบภายใน 30 วัน</span><span class="fig">${n('soon')}</span><span class="cap">วางแผนส่งสอบเทียบ</span></div>
       <div class="stat"><span class="label">ใช้งานได้</span><span class="fig">${n('ok')}<small> / ${state.gauges.length}</small></span><span class="cap">อยู่ในรอบสอบเทียบ</span></div>
     </section>
@@ -881,7 +881,7 @@ function viewReport() {
         ${causes.length ? `<table><thead><tr><th scope="col">รหัส</th><th scope="col">สาเหตุ</th><th scope="col" class="num">ครั้ง</th><th scope="col" class="num">สะสม</th></tr></thead><tbody>
           ${causes.map(([k, nn]) => { cum += nn; return `<tr><td class="mono">${esc(k)}</td><td>${esc((CAUSES.find(([c]) => c === k) || [, k])[1])}</td><td class="mono num">${nn}</td><td class="mono num">${((100 * cum) / causeTotal).toFixed(0)}%</td></tr>`; }).join('')}
         </tbody></table>` : '<p class="empty">ยังไม่มีงานซ่อมที่ปิดพร้อมรหัสสาเหตุในช่วงนี้</p>'}
-        <p class="hint u-pad-sm">เลือกแก้สาเหตุที่สะสมถึงราว 80% ก่อน จะลดเวลาหยุดได้มากที่สุด</p></section>
+        <p class="hint u-pad-sm">ควรแก้ไขสาเหตุที่มีสัดส่วนสะสมถึงประมาณ 80% ก่อน เพื่อลดเวลาหยุดเครื่องได้มากที่สุด</p></section>
     </div>`;
 }
 
@@ -940,7 +940,7 @@ function issuedBox() {
   if (!x) return '';
   return `<div class="notice u-mbox"><b>${esc(x.title)}</b>
     <dl class="kv" style="margin:var(--space-xs) 0"><dt>ชื่อ</dt><dd>${esc(x.name)}</dd><dt>รหัสพนักงาน</dt><dd class="mono">${esc(x.empId)}</dd><dt>รหัสผ่านชั่วคราว</dt><dd class="mono" style="font-size:var(--text-lg);letter-spacing:.08em">${esc(x.temp)}</dd></dl>
-    <p class="hint" style="margin:0 0 var(--space-xs)">จดหรือแจ้งพนักงานตอนนี้ ปิดกล่องนี้แล้วจะดูรหัสนี้อีกไม่ได้ พนักงานต้องตั้งรหัสใหม่ตอนเข้าครั้งแรก</p>
+    <p class="hint" style="margin:0 0 var(--space-xs)">กรุณาบันทึกหรือแจ้งรหัสนี้แก่พนักงานทันที เมื่อปิดหน้าต่างนี้แล้วจะไม่สามารถเรียกดูได้อีก พนักงานต้องตั้งรหัสผ่านใหม่เมื่อเข้าสู่ระบบครั้งแรก</p>
     <div class="actions"><button type="button" class="btn small" data-act="copy-temp">คัดลอก</button><button type="button" class="btn small" data-act="issued-close">ปิด</button></div></div>`;
 }
 
@@ -965,17 +965,17 @@ function viewServer() {
       <div class="field"><label for="u-emp">รหัสพนักงาน</label><input id="u-emp" name="empId" required autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]{1,19}" title="A-Z 0-9 . _ - ยาว 2–20 ตัว" placeholder="เช่น M0112"></div>
       <div class="field"><label for="u-role">สิทธิ์</label><select id="u-role" name="role">${['operator', 'tech', 'admin'].map((r) => `<option value="${r}">${ROLE_LABEL[r]}</option>`).join('')}</select></div>
       <button class="btn solid">เพิ่มผู้ใช้</button></div>
-      <p class="hint">ระบบจะสร้างรหัสผ่านชั่วคราวให้ แจ้งพนักงานด้วยตัวเอง พนักงานต้องตั้งรหัสใหม่ตอนเข้าครั้งแรก</p></form>
-      ${issuedBox()}` : '<p class="notice u-mbox">โหมดตัวอย่างแสดงรายชื่อตัวอย่าง เพิ่มผู้ใช้จริงได้หลังเชื่อม Firebase</p>'}
+      <p class="hint">ระบบจะสร้างรหัสผ่านชั่วคราวให้ โปรดแจ้งพนักงานโดยตรง พนักงานต้องตั้งรหัสผ่านใหม่เมื่อเข้าสู่ระบบครั้งแรก</p></form>
+      ${issuedBox()}` : '<p class="notice u-mbox">โหมดตัวอย่างแสดงรายชื่อตัวอย่าง สามารถเพิ่มผู้ใช้จริงได้หลังเชื่อมต่อ Firebase</p>'}
     <div class="scroll"><table style="min-width:680px"><thead><tr><th scope="col">ชื่อ</th><th scope="col">รหัสพนักงาน</th><th scope="col">สิทธิ์</th><th scope="col"><span class="sr">รหัสผ่าน</span></th></tr></thead><tbody>
-    ${users.map((u) => `<tr><td><span class="u-row">${avatar(u.name)}${esc(u.name)}${u.id === state.user.uid ? ' <span class="dim">(คุณ)</span>' : ''}</span></td><td class="mono">${esc(u.empId || '—')}${u.mustChange ? ' <span class="dim u-sans">· ยังไม่ได้ตั้งรหัส</span>' : ''}</td>
+    ${users.map((u) => `<tr><td><span class="u-row">${avatar(u.name)}${esc(u.name)}${u.id === state.user.uid ? ' <span class="dim">(คุณ)</span>' : ''}</span></td><td class="mono">${esc(u.empId || '—')}${u.mustChange ? ' <span class="dim u-sans">· ยังไม่ได้ตั้งรหัสผ่าน</span>' : ''}</td>
       <td>${u.id === state.user.uid || !live ? esc(ROLE_LABEL[u.role] || u.role) : `<label for="r-${esc(u.id)}" class="sr">สิทธิ์ของ ${esc(u.name)}</label><select id="r-${esc(u.id)}" data-user-role="${esc(u.id)}" style="height:34px;padding:0 var(--space-xs);border:1px solid var(--field);border-radius:var(--radius-card);background:var(--card)">${['admin', 'tech', 'operator', 'disabled'].map((r) => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td>
       <td class="num">${live && u.id !== state.user.uid && u.empId ? `<button type="button" class="btn small" data-act="reset-user" data-id="${esc(u.id)}">รีเซ็ตรหัสผ่าน</button>` : ''}</td></tr>`).join('')}
     </tbody></table></div></section>`;
 
   const p = state.importPreview;
   const importBox = `<section class="box w3"><div class="bar"><h2>นำเข้าข้อมูลจาก Excel</h2></div><div class="pad">
-    <p class="dim">บันทึกไฟล์ Excel เป็น "CSV UTF-8" ใช้หัวตารางตามไฟล์ตัวอย่าง รหัสซ้ำจะอัปเดตข้อมูลเดิม</p>
+    <p class="dim">บันทึกไฟล์ Excel เป็น "CSV UTF-8" ใช้หัวตารางตามไฟล์ตัวอย่าง หากรหัสซ้ำ ระบบจะปรับปรุงข้อมูลเดิม</p>
     <div class="actions"><button type="button" class="btn small" data-act="tpl" data-id="assets">ไฟล์ตัวอย่าง เครื่องจักร</button><button type="button" class="btn small" data-act="tpl" data-id="parts">ไฟล์ตัวอย่าง อะไหล่</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:var(--space-sm)">
       <div class="field"><label for="imp-assets">นำเข้าเครื่องจักร</label><input id="imp-assets" type="file" accept=".csv,text/csv" data-import="assets"></div>
@@ -989,15 +989,15 @@ function viewServer() {
   const plantBox = `<section class="box"><div class="bar"><h2>ข้อมูลโรงงาน</h2><span class="lamp" style="--c:${live ? 'var(--ok)' : 'var(--run)'}">${live ? 'เชื่อมฐานข้อมูลจริงแล้ว' : 'โหมดตัวอย่าง'}</span></div><div class="pad">
     ${live ? `<form class="stack u-gap-sm" data-form="plant"><div class="field"><label for="p-name">ชื่อโรงงาน / บริษัท</label><input id="p-name" name="plant" value="${esc(state.setup?.plant || '')}" required></div><div class="field"><label for="p-dept">แผนก</label><input id="p-dept" name="dept" value="${esc(state.setup?.dept || '')}"></div><div class="actions"><button class="btn small">บันทึก</button></div></form>
       <p class="hint">โปรเจกต์ Firebase: <span class="mono">${esc(b.projectId)}</span></p>
-      ${state.canSeed ? '<div class="actions"><button type="button" class="btn solid" data-act="seed">ใส่ข้อมูลตัวอย่างเพื่อทดลอง</button></div><p class="hint">ฐานข้อมูลยังว่าง จะใส่ข้อมูลตัวอย่างไว้ลองก่อน หรือนำเข้าข้อมูลจริงจาก Excel ก็ได้</p>' : ''}`
-    : `<p class="dim">ข้อมูลตอนนี้เก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ยังไม่มีระบบล็อกอิน ใช้ดูหน้าตาและทดลองก่อนตั้งค่า Firebase</p>
+      ${state.canSeed ? '<div class="actions"><button type="button" class="btn solid" data-act="seed">ใส่ข้อมูลตัวอย่างเพื่อทดลอง</button></div><p class="hint">ฐานข้อมูลยังไม่มีข้อมูล สามารถใส่ข้อมูลตัวอย่างเพื่อทดลองใช้งาน หรือนำเข้าข้อมูลจริงจากไฟล์ Excel</p>' : ''}`
+    : `<p class="dim">ข้อมูลขณะนี้จัดเก็บในเบราว์เซอร์ของเครื่องนี้เท่านั้นและไม่มีการเข้าสู่ระบบ ใช้สำหรับทดลองก่อนตั้งค่า Firebase</p>
       <form class="stack u-gap-sm" data-form="config"><div class="field"><label for="s-config">firebaseConfig (ถ้ามีแล้ว)</label>
       <textarea id="s-config" name="config" class="code" rows="6" spellcheck="false" required placeholder='const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", appId: "..." };'>${esc(state.draft.config)}</textarea></div>
       <div class="actions"><button class="btn solid">เชื่อมต่อเครื่องนี้</button><button type="button" class="btn" data-act="reset-demo">รีเซ็ตข้อมูลตัวอย่าง</button></div></form>`}
     ${state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}</div></section>`;
 
   const backupBox = `<section class="box"><div class="bar"><h2>สำรองข้อมูล</h2></div>
-    <div class="pad"><p class="dim">ดาวน์โหลดข้อมูลทั้งหมด ${COLLECTIONS.map((c) => `${state[c].length.toLocaleString()} ${colls[c]}`).join(', ')} เป็นไฟล์ JSON เก็บไว้เป็นหลักฐานหรือย้ายระบบ</p>
+    <div class="pad"><p class="dim">ดาวน์โหลดข้อมูลทั้งหมด ${COLLECTIONS.map((c) => `${state[c].length.toLocaleString()} ${colls[c]}`).join(', ')} เป็นไฟล์ JSON สำหรับเก็บเป็นหลักฐานหรือย้ายระบบ</p>
     <div class="actions"><button type="button" class="btn" data-act="backup">ดาวน์โหลดไฟล์สำรอง</button></div></div></section>`;
 
   return `${usersBox}<div class="split">${importBox}<div class="w2">${plantBox}${account}${backupBox}</div></div>`;
@@ -1025,15 +1025,15 @@ function viewLogin() {
     <div class="field"><label for="l-pass">รหัสผ่าน</label><input id="l-pass" name="password" type="password" autocomplete="current-password" required></div>
     ${err}${note}
     <button class="btn solid u-center">เข้าสู่ระบบ</button>
-    <p class="hint u-tc">ลืมรหัสผ่านหรือยังไม่มีบัญชี ให้หัวหน้าซ่อมบำรุงรีเซ็ตหรือเพิ่มให้ในหน้าตั้งค่า</p>
+    <p class="hint u-tc">หากลืมรหัสผ่านหรือยังไม่มีบัญชี กรุณาติดต่อหัวหน้าแผนกซ่อมบำรุง</p>
     ${fromFile ? '' : '<button type="button" class="btn small" style="align-self:center" data-act="disconnect">เลิกเชื่อมต่อเครื่องนี้</button>'}</form>`);
 }
 
 // เข้าด้วยรหัสชั่วคราว ต้องตั้งรหัสของตัวเองก่อนใช้งาน
 function viewFirstPassword() {
   const err = state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : '';
-  return authShell('ตั้งรหัสผ่านของคุณ', `<form class="pad" data-form="firstpass">
-    <p class="dim">สวัสดี ${esc(state.user.name)} (${esc(state.user.empId)}) คุณเข้าด้วยรหัสผ่านชั่วคราว ตั้งรหัสผ่านของคุณเองก่อนใช้งาน</p>
+  return authShell('ตั้งรหัสผ่านใหม่', `<form class="pad" data-form="firstpass">
+    <p class="dim">ยินดีต้อนรับ คุณ${esc(state.user.name)} (${esc(state.user.empId)}) ท่านเข้าสู่ระบบด้วยรหัสผ่านชั่วคราว กรุณาตั้งรหัสผ่านใหม่ก่อนเริ่มใช้งาน</p>
     <div class="field"><label for="f-new">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</label><input id="f-new" name="next" type="password" minlength="8" required autocomplete="new-password"></div>
     <div class="field"><label for="f-new2">ยืนยันรหัสผ่านใหม่</label><input id="f-new2" name="next2" type="password" minlength="8" required autocomplete="new-password"></div>
     ${err}
@@ -1044,15 +1044,15 @@ function viewFirstPassword() {
 function viewSetup() {
   const err = state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : '';
   return authShell('ตั้งค่าครั้งแรก', `<form class="pad" data-form="setup">
-    <p class="dim">ฐานข้อมูลนี้ยังไม่มีผู้ดูแล บัญชีที่สร้างตอนนี้จะเป็นหัวหน้า / แอดมินคนแรก และหน้านี้จะปิดทันทีหลังตั้งค่าเสร็จ</p>
+    <p class="dim">ระบบยังไม่มีผู้ดูแล บัญชีที่สร้างในขั้นตอนนี้จะเป็นผู้ดูแลระบบคนแรก และหน้านี้จะปิดถาวรเมื่อตั้งค่าเสร็จสิ้น</p>
     <div class="field"><label for="s-plant">ชื่อโรงงาน / บริษัท</label><input id="s-plant" name="plant" required placeholder="เช่น Orbray โรงงาน 2" value="${esc(state.draft.plant)}"></div>
     <div class="field"><label for="s-dept">แผนก</label><input id="s-dept" name="dept" placeholder="เช่น ซ่อมบำรุง" value="${esc(state.draft.dept)}"></div>
-    <div class="field"><label for="s-name">ชื่อของคุณ</label><input id="s-name" name="name" required autocomplete="name" value="${esc(state.draft.name)}"></div>
+    <div class="field"><label for="s-name">ชื่อ-นามสกุล</label><input id="s-name" name="name" required autocomplete="name" value="${esc(state.draft.name)}"></div>
     <div class="field"><label for="s-emp">รหัสพนักงานของคุณ (ใช้ล็อกอิน)</label><input id="s-emp" name="empId" required autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="เช่น M0001" value="${esc(state.draft.empId)}"></div>
     <div class="field"><label for="s-pass">รหัสผ่าน (อย่างน้อย 8 ตัว)</label><input id="s-pass" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
     <div class="field"><label for="s-pass2">ยืนยันรหัสผ่าน</label><input id="s-pass2" name="password2" type="password" minlength="8" required autocomplete="new-password"></div>
     ${err}
-    <button class="btn solid u-center">สร้างบัญชีแอดมินและเริ่มใช้งาน</button></form>`);
+    <button class="btn solid u-center">สร้างบัญชีผู้ดูแลระบบ</button></form>`);
 }
 
 /* ---------- วาดหน้า ---------- */
@@ -1072,7 +1072,7 @@ function render() {
   const report = noRole || state.page === 'quick' ? '' : `<button type="button" class="btn solid" data-act="report">${icon('<path d="M12 5v14M5 12h14"/>')}แจ้งซ่อม</button>`;
   const role = { admin: 'หัวหน้า / แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต' }[state.user.role] || 'ยังไม่มีสิทธิ์';
   const where = state.backend.mode === 'firebase' ? (placeName() || state.backend.projectId) : 'ข้อมูลตัวอย่างในเครื่องนี้';
-  const sync = state.lastSync ? `ซิงก์ ${fmtTime(state.lastSync)}` : '';
+  const sync = state.lastSync ? `อัปเดตล่าสุด ${fmtTime(state.lastSync)}` : '';
   app.classList.toggle('quickmode', state.page === 'quick');
   const plantLine = state.backend.mode === 'firebase' ? [state.setup?.plant, state.setup?.dept].filter(Boolean) : ['ข้อมูลตัวอย่าง'];
   app.innerHTML = `<div class="shell">
@@ -1084,8 +1084,8 @@ function render() {
       <main>
         <header class="head"><div><h1>${full}</h1><p class="meta"><span>${today()}</span><span>${esc(where)}</span>${sync ? `<span>${sync}</span>` : ''}</p></div>
           <div class="actions">${noRole ? '' : `<div class="searchwrap"><span class="sicon">${icon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}</span><label for="q" class="sr">ค้นหาเครื่อง ใบงาน อะไหล่ เครื่องมือวัด</label><input id="q" class="search" type="search" autocomplete="off" placeholder="ค้นหาทั้งระบบ" value="${esc(state.q)}"><div id="q-res" class="qres" hidden></div></div>`}${tv}${add}${report}</div></header>
-        ${state.backend.mode === 'local' ? `<p class="notice demo">โหมดตัวอย่าง: ข้อมูลอยู่ในเบราว์เซอร์เครื่องนี้เท่านั้นและไม่มีล็อกอิน ${canAdmin() ? '<button type="button" class="link u-sans" data-act="nav" data-id="server">ตั้งค่าเพื่อใช้งานจริง</button>' : ''}</p>` : ''}
-        ${noRole ? `<p class="notice err">${state.user.disabled ? 'บัญชีนี้ถูกปิดใช้งาน ติดต่อหัวหน้าซ่อมบำรุง' : 'บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อหัวหน้าซ่อมบำรุงให้เพิ่มในหน้าตั้งค่า'}</p>` : ''}
+        ${state.backend.mode === 'local' ? `<p class="notice demo">โหมดตัวอย่าง: ข้อมูลจัดเก็บในเบราว์เซอร์ของเครื่องนี้เท่านั้น ${canAdmin() ? '<button type="button" class="link u-sans" data-act="nav" data-id="server">ตั้งค่าเพื่อใช้งานจริง</button>' : ''}</p>` : ''}
+        ${noRole ? `<p class="notice err">${state.user.disabled ? 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อหัวหน้าแผนกซ่อมบำรุง' : 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้งาน กรุณาติดต่อหัวหน้าแผนกซ่อมบำรุง'}</p>` : ''}
         ${state.loadError && state.page !== 'server' ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}
         ${noRole && state.page !== 'server' ? '' : views[state.page](m)}
       </main>
@@ -1133,12 +1133,12 @@ async function run(task, okMsg) {
 function explain(err) {
   const code = err?.code || '';
   if (code.includes('permission-denied')) return 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้';
-  if (code.includes('unavailable') || code.includes('failed-precondition') || code === 'auth/network-request-failed') return 'ต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่เมื่อมีสัญญาณ';
+  if (code.includes('unavailable') || code.includes('failed-precondition') || code === 'auth/network-request-failed') return 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่เมื่อเครือข่ายพร้อมใช้งาน';
   if (code === 'auth/email-already-in-use') return 'รหัสพนักงานนี้มีบัญชีอยู่แล้ว';
-  if (code === 'auth/requires-recent-login') return 'ต้องออกจากระบบแล้วเข้าใหม่ก่อนเปลี่ยนรหัสผ่าน';
-  if (code === 'auth/weak-password') return 'รหัสผ่านสั้นหรือง่ายเกินไป ใช้อย่างน้อย 8 ตัว';
+  if (code === 'auth/requires-recent-login') return 'กรุณาออกจากระบบและเข้าสู่ระบบใหม่ก่อนเปลี่ยนรหัสผ่าน';
+  if (code === 'auth/weak-password') return 'รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร';
   if (code === 'auth/invalid-email') return 'รหัสพนักงานไม่ถูกต้อง';
-  if (code === 'auth/too-many-requests') return 'ลองผิดหลายครั้งเกินไป รอสักครู่แล้วลองใหม่ หรือให้หัวหน้ารีเซ็ตรหัสผ่าน';
+  if (code === 'auth/too-many-requests') return 'ระบุรหัสผ่านผิดหลายครั้ง กรุณารอสักครู่แล้วลองใหม่ หรือติดต่อหัวหน้าแผนกเพื่อรีเซ็ตรหัสผ่าน';
   if (code === 'auth/operation-not-allowed') return 'ยังไม่ได้เปิด Email/Password ใน Firebase console (ระบบใช้เบื้องหลังสำหรับรหัสพนักงาน)';
   if (code.startsWith('auth/')) return 'รหัสพนักงานหรือรหัสผ่านไม่ถูกต้อง';
   return err?.message || 'ทำรายการไม่สำเร็จ';
@@ -1205,7 +1205,7 @@ const actions = {
     if (state.page !== 'work') go('work');
     state.selectedWo = null;
     state.panel = true;
-    state.create = { title: '', type: 'breakdown', asset: state.assets[0]?.id || '', due: '', prio: 'stop', people: [state.user.name], checks: [{ text: 'ทำ LOTO ก่อนเริ่มงาน', done: false }], newCheck: '', note: '' };
+    state.create = { title: '', type: 'breakdown', asset: state.assets[0]?.id || '', due: '', prio: 'stop', people: [state.user.name], checks: [{ text: 'ดำเนินการ LOTO ก่อนเริ่มงาน', done: false }], newCheck: '', note: '' };
     render();
     document.getElementById('cp-title')?.focus();
   },
@@ -1279,7 +1279,7 @@ const actions = {
     const patch = { status };
     const tech = w.tech || state.user.name;
     if (!w.tech) patch.tech = tech;
-    patch.log = addLog(w, status === 'parts' ? `${tech} เปลี่ยนสถานะเป็นรออะไหล่` : `${tech} ${w.status === 'parts' ? 'กลับมาซ่อมต่อ' : 'เริ่มซ่อม'}`);
+    patch.log = addLog(w, status === 'parts' ? `${tech} เปลี่ยนสถานะเป็นรออะไหล่` : `${tech} ${w.status === 'parts' ? 'ดำเนินการซ่อมต่อ' : 'เริ่มซ่อม'}`);
     run(() => state.backend.updateWorkOrder(w.id, patch));
   },
   'wo-close': () => {
@@ -1291,7 +1291,7 @@ const actions = {
       status: 'done', endAt: Date.now(), tech, cause, action: action.trim(), log: addLog(w, `${tech} ปิดงาน สาเหตุ ${cause}`)
     }), `ปิด ${w.id} แล้ว`);
   },
-  'pm-done': (id) => run(() => state.backend.completePM(id, state.user.name), 'บันทึกแล้ว เลื่อนรอบถัดไปให้แล้ว'),
+  'pm-done': (id) => run(() => state.backend.completePM(id, state.user.name), 'บันทึกเรียบร้อย ระบบเลื่อนรอบถัดไปให้แล้ว'),
   part: (id, el) => run(() => state.backend.adjustPart(id, Number(el.dataset.delta))),
   del: (id, el) => {
     if (el.dataset.confirm) return run(() => state.backend.remove(el.dataset.coll, id), 'ลบแล้ว');
@@ -1317,7 +1317,7 @@ const actions = {
   'copy-temp': () => {
     const x = state.issued;
     if (!x) return;
-    navigator.clipboard?.writeText(`รหัสพนักงาน ${x.empId} รหัสผ่านชั่วคราว ${x.temp}`).then(() => toast('คัดลอกแล้ว'), () => toast('คัดลอกไม่ได้ จดจากหน้าจอแทน'));
+    navigator.clipboard?.writeText(`รหัสพนักงาน ${x.empId} รหัสผ่านชั่วคราว ${x.temp}`).then(() => toast('คัดลอกแล้ว'), () => toast('คัดลอกไม่สำเร็จ กรุณาจดจากหน้าจอ'));
   },
   tpl: (id) => download(`template-${id}.csv`, csv([IMPORT_COLS[id], ...IMPORT_SAMPLE[id]])),
   'import-cancel': () => { state.importPreview = null; render(); },
@@ -1412,7 +1412,7 @@ app.addEventListener('input', (e) => {
     const ready = state.create.title.trim() && state.create.asset;
     const btn = document.getElementById('cp-submit'); if (btn) btn.disabled = !ready;
     const hint = document.getElementById('cp-hint');
-    if (hint) { hint.textContent = ready ? (state.create.people.length ? `มอบหมาย ${state.create.people.length} คน` : 'ยังไม่มอบหมาย งานจะเข้าคิวรวม') : 'ใส่ชื่องานและเลือกเครื่องก่อนสร้าง'; hint.style.color = ready ? '' : 'var(--stop-fg)'; }
+    if (hint) { hint.textContent = ready ? (state.create.people.length ? `มอบหมาย ${state.create.people.length} คน` : 'ยังไม่ได้มอบหมาย งานจะเข้าสู่คิวงานรวม') : 'กรุณาระบุชื่องานและเลือกเครื่องจักรก่อนสร้างงาน'; hint.style.color = ready ? '' : 'var(--stop-fg)'; }
     return;
   }
   const key = e.target.dataset.close;
@@ -1422,7 +1422,7 @@ app.addEventListener('input', (e) => {
   const ready = state.close.cause && state.close.action.trim();
   if (btn) btn.disabled = !ready;
   const hint = btn?.closest('.pad')?.querySelector('.hint');
-  if (hint) hint.textContent = ready ? 'ปิดงานแล้วระบบจะบันทึกเวลาและเพิ่มเข้าประวัติเครื่อง' : 'เลือกรหัสสาเหตุและกรอกการแก้ไขที่ต้นเหตุก่อนปิดงาน';
+  if (hint) hint.textContent = ready ? 'เมื่อปิดงาน ระบบจะบันทึกเวลาและเพิ่มลงในประวัติเครื่องจักร' : 'กรุณาเลือกรหัสสาเหตุและระบุการแก้ไขที่ต้นเหตุก่อนปิดงาน';
 });
 
 app.addEventListener('keydown', (e) => {
@@ -1488,7 +1488,7 @@ app.addEventListener('submit', (e) => {
       const id = await state.backend.createWorkOrder({
         asset: q.asset, title, type, priority: q.stopped ? 'stop' : 'slow', requestedBy: me, status: 'pending',
         note: q.note.trim(), photo: q.photo || '',
-        log: [{ at: Date.now(), text: `${me} แจ้งงานด่วน${q.stopped ? ' เครื่องหยุด' : ''}${q.photo ? ' พร้อมรูป' : ''}` }]
+        log: [{ at: Date.now(), text: `${me} แจ้งซ่อมด่วน${q.stopped ? ' เครื่องหยุด' : ''}${q.photo ? ' พร้อมรูป' : ''}` }]
       });
       q.sent = { id, asset: q.asset, title, stopped: q.stopped };
       document.activeElement?.blur();
@@ -1626,7 +1626,7 @@ app.addEventListener('submit', (e) => {
         await state.backend.refreshUser();
       } catch (err) {
         state.loadError = err?.code?.includes('permission-denied')
-          ? 'ฐานข้อมูลปฏิเสธการสร้างบัญชี (permission-denied) ปิดแท็บ CMMS อื่นทั้งหมด แล้วกด Ctrl+F5 และลองใหม่ ถ้ายังขึ้นอีก ส่งภาพหน้าจอนี้ให้ผู้ดูแลระบบ'
+          ? 'ฐานข้อมูลปฏิเสธการสร้างบัญชี (permission-denied) กรุณาปิดแท็บ CMMS อื่นทั้งหมด กด Ctrl+F5 แล้วลองใหม่ หากยังพบปัญหา กรุณาแจ้งผู้ดูแลระบบพร้อมภาพหน้าจอนี้'
           : `${explain(err)}${err?.code ? ` (${err.code})` : ''}`;
         render();
       }
@@ -1669,7 +1669,7 @@ app.addEventListener('submit', (e) => {
     state.needSetup = state.backend.mode === 'firebase' && !state.setup;
   } catch (err) {
     console.error(err);
-    state.loadError = err?.code?.includes('permission-denied') ? 'ยังไม่ได้ใส่กฎความปลอดภัย (firestore.rules) ใน Firebase console' : explain(err);
+    state.loadError = err?.code?.includes('permission-denied') ? 'ยังไม่ได้ตั้งค่ากฎความปลอดภัย (firestore.rules) ใน Firebase console' : explain(err);
   }
   state.backend.onAuth(async (user) => {
     if (user && state.needSetup) return;

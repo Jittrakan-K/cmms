@@ -138,7 +138,7 @@ export const EMP_RE = /^[A-Z0-9][A-Z0-9._-]{1,19}$/;
 export const normEmpId = (s) => String(s || '').trim().toUpperCase();
 export function checkEmpId(s) {
   const id = normEmpId(s);
-  if (!EMP_RE.test(id)) throw new Error('รหัสพนักงานใช้ได้แค่ A-Z 0-9 . _ - ยาว 2–20 ตัว');
+  if (!EMP_RE.test(id)) throw new Error('รหัสพนักงานใช้ได้เฉพาะ A-Z 0-9 . _ - ความยาว 2–20 ตัวอักษร');
   return id;
 }
 const rand = (n, chars) => Array.from(crypto.getRandomValues(new Uint32Array(n)), (x) => chars[x % chars.length]).join('');
@@ -175,11 +175,11 @@ class LocalBackend {
   async signIn() {}
   async signOut() {}
   async getSetup() { return { plant: 'โรงงานตัวอย่าง', dept: 'ซ่อมบำรุง', demo: true }; }
-  async changePassword() { throw new Error('โหมดตัวอย่างไม่มีรหัสผ่าน'); }
-  async resetUser() { throw new Error('โหมดตัวอย่างรีเซ็ตรหัสผ่านไม่ได้ ต้องเชื่อม Firebase ก่อน'); }
-  async createUser() { throw new Error('โหมดตัวอย่างเพิ่มผู้ใช้ไม่ได้ ต้องเชื่อม Firebase ก่อน'); }
-  async updateUser() { throw new Error('โหมดตัวอย่างแก้ผู้ใช้ไม่ได้ ต้องเชื่อม Firebase ก่อน'); }
-  async updateSetup() { throw new Error('โหมดตัวอย่างแก้ชื่อโรงงานไม่ได้'); }
+  async changePassword() { throw new Error('โหมดตัวอย่างไม่ใช้รหัสผ่าน'); }
+  async resetUser() { throw new Error('โหมดตัวอย่างไม่รองรับการรีเซ็ตรหัสผ่าน กรุณาเชื่อมต่อ Firebase ก่อน'); }
+  async createUser() { throw new Error('โหมดตัวอย่างไม่รองรับการเพิ่มผู้ใช้ กรุณาเชื่อมต่อ Firebase ก่อน'); }
+  async updateUser() { throw new Error('โหมดตัวอย่างไม่รองรับการแก้ไขผู้ใช้ กรุณาเชื่อมต่อ Firebase ก่อน'); }
+  async updateSetup() { throw new Error('โหมดตัวอย่างไม่รองรับการแก้ไขข้อมูลโรงงาน'); }
   subscribeUsers(cb) {
     cb([['demo', 'อนันต์ ส.', 'admin', 'DEMO'], ['u2', 'วิชัย ร.', 'tech', 'M0112'], ['u3', 'สมชาย ก.', 'tech', 'M0127'], ['u4', 'มาลี ท.', 'operator', 'P0451'], ['u5', 'ประเสริฐ บ.', 'operator', 'P0466']]
       .map(([id, name, role, empId]) => ({ id, name, role, empId })));
@@ -237,7 +237,7 @@ class LocalBackend {
     const part = this.db.parts.find((p) => p.id === partId);
     const wo = this.db.workOrders.find((w) => w.id === woId);
     if (!part || !wo) throw new Error('ไม่พบอะไหล่หรือใบงาน');
-    if (part.qty < qty) throw new Error(`คงเหลือ ${part.qty} ไม่พอเบิก ${qty}`);
+    if (part.qty < qty) throw new Error(`คงเหลือ ${part.qty} ไม่เพียงพอสำหรับการเบิก ${qty}`);
     part.qty -= qty;
     wo.partsUsed = mergeParts(wo.partsUsed, partId, qty);
     wo.log = [...(wo.log || []), { at: Date.now(), text }];
@@ -567,7 +567,7 @@ class FirebaseBackend {
       const wRef = doc(this.db, 'workOrders', woId);
       const [p, w] = [await tx.get(pRef), await tx.get(wRef)];
       if (!p.exists() || !w.exists()) throw new Error('ไม่พบอะไหล่หรือใบงาน');
-      if (p.data().qty < qty) throw new Error(`คงเหลือ ${p.data().qty} ไม่พอเบิก ${qty}`);
+      if (p.data().qty < qty) throw new Error(`คงเหลือ ${p.data().qty} ไม่เพียงพอสำหรับการเบิก ${qty}`);
       tx.update(pRef, { qty: p.data().qty - qty });
       tx.update(wRef, { partsUsed: mergeParts(w.data().partsUsed, partId, qty), log: [...(w.data().log || []), { at: Date.now(), text }] });
     });
