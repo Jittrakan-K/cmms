@@ -41,7 +41,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [],
-  page: 'overview', tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
+  page: 'overview', tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
 
@@ -578,36 +578,113 @@ function quickAdd() {
   </form>`;
 }
 
-function viewWork() {
-  const all = state.workOrders;
-  const me = state.user.name;
-  const mineCount = all.filter((w) => (w.tech === me || w.requestedBy === me) && w.status !== 'done').length;
-  const tabs = [['mine', 'งานของฉัน', mineCount], ['all', 'งานทั้งหมด', all.filter((w) => w.status !== 'done').length]]
-    .map(([k, l, n]) => `<button type="button" data-act="scope" data-id="${k}" aria-pressed="${state.scope === k}">${l}<span>${n}</span></button>`).join('');
+/* ---------- SH-02 ใบงาน: ตารางเต็มความกว้าง ตัวกรอง ค้นหา แถวขยายดูรายละเอียด แบ่งหน้า ---------- */
+const WO_PER_PAGE = 15;
+const WO_CHIP = { pending: 'pend', open: 'info', doing: 'ok', parts: 'wait', done: 'grey' };
+const WO_STATUS_FILTER = [['all', 'ทั้งหมด'], ['active', 'งานที่เปิดอยู่'], ['pending', 'รออนุมัติ'], ['open', 'รอเริ่มงาน'], ['doing', 'กำลังซ่อม'], ['parts', 'รออะไหล่'], ['done', 'ปิดงานแล้ว']];
+const chevronSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+const statusChip = (s) => `<span class="schip s-${WO_CHIP[s] || 'grey'}">${esc(STATUS[s]?.[0] || s)}</span>`;
+
+function woFiltered() {
+  const t = state.woQ.trim().toLowerCase();
+  const f = state.woStatus;
+  return scopeList()
+    .filter((w) => (f === 'all' ? true : f === 'active' ? w.status !== 'done' : w.status === f))
+    .filter((w) => !t || `${w.id} ${w.title} ${w.asset} ${assetOf(w.asset)?.name || ''} ${w.tech || ''} ${w.requestedBy || ''}`.toLowerCase().includes(t))
+    .sort((a, b) => (a.status === 'done') - (b.status === 'done') || b.startAt - a.startAt);
+}
+
+function woRow(w) {
+  const done = w.status === 'done';
+  const a = assetOf(w.asset);
+  const ms = a ? machineState(a) : null;
+  const p = priOf(w);
+  const open = !!state.woOpen[w.id];
+  const rid = `wox-${esc(w.id)}`;
+  const main = `<tr class="worow${open ? ' open' : ''}${done ? ' done' : ''}"${w.id === state.selectedWo ? ' aria-current="true"' : ''}>
+    <td class="xcol"><button type="button" class="xbtn" data-act="wo-expand" data-id="${esc(w.id)}" aria-expanded="${open}" aria-controls="${rid}" aria-label="${open ? 'ซ่อน' : 'แสดง'}รายละเอียดใบงาน ${esc(w.id)}">${chevronSvg}</button></td>
+    <td>${statusChip(w.status)}</td>
+    <td class="two"><button type="button" class="tlink" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.title)}</button><small><span class="mono">${esc(w.id)}</span> ${esc(TYPE[w.type] || '')}</small></td>
+    <td class="two"><span class="mrow">${ms ? andon(ms.k) : ''}<span><b class="mono">${esc(w.asset)}</b><small>${esc(a ? `${a.name}${a.line ? `  ${a.line}` : ''}` : 'ไม่พบข้อมูลเครื่อง')}</small></span></span></td>
+    <td><span class="prio p-${done ? 'done' : p}">${esc(PRIO[p][0])}</span></td>
+    <td class="two">${w.tech ? `<span class="mrow">${avatar(w.tech)}<span><b>${esc(w.tech)}</b><small>มอบหมายแล้ว</small></span></span>` : '<span class="dim">รอมอบหมาย</span>'}</td>
+    <td class="two"><b class="mono">${fmtDateY(w.startAt)}</b><small class="mono">${fmtTime(w.startAt)}</small></td>
+    <td class="num"><button type="button" class="link" data-act="open-wo" data-id="${esc(w.id)}" aria-label="เปิดใบงาน ${esc(w.id)}">รายละเอียด</button></td>
+  </tr>`;
+  if (!open) return main;
+  const late = !done && w.dueDate && w.dueDate < startOfToday();
+  const facts = [
+    ['ผู้แจ้ง', w.requestedBy || '—'],
+    ['ผู้อนุมัติ', w.approvedBy || '—'],
+    ['กำหนดเสร็จ', w.dueDate ? fmtDateY(w.dueDate) : 'ไม่ได้กำหนด', late ? 'alarm' : ''],
+    [done ? 'ปิดงาน' : 'เวลาที่ผ่านไป', done ? (w.endAt ? fmtDateTime(w.endAt) : '—') : `${hm(Date.now() - w.startAt)} ชม.`]
+  ].map(([k, v, c]) => `<div><dt>${k}</dt><dd class="${c || ''}">${esc(v)}</dd></div>`).join('');
+  const rca = done && (w.cause || w.action) ? `<div class="wide"><dt>สาเหตุและการแก้ไข</dt><dd>${esc([w.cause, w.action].filter(Boolean).join('  '))}</dd></div>` : '';
+  return `${main}<tr class="woexp" id="${rid}"><td></td><td colspan="7">
+    <div class="band"><dl>${facts}${w.note ? `<div class="wide"><dt>รายละเอียด</dt><dd class="u-pre">${esc(w.note)}</dd></div>` : ''}${rca}</dl>
+      <button type="button" class="btn small" data-act="open-wo" data-id="${esc(w.id)}">เปิดใบงาน</button></div>
+  </td></tr>`;
+}
+
+function woTable() {
+  const rows = woFiltered();
+  const pages = Math.max(1, Math.ceil(rows.length / WO_PER_PAGE));
+  state.woPage = Math.min(state.woPage, pages - 1);
+  const from = state.woPage * WO_PER_PAGE;
+  const shown = rows.slice(from, from + WO_PER_PAGE);
+  if (!rows.length) return `<p class="empty">${state.woQ.trim() ? 'ไม่พบใบงานที่ตรงกับคำค้น' : 'ไม่มีใบงานในเงื่อนไขนี้'}</p>`;
+  return `<div class="scroll"><table class="wot">
+      <thead><tr><th scope="col" class="xcol"><span class="sr">ขยาย</span></th><th scope="col">สถานะ</th><th scope="col">ใบงาน</th><th scope="col">เครื่องจักร</th><th scope="col">ความสำคัญ</th><th scope="col">ผู้รับผิดชอบ</th><th scope="col">วันที่แจ้ง</th><th scope="col"><span class="sr">ลิงก์</span></th></tr></thead>
+      <tbody>${shown.map(woRow).join('')}</tbody></table></div>
+    <nav class="pager" aria-label="เลขหน้าใบงาน"><span class="mono">${from + 1}–${from + shown.length} จาก ${rows.length}</span>
+      <button type="button" class="pbtn" data-act="wo-page" data-id="prev" ${state.woPage === 0 ? 'disabled' : ''} aria-label="หน้าก่อนหน้า"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+      <button type="button" class="pbtn" data-act="wo-page" data-id="next" ${state.woPage >= pages - 1 ? 'disabled' : ''} aria-label="หน้าถัดไป"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></nav>`;
+}
+
+function woGroups() {
   const list = scopeList();
   const groups = [
     ['pending', 'รออนุมัติ', (w) => w.status === 'pending'],
     ['active', 'กำลังดำเนินการ', (w) => ['open', 'doing', 'parts'].includes(w.status)],
     ['done', 'ปิดแล้ว', (w) => w.status === 'done']
   ];
-  const chevron = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
   const body = groups.map(([k, label, test]) => {
     const items = list.filter(test);
     const open = !state.collapsed[k];
     const shown = k === 'done' && !state.showDone ? items.slice(0, 6) : items;
     return `<section aria-label="${label}">
-      <button type="button" class="ghead" data-act="toggle-group" data-id="${k}" aria-expanded="${open}">${chevron}${label}<span class="mono">${items.length}</span></button>
+      <button type="button" class="ghead" data-act="toggle-group" data-id="${k}" aria-expanded="${open}">${chevronSvg}${label}<span class="mono">${items.length}</span></button>
       ${open ? `${shown.map(taskRow).join('')}${!items.length && k !== 'pending' ? '<p class="empty" style="padding-left:var(--space-lg)">ไม่มีงานในกลุ่มนี้</p>' : ''}
         ${k === 'done' && items.length > shown.length ? `<button type="button" class="more" data-act="show-done">แสดงเพิ่มเติม ${items.length - shown.length} งาน</button>` : ''}
         ${k === 'pending' ? quickAdd() : ''}` : ''}
     </section>`;
   }).join('');
-  return `<div class="u-spread"><div class="chips" role="group" aria-label="ขอบเขตงาน">${tabs}</div>
-      <button type="button" class="btn" data-act="export-wo">ส่งออก CSV</button></div>
-    <div class="tasks"><div class="scroll"><div class="grid">
+  return `<div class="tasks"><div class="scroll"><div class="grid">
       <div class="trow th"><span></span><span></span><span class="u-px">ชื่องาน</span><span class="u-px">ประเภท</span><span class="u-px">เครื่อง</span><span class="u-px">ผู้รับผิดชอบ</span><span class="u-px">วันที่</span><span class="u-px">ความสำคัญ</span></div>
       ${body}
     </div></div></div>`;
+}
+
+function viewWork() {
+  const all = state.workOrders;
+  const me = state.user.name;
+  const mineCount = all.filter((w) => (w.tech === me || w.requestedBy === me) && w.status !== 'done').length;
+  const scopeBtns = [['all', 'งานทั้งหมด', all.filter((w) => w.status !== 'done').length], ['mine', 'งานของฉัน', mineCount]]
+    .map(([k, l, n]) => `<button type="button" data-act="scope" data-id="${k}" aria-pressed="${state.scope === k}">${l}<span class="mono">${n}</span></button>`).join('');
+  const views = [['table', 'มุมมองตาราง', '<path d="M4 6h16M4 12h16M4 18h16"/>'], ['group', 'มุมมองแยกตามสถานะ', '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>']]
+    .map(([k, l, d]) => `<button type="button" data-act="wo-view" data-id="${k}" aria-pressed="${state.woView === k}" aria-label="${l}" title="${l}">${icon(d)}</button>`).join('');
+  const fLabel = WO_STATUS_FILTER.find(([k]) => k === state.woStatus)?.[1] || '';
+  const pop = state.woFilter ? `<div class="wopop" role="group" aria-label="กรองตามสถานะ"><p class="hint">สถานะใบงาน</p>
+      ${WO_STATUS_FILTER.map(([k, l]) => `<button type="button" data-act="wo-status" data-id="${k}" aria-pressed="${state.woStatus === k}">${l}<span class="mono">${k === 'all' ? scopeList().length : k === 'active' ? scopeList().filter((w) => w.status !== 'done').length : scopeList().filter((w) => w.status === k).length}</span></button>`).join('')}</div>` : '';
+  const table = state.woView === 'table';
+  return `<div class="wobar">
+      <div class="seg-ctl wv" role="group" aria-label="รูปแบบการแสดงผล">${views}</div>
+      <div class="chips" role="group" aria-label="ขอบเขตงาน">${scopeBtns}</div>
+      ${table ? `<div class="wofilter"><button type="button" class="btn" data-act="wo-filter" aria-expanded="${state.woFilter}">${icon('<path d="M4 6h16M7 12h10M10 18h4"/>')}ตัวกรอง<span class="fval">${esc(fLabel)}</span></button>${pop}</div>
+      <div class="wosearch"><span class="sicon">${icon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}</span><label for="wo-q" class="sr">ค้นหาใบงาน</label><input id="wo-q" type="search" autocomplete="off" placeholder="ค้นหาเลขที่ ชื่องาน หรือเครื่องจักร" value="${esc(state.woQ)}"></div>` : '<span class="u-grow"></span>'}
+      <button type="button" class="btn" data-act="export-wo">ส่งออก CSV</button>
+    </div>
+    ${table ? `<section class="card flush wocard" aria-label="รายการใบงาน"><div id="wo-body">${woTable()}</div></section>` : woGroups()}`;
 }
 
 /* ---------- SH-00 แจ้งซ่อมด่วน (ฝ่ายผลิต ใช้บนมือถือ) ---------- */
@@ -1201,6 +1278,11 @@ const actions = {
   scope: (id) => { state.scope = id; render(); },
   'toggle-group': (id) => { state.collapsed[id] = !state.collapsed[id]; render(); },
   'show-done': () => { state.showDone = true; render(); },
+  'wo-view': (id) => { state.woView = id; state.woFilter = false; render(); },
+  'wo-filter': () => { state.woFilter = !state.woFilter; render(); },
+  'wo-status': (id) => { state.woStatus = id; state.woPage = 0; state.woFilter = false; render(); document.querySelector('[data-act="wo-filter"]')?.focus(); },
+  'wo-expand': (id) => { state.woOpen[id] = !state.woOpen[id]; render(); document.querySelector(`[data-act="wo-expand"][data-id="${CSS.escape(id)}"]`)?.focus(); },
+  'wo-page': (id) => { state.woPage = Math.max(0, state.woPage + (id === 'next' ? 1 : -1)); render(); document.querySelector('.wot')?.scrollIntoView({ block: 'nearest' }); },
   'quick-open': () => { state.quick = true; state.collapsed.pending = false; state.draft = { asset: state.assets[0]?.id, priority: 'stop' }; render(); document.getElementById('qa-title')?.focus(); },
   'quick-cancel': () => { state.quick = false; state.draft = {}; render(); },
   'open-asset': (id) => { state.selectedAsset = id; if (state.page !== 'assets') go('assets'); else render(); window.scrollTo(0, 0); },
@@ -1334,6 +1416,7 @@ const actions = {
 app.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (state.q && (!e.target.closest('.searchwrap') || el?.closest('.qres'))) { state.q = ''; const i = document.getElementById('q'); if (i) i.value = ''; paintSearch(); }
+  if (state.woFilter && !e.target.closest('.wofilter')) { state.woFilter = false; if (!el) { render(); return; } }
   if (!el || el.disabled) return;
   actions[el.dataset.act]?.(el.dataset.id, el);
 });
@@ -1390,6 +1473,7 @@ new MutationObserver(() => labelScrollRegions()).observe(app, { childList: true 
 window.addEventListener('resize', () => labelScrollRegions());
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.woFilter) { state.woFilter = false; render(); document.querySelector('[data-act="wo-filter"]')?.focus(); return; }
   if (e.key === 'Escape' && state.panel && !state.q) { actions['panel-close'](); return; }
   if (e.key === 'Escape' && state.selectedWo && state.page === 'work' && !state.q) { actions['close-drawer'](); return; }
   if (e.key === 'Escape' && state.q) { state.q = ''; const i = document.getElementById('q'); if (i) i.value = ''; paintSearch(); }
@@ -1397,6 +1481,7 @@ document.addEventListener('keydown', (e) => {
 
 app.addEventListener('input', (e) => {
   if (e.target.id === 'q') { state.q = e.target.value; paintSearch(); return; }
+  if (e.target.id === 'wo-q') { state.woQ = e.target.value; state.woPage = 0; const b = document.getElementById('wo-body'); if (b) b.innerHTML = woTable(); return; }
   const qk = e.target.dataset.qr;
   if (qk && state.qr) {
     state.qr[qk] = e.target.value;

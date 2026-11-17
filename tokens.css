@@ -1,5 +1,5 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
   --text-xs: 0.8rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem;
   --text-display-s: 1.44rem; --text-display: 1.728rem; --text-section: 1.2rem; --text-title: 1rem; --text-lead: 1rem;
@@ -8,24 +8,25 @@
   --color-error: oklch(52% 0.19 27); --color-success: oklch(50% 0.12 150);
   --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
   --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
-  /* dark console: near-black surfaces in a few steps, grey hairlines, one emerald signal for the primary action and selection */
-  --color-paper: #1c1c1c; --color-paper-2: #232323; --color-paper-3: #2a2a2a;
-  --color-ink: #ededed; --color-ink-2: #b4b4b4; --color-muted: #9a9a9a;
-  --color-rule: #2e2e2e; --color-rule-2: #3e3e3e;
-  --color-graphite: #171717; --color-graphite-2: #232323; --color-graphite-ink: #ededed; --color-graphite-muted: #9a9a9a;
-  --color-accent: #3ecf8e; --color-accent-hover: #34b27b; --color-accent-2: #3ecf8e; --color-accent-wash: #1d2a23; --color-accent-ink: #fafafa; --color-focus: #3ecf8e;
-  --color-accent-soft: #1d2a23; --color-accent-edge: #24b47e; --color-accent-light: #6ee7b7; --color-orange: #f59e0b;
-  --color-btn-primary: #006239; --color-btn-primary-hover: #00703f;
-  --color-key-face: #262626; --color-key-edge: #3a3a3a;
-  --color-cotton: #212121; --color-desk: #1c1c1c; --color-print: #ededed;
-  --color-board: #006239; --color-board-type: #fafafa; --color-paid: #3ecf8e;
-  --color-side: #171717; --color-edge-hover: #4a4a4a; --color-on-accent: #0b1f16; --color-lamp-body: #0e0e0e; --color-stop-solid: #7f1d1d; --color-selection: #1f4a37;
-  --font-display: "Inter", "IBM Plex Sans Thai", Tahoma, system-ui, sans-serif; --font-body: "Inter", "IBM Plex Sans Thai", "Noto Sans Thai", Tahoma, system-ui, sans-serif;
+  /* light work-order desk: white surfaces on a faint lavender-grey page, grey hairlines, one periwinkle signal for the primary action, the selection and the open row */
+  --color-paper: #f5f6fb; --color-paper-2: #eff1f8; --color-paper-3: #e7e9f4;
+  --color-ink: #1d2038; --color-ink-2: #464b66; --color-muted: #646a85;
+  --color-rule: #e3e5ef; --color-rule-2: #d2d5e3;
+  --color-graphite: #f7f8fc; --color-graphite-2: #eff1f8; --color-graphite-ink: #1d2038; --color-graphite-muted: #646a85;
+  --color-accent: #4f5bd5; --color-accent-hover: #4350c4; --color-accent-2: #4f5bd5; --color-accent-wash: #eef0fd; --color-accent-ink: #ffffff; --color-focus: #4f5bd5;
+  --color-accent-soft: #e3e7fc; --color-accent-edge: #4f5bd5; --color-accent-light: #3a45b0; --color-orange: #d9822b;
+  --color-btn-primary: #4f5bd5; --color-btn-primary-hover: #4350c4;
+  --color-key-face: #ffffff; --color-key-edge: #d2d5e3;
+  --color-cotton: #ffffff; --color-desk: #f5f6fb; --color-print: #1d2038;
+  --color-board: #4f5bd5; --color-board-type: #ffffff; --color-paid: #23925f;
+  --color-side: #ffffff; --color-edge-hover: #b5b9cf; --color-on-accent: #ffffff; --color-lamp-body: #2b2e42; --color-stop-solid: #c62f2f; --color-selection: #dde1fb;
+  --color-info-bg: #e6effd; --color-info-fg: #23559e; --color-pend-bg: #efeafc; --color-pend-fg: #5b3fae;
+  --font-display: "Nunito Sans", "IBM Plex Sans Thai", Tahoma, system-ui, sans-serif; --font-body: "Nunito Sans", "IBM Plex Sans Thai", "Noto Sans Thai", Tahoma, system-ui, sans-serif;
   --font-outlier: "JetBrains Mono", "IBM Plex Sans Thai", ui-monospace, monospace;
-  --radius-card: 8px; --radius-input: 6px; --radius-pill: 999px; --radius-stock: 6px; --cut: 8px; --cut-l: 16px; --rule-hair: 1px;
+  --radius-card: 12px; --radius-input: 8px; --radius-pill: 999px; --radius-stock: 6px; --cut: 8px; --cut-l: 16px; --rule-hair: 1px;
   --shadow-card: 0 1px 2px oklch(20% 0.01 35 / 0.05);
   --edge-stock: 0 0 0 1px var(--color-rule);
-  --cast-stock: none; --cast-stock-lift: 0 12px 32px rgb(0 0 0 / 0.5);
+  --cast-stock: none; --cast-stock-lift: 0 12px 32px rgb(29 32 56 / 0.12);
   --press-groove: inset 0 0 0 1px var(--color-rule);
   --shadow-key: none; --shadow-key-accent: none; --shadow-key-press: none;
   --tracking-display: -0.01em; --display-weight: 600;
