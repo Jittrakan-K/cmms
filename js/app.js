@@ -172,6 +172,8 @@ function metrics() {
 /* ---------- ส่วนประกอบ ---------- */
 
 /* ---------- SH-09 แดชบอร์ดสถานะ: ดูสถานะทุกส่วนในจอเดียว ใช้บนจอทีวีในห้องซ่อมบำรุงได้ ---------- */
+// ลายเซ็น: ไฟ andon 3 ชั้นแบบบนตัวเครื่อง ไฟที่ติดบอกสถานะเครื่อง (แดง หยุด / เหลือง รอ / เขียว เดิน)
+const andon = (k) => `<span class="andon" data-s="${k}" aria-hidden="true"><i></i><i></i><i></i></span>`;
 const MSTATE = {
   stop: ['หยุดเสีย', 'stop'], wait: ['รออะไหล่', 'wait'], pm: ['กำลังทำ PM', 'pm'], late: ['PM เลยกำหนด', 'late'], run: ['เดินเครื่อง', 'run']
 };
@@ -210,7 +212,7 @@ function viewBoard(m) {
     const detail = x.w ? cut(x.w.title) : x.plan ? cut(x.plan.task) : '';
     const who = x.w ? (x.w.tech ? esc(x.w.tech) : 'ยังไม่มีช่างรับงาน') : '';
     return `<button type="button" class="mtile s-${x.k}" ${act} aria-label="${esc(`${x.a.id} ${x.a.name} ${label}`)}">
-      <span class="mt-top"><span class="tag">${esc(x.a.id)}</span><span class="mt-state">${label}${x.since && x.k !== 'run' ? ` <span class="mono">${x.k === 'late' ? relDate(x.since) : ago(x.since)}</span>` : ''}</span></span>
+      <span class="mt-top"><span class="u-row">${andon(x.k)}<span class="tag">${esc(x.a.id)}</span></span><span class="mt-state">${label}${x.since && x.k !== 'run' ? ` <span class="mono">${x.k === 'late' ? relDate(x.since) : ago(x.since)}</span>` : ''}</span></span>
       <span class="mt-name">${esc(x.a.name)}</span>
       ${detail ? `<span class="mt-detail">${detail}</span>` : ''}${who ? `<span class="mt-who">${who}</span>` : ''}
     </button>`;
@@ -260,13 +262,12 @@ function viewBoard(m) {
 
   return `<section class="now" aria-live="polite">
       <h2>${headline}</h2>
-      <p class="dim">อัปเดตเองเมื่อมีการเปลี่ยนแปลง ล่าสุด ${fmtTime(state.lastSync || now)}</p>
     </section>
     <div class="dash">
       <div class="dash-main">
       <section class="box dash-machines">
         <div class="bar"><h2>เครื่องจักร</h2>
-          <ul class="mkey inline">${Object.entries(MSTATE).map(([k, [label]]) => `<li><i class="m-${k}" aria-hidden="true"></i>${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
+          <ul class="mkey inline">${Object.entries(MSTATE).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
         ${lines.map((ln) => `<div class="mline"><h3>${esc(ln)}</h3><div class="mgrid">${ms.filter((x) => (x.a.line || 'ไม่ระบุไลน์') === ln).map(tile).join('')}</div></div>`).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
       </section>
 
@@ -286,25 +287,17 @@ function viewBoard(m) {
       <div class="dash-side">
         <section class="box">
           <div class="bar"><h2>แผน PM</h2>${seeAll('pm', 'ดูแผน PM')}</div>
-          <div class="pad">
-            ${meter([{ k: 'stop', n: pmLate.length, label: 'เลยกำหนด' }, { k: 'wait', n: pmToday.length, label: 'ครบวันนี้' }, { k: 'ink', n: pmWeek.length, label: 'ภายใน 7 วัน' }, { k: 'run', n: Math.max(0, pmLater), label: 'ถัดไป' }], 'สัดส่วนแผน PM ตามกำหนด')}
-            <p class="kpi">PM ทันกำหนด 30 วัน <b class="mono">${comp.pct.toFixed(0)}%</b></p>
-            ${pmLate.length ? `<ul class="alist">${pmLate.slice(0, 4).map((p) => `<li><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}</span><span class="alarm u-nowrap">${relDate(p.dueDate)}</span></li>`).join('')}</ul>` : ''}
-          </div>
+          <dl class="trio"><div><dt>เลยกำหนด</dt><dd class="${pmLate.length ? 'alarm' : ''}">${pmLate.length}</dd></div><div><dt>ครบวันนี้</dt><dd>${pmToday.length}</dd></div><div><dt>ใน 7 วัน</dt><dd>${pmWeek.length}</dd></div></dl>
+          <div class="pad goal"><p class="kpi">ทำทันกำหนดใน 30 วัน <b class="mono">${comp.pct.toFixed(0)}%</b></p><div class="prog" role="img" aria-label="ทำ PM ทันกำหนด ${comp.pct.toFixed(0)} เปอร์เซ็นต์"><span style="width:${Math.min(100, comp.pct)}%"></span></div></div>
+          <ul class="alist">${[...pmLate, ...pmToday, ...pmWeek].slice(0, 5).map((p) => `<li><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}</span><span class="u-nowrap ${p.dueDate < t0 ? 'alarm' : 'dim'}">${p.dueDate < t0 ? `เลย ${Math.ceil((t0 - p.dueDate) / DAY)} วัน` : relDate(p.dueDate) === 'วันนี้' ? 'วันนี้' : fmtDate(p.dueDate)}</span></li>`).join('') || '<li class="dim">ไม่มี PM ใน 7 วันนี้</li>'}</ul>
         </section>
         <section class="box">
-          <div class="bar"><h2>อะไหล่</h2>${seeAll('parts', 'ดูคลังอะไหล่')}</div>
-          <div class="pad">
-            ${meter([{ k: 'stop', n: out.length, label: 'หมด' }, { k: 'wait', n: low.length, label: 'ถึงจุดสั่งซื้อ' }, { k: 'run', n: okParts, label: 'ปกติ' }], 'สัดส่วนสถานะอะไหล่')}
-            ${reorder.length ? `<ul class="alist">${reorder.slice(0, 5).map((p) => `<li><span class="tag">${esc(p.id)}</span><span class="t">${esc(p.name)}</span><span class="stock"><span class="sbar"><span style="width:${Math.min(100, (100 * p.qty) / Math.max(1, p.max || p.min * 2))}%"></span></span><span class="mono ${p.qty <= 0 ? 'alarm' : ''}">${p.qty}/${p.min}</span></span></li>`).join('')}</ul>` : ''}
-          </div>
+          <div class="bar"><h2>อะไหล่ที่ต้องสั่ง <span class="dim u-w400">${reorder.length} จาก ${state.parts.length}</span></h2>${seeAll('parts', 'ดูคลังอะไหล่')}</div>
+          ${reorder.length ? `<ul class="alist">${[...reorder].sort((a, b) => a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min)).slice(0, 6).map((p) => `<li><span class="tag">${esc(p.id)}</span><span class="t">${esc(p.name)}</span><span class="stock"><span class="sbar"><span style="width:${Math.min(100, (100 * p.qty) / Math.max(1, p.min))}%"></span></span><span class="mono ${p.qty <= 0 ? 'alarm' : ''}">${p.qty <= 0 ? 'หมด' : `${p.qty}/${p.min}`}</span></span></li>`).join('')}</ul>` : '<p class="empty">อะไหล่ทุกรายการอยู่เหนือจุดสั่งซื้อ</p>'}
         </section>
         <section class="box">
-          <div class="bar"><h2>เครื่องมือวัด</h2>${seeAll('gauges', 'ดูทะเบียน')}</div>
-          <div class="pad">
-            ${meter([{ k: 'stop', n: gN('hold'), label: 'ห้ามใช้' }, { k: 'late', n: gN('late'), label: 'เลยกำหนดสอบเทียบ' }, { k: 'wait', n: gN('soon'), label: 'ครบใน 30 วัน' }, { k: 'run', n: gN('ok'), label: 'ใช้งานได้' }], 'สัดส่วนสถานะเครื่องมือวัด')}
-            ${gAlert.length ? `<ul class="alist">${gAlert.slice(0, 4).map((x) => `<li><span class="tag">${esc(x.g.id)}</span><span class="t">${esc(x.g.name)}</span><span class="u-nowrap ${x.s[0] === 'soon' ? 'dim' : 'alarm'}">${x.s[1]}</span></li>`).join('')}</ul>` : ''}
-          </div>
+          <div class="bar"><h2>เครื่องมือวัด <span class="dim u-w400">ใช้งานได้ ${gN('ok')} จาก ${state.gauges.length}</span></h2>${seeAll('gauges', 'ดูทะเบียน')}</div>
+          ${gAlert.length ? `<ul class="alist">${gAlert.slice(0, 4).map((x) => `<li><span class="tag">${esc(x.g.id)}</span><span class="t">${esc(x.g.name)}</span><span class="u-nowrap ${x.s[0] === 'soon' ? 'dim' : 'alarm'}">${x.s[1]}</span></li>`).join('')}</ul>` : '<p class="empty">ทุกเครื่องมืออยู่ในรอบสอบเทียบ</p>'}
         </section>
         <section class="box">
           <div class="bar"><h2>ทีมช่าง</h2><span class="dim u-small">งานที่ถืออยู่ / ปิดใน 7 วัน</span></div>
@@ -332,7 +325,7 @@ function viewOverview(m) {
       }).join('');
     const d = mergedDown(a.id, m.from, m.now);
     return `<div class="tl-row">
-      <button type="button" class="tl-name" data-act="open-asset" data-id="${esc(a.id)}">${tag(a.id)}<span class="nm">${esc(a.name)}</span></button>
+      <button type="button" class="tl-name" data-act="open-asset" data-id="${esc(a.id)}">${andon(machineState(a).k)}${tag(a.id)}<span class="nm">${esc(a.name)}</span></button>
       <div class="track"><div class="base" style="width:${pct(m.now)}%"></div>${spans}<div class="now" style="left:${pct(m.now)}%"></div></div>
       <span class="tl-sum ${d ? '' : 'dim'}">${d ? hours(d) : '0'}</span></div>`;
   }).join('');
@@ -478,10 +471,10 @@ function taskRow(w) {
     <span class="stripe" style="--c:${c}"></span>
     <span><button type="button" class="check ${done ? 'on' : ''}" data-act="open-wo" data-id="${esc(w.id)}" aria-label="เปิดใบงาน ${esc(w.id)}${done ? ' (ปิดแล้ว)' : ''}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button></span>
     <span class="tname"><button type="button" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.title)}</button><small>${sub}</small></span>
-    <span class="cell">${done ? pill(TYPE[w.type], 'var(--grey-bg)', 'var(--muted)') : pill(TYPE[w.type], tb, tf)}</span>
+    <span class="cell">${pill(TYPE[w.type], 'var(--grey-bg)', done ? 'var(--muted)' : 'var(--grey-fg)')}</span>
     <span class="cell"><span class="tag">${esc(w.asset)}</span></span>
     <span class="cell">${w.tech ? `${avatar(w.tech)}<span class="u-ell">${esc(w.tech)}</span>` : '<span class="dim">ยังไม่มอบหมาย</span>'}</span>
-    <span class="cell mono" style="font-size:13px;${!done && w.startAt >= startOfToday() ? 'color:var(--ok-fg)' : ''}">${relDate(done ? w.endAt : w.startAt)}</span>
+    <span class="cell mono" style="font-size:var(--text-sm)">${relDate(done ? w.endAt : w.startAt)}</span>
     <span class="cell">${done ? pill(pl, 'var(--grey-bg)', 'var(--muted)') : pill(pl, pb, pf)}</span>
   </div>`;
 }
@@ -680,7 +673,7 @@ function viewAssets(m) {
   const rows = state.assets.map((x) => {
     const [s, label] = stateOf(x.id);
     return `<tr class="pick" data-act="open-asset" data-id="${esc(x.id)}"${x.id === a?.id ? ' aria-current="true"' : ''}>
-      <td><button type="button" class="link" data-act="open-asset" data-id="${esc(x.id)}">${esc(x.id)}</button></td><td>${esc(x.name)}</td>
+      <td><span class="u-row">${andon(machineState(x).k)}<button type="button" class="link tagl" data-act="open-asset" data-id="${esc(x.id)}">${esc(x.id)}</button></span></td><td>${esc(x.name)}</td>
       <td class="dim">${esc(x.line)}</td><td class="mono">${esc(x.cls || '—')}</td>
       <td class="mono num">${hours(mergedDown(x.id, m.from, m.now))}</td>
       <td>${s === 'run' ? '<span class="lamp" style="--c:var(--run)">เดินเครื่อง</span>' : lamp(s, label)}</td></tr>`;
@@ -932,8 +925,7 @@ function placeName() {
 function authShell(title, body) {
   const plant = placeName();
   return `<div class="login"><div class="authcard">
-    <div class="bar" style="display:flex;align-items:center;gap:var(--space-sm)"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>
-      <div><b class="authname">CMMS</b>${plant ? `<span class="authplant">${esc(plant)}</span>` : ''}<span class="authtitle">${title}</span></div></div>
+    <div class="bar" style="display:flex;align-items:center;gap:var(--space-sm)"><div><b class="authname">CMMS</b>${plant ? `<span class="authplant">${esc(plant)}</span>` : ''}<span class="authtitle">${title}</span></div></div>
     ${body}</div></div>`;
 }
 
@@ -998,8 +990,7 @@ function render() {
   const plantLine = state.backend.mode === 'firebase' ? [state.setup?.plant, state.setup?.dept].filter(Boolean) : ['ข้อมูลตัวอย่าง'];
   app.innerHTML = `<div class="shell">
       <aside class="side">
-        <div class="brand" title="${esc(placeName())}"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>
-          <span class="bt"><b>CMMS</b>${plantLine.map((x) => `<span>${esc(x)}</span>`).join('')}</span></div>
+        <div class="brand" title="${esc(placeName())}"><span class="bt"><b>CMMS</b>${plantLine.map((x) => `<span>${esc(x)}</span>`).join('')}</span></div>
         <div class="searchwrap"><span class="sicon">${icon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}</span><label for="q" class="sr">ค้นหาเครื่อง ใบงาน อะไหล่ เครื่องมือวัด</label><input id="q" class="search" type="search" autocomplete="off" placeholder="ค้นหาทั้งระบบ" value="${esc(state.q)}"><div id="q-res" class="qres" hidden></div></div>
         <nav class="nav" aria-label="เมนูหลัก">${nav}</nav>
         <div class="me">${avatar(state.user.name, false)}<span class="who"><b>${esc(state.user.name)}</b><span>${esc(role)}</span></span>${state.backend.mode === 'firebase' ? '<button type="button" data-act="logout">ออกจากระบบ</button>' : ''}</div>
