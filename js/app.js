@@ -886,7 +886,7 @@ function viewReport() {
 }
 
 /* ---------- SH-08 ตั้งค่า ---------- */
-const ROLE_LABEL = { admin: 'หัวหน้า / แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต', disabled: 'ปิดใช้งาน' };
+const ROLE_LABEL = { admin: 'แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต', disabled: 'ปิดใช้งาน' };
 const IMPORT_COLS = {
   assets: ['id', 'name', 'line', 'cls', 'maker', 'model', 'year'],
   parts: ['id', 'name', 'bin', 'qty', 'min', 'max']
@@ -1070,7 +1070,7 @@ function render() {
   const add = canAdmin() && ADD_LABEL[state.page] ? `<button type="button" class="btn" data-act="add" data-id="${state.page}">${ADD_LABEL[state.page]}</button>` : '';
   const tv = state.page === 'board' ? `<button type="button" class="btn" data-act="tv">${icon('<path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/>')}${state.tv ? 'ออกจากโหมดจอ' : 'โหมดจอทีวี'}</button>` : '';
   const report = noRole || state.page === 'quick' ? '' : `<button type="button" class="btn solid" data-act="report">${icon('<path d="M12 5v14M5 12h14"/>')}แจ้งซ่อม</button>`;
-  const role = { admin: 'หัวหน้า / แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต' }[state.user.role] || 'ยังไม่มีสิทธิ์';
+  const role = { admin: 'แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต' }[state.user.role] || 'ยังไม่มีสิทธิ์';
   const where = state.backend.mode === 'firebase' ? (placeName() || state.backend.projectId) : 'ข้อมูลตัวอย่างในเครื่องนี้';
   const sync = state.lastSync ? `อัปเดตล่าสุด ${fmtTime(state.lastSync)}` : '';
   app.classList.toggle('quickmode', state.page === 'quick');
