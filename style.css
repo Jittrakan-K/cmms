@@ -1,4 +1,4 @@
-/* Hallmark · shape: app screen · genre: modern-minimal · theme: Cobalt (by request, after usehallmark.com/made/cobalt-database-client) · redesign: full
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: custom dark console, after the Supabase dashboard look (by request) · redesign: full
  * nav: sidebar kept (9 destinations), light paper rail, becomes a sideways tab row under 60rem · signature: the 7-day machine status board with its figures set into its head · states: loading, empty, error, full (as the app has them)
  * axes: light/grotesk-sans/warm · posture: restrained · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H5 E4 S4 R5 V4 · weakest: P, a calm tool argues little; the status board leads every overview and the four stat cards were folded into it */
@@ -8,7 +8,8 @@
 /* Hallmark · dismissed F25 · the machine or name column leads every table and the rest scrolls sideways inside its box on a phone; the phone task is SH-00, which has no table */
 /* Hallmark · reworded "แผนภูมิสถานะเครื่อง 7 วัน" to "สถานะเครื่อง 7 วัน" · the board now holds the figures too, so it names the status, not the chart */
 /* Hallmark · dismissed kept 12:23 · the sync time on the page head changes with every load; the figure is still there */
-/* Hallmark · dismissed F4 · .btn is the paper keycap, .nav current is a selection wash; the one filled primary is .btn.solid */
+/* Hallmark · dismissed F4 · .btn is a flat secondary, .nav current is a surface step; the one filled primary is .btn.solid */
+/* Hallmark · dismissed 40/41 static · the low-contrast pairs it names (.step.done .ball, .streak li.ok, .seg-ctl pressed, accent-ink on accent, dark cards without a text colour) are earlier rules that the dark console block at the end overrides; the rendered pages pass axe */
 @import url("./tokens.css");
 @import url("./base.css");
 
@@ -19,8 +20,9 @@
 @font-face { font-family: "IBM Plex Sans Thai"; font-weight: 400; font-display: swap; src: url("fonts/plex-thai-latin-400.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Sans Thai"; font-weight: 500; font-display: swap; src: url("fonts/plex-thai-latin-500.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Sans Thai"; font-weight: 600; font-display: swap; src: url("fonts/plex-thai-latin-600.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Familjen Grotesk"; font-weight: 500; font-display: swap; src: url("fonts/familjen-500.woff2") format("woff2"); }
-@font-face { font-family: "Familjen Grotesk"; font-weight: 600; font-display: swap; src: url("fonts/familjen-600.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 400; font-display: swap; src: url("fonts/inter-400.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212, U+FEFF; }
+@font-face { font-family: "Inter"; font-weight: 500; font-display: swap; src: url("fonts/inter-500.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212, U+FEFF; }
+@font-face { font-family: "Inter"; font-weight: 600; font-display: swap; src: url("fonts/inter-600.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212, U+FEFF; }
 @font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: swap; src: url("fonts/jetbrains-400.woff2") format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: swap; src: url("fonts/jetbrains-500.woff2") format("woff2"); }
 
@@ -701,3 +703,108 @@ tr.pick[aria-current=true], .trow.task[aria-current=true] { background: var(--co
 .side { border-right: 0; }
 @media (max-width: 60rem) { .shell { background: none; } .side { border-bottom: 1px solid var(--color-rule); } }
 html.tv .shell { background: none; }
+
+/* ---------- คอนโซลสีเข้ม: พื้นดำอมเทาหลายชั้น เส้นเทาบาง สีเขียวมรกตเดียว ---------- */
+:root {
+  --ground: var(--color-paper); --rail: var(--color-side); --card: var(--color-cotton);
+  --hover: var(--color-paper-2); --sel: var(--color-paper-3); --line: var(--color-rule); --rule: var(--color-rule);
+  --field: #6b6b6b; --field-edge: #6b6b6b; --accent: var(--color-accent);
+  --stop: #f87171; --stop-bg: #3b1f1f; --stop-fg: #fca5a5;
+  --wait: #f5b301; --wait-bg: #382c12; --wait-fg: #fcd34d;
+  --ok: #3ecf8e; --ok-bg: #1d2a23; --ok-fg: #6ee7b7;
+  --late: #fb923c; --late-bg: #3a2617;
+  --pm: var(--color-ink-2); --pm-bg: var(--color-paper-3); --pm-fg: var(--color-ink-2);
+  --run: #4a4a4a; --grey-bg: var(--color-paper-3); --grey-fg: var(--color-ink-2);
+  --lamp-off: #3a3a3a; --scrim: rgb(0 0 0 / 0.6);
+}
+html { font-size: 93.75%; }
+body { background: var(--color-paper); color: var(--ink); }
+h1, h2, h3, .cfig, .fig, .stage .fig, .trio dd { font-weight: 500; letter-spacing: var(--tracking-display); }
+h1 { font-size: var(--text-xl); }
+.brand .bt b { font-size: var(--text-lg); font-weight: 600; letter-spacing: 0; }
+.clabel, th { color: var(--muted); font-weight: 400; }
+a, .link { color: var(--ink-2); }
+.link:hover { color: var(--ink); text-decoration-color: var(--accent); }
+
+.shell { background: linear-gradient(90deg, var(--color-side) 0 calc(var(--rail-w) - 1px), var(--color-rule) 0 var(--rail-w), transparent 0); }
+.side { background: var(--color-side); }
+.nav button { min-height: 32px; color: var(--muted); font-weight: 400; }
+.nav button:hover { background: var(--color-paper-2); color: var(--ink); }
+.nav button[aria-current=page] { background: var(--color-paper-3); color: var(--ink); box-shadow: none; font-weight: 500; }
+.nav button[aria-current=page] svg { color: var(--ink); }
+
+.btn { min-height: 34px; border: 1px solid var(--color-key-edge); background: var(--color-key-face); color: var(--ink); box-shadow: none; }
+.btn:hover:not(:disabled) { transform: none; background: var(--color-paper-3); border-color: var(--color-edge-hover); box-shadow: none; }
+.btn:active:not(:disabled) { transform: none; background: var(--color-paper-2); }
+.btn.solid { background: var(--color-btn-primary); border-color: var(--color-accent-edge); color: var(--color-accent-ink); box-shadow: none; }
+.btn.solid:hover:not(:disabled) { background: var(--color-btn-primary-hover); }
+.btn.danger { color: var(--stop-fg); }
+
+.seg-ctl, .chips { background: var(--color-paper-2); box-shadow: inset 0 0 0 1px var(--color-rule); }
+.seg-ctl button[aria-pressed=true], .chips button[aria-pressed=true] { background: var(--color-paper-3); color: var(--ink); box-shadow: inset 0 0 0 1px var(--color-rule-2); }
+
+.box, .card, .tasks, .stats { background: var(--color-cotton); box-shadow: 0 0 0 1px var(--color-rule); border-radius: var(--radius-card); }
+@supports (corner-shape: bevel) { .card, .box { border-radius: var(--radius-card); corner-shape: round; } }
+.search { background: var(--color-paper-2); border-color: var(--field); color: var(--ink); }
+.field input, .field select, .field textarea, form.quick input, form.quick select, .qr-input { background: var(--color-paper-2); color: var(--ink); border-color: var(--field); }
+.notice { background: var(--color-paper-2); }
+.notice.demo { background: var(--color-paper-2); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--color-rule); }
+
+.wotable th, table th { background: transparent; }
+.wotable th { background: var(--color-paper-2); }
+tr.pick:hover, .trow.task:hover { background: var(--color-paper-2); }
+tr.pick[aria-current=true], .trow.task[aria-current=true] { background: var(--color-accent-wash); }
+.check::before { background: var(--color-paper-2); border-color: var(--color-edge-hover); }
+.check.on::before { background: var(--color-accent-edge); border-color: var(--color-accent-edge); }
+.check.on { color: var(--color-on-accent); }
+
+.pbar, .prog, .sbar { background: var(--color-paper-3); }
+.pbar span, .prog span { background: var(--accent); }
+.pbar.alt span, .progress.warn .pbar span { background: var(--color-orange); }
+.sbar span { background: var(--color-ink-2); }
+.minibars span { background: var(--color-paper-3); }
+.minibars span.on, .bars .b.sel span { background: var(--accent); }
+.bars .b span { background: var(--color-paper-3); }
+.bars .b:hover span { background: var(--color-key-edge); }
+.line polyline { stroke: var(--color-ink-2); }
+.dots i { background: var(--color-cotton); border-color: var(--color-ink-2); }
+.k-line { border-color: var(--color-ink-2); background: var(--color-cotton); }
+.k-bar { background: var(--color-paper-3); }
+.xlab .on { color: var(--accent); }
+.streak li.ok { background: var(--color-accent-wash); color: var(--color-accent-light); box-shadow: inset 0 0 0 1px var(--color-accent-edge); }
+.streak li.late { background: var(--color-paper-3); color: var(--muted); }
+.tip { background: var(--color-paper-2); box-shadow: 0 0 0 1px var(--color-rule-2), var(--cast-stock-lift); color: var(--ink-2); }
+.tip b { color: var(--ink); }
+
+.mtile { background: var(--color-paper-2); border-color: var(--color-rule); }
+.mtile:hover { border-color: var(--color-rule-2); }
+.mtile.s-late { background: var(--color-paper-2); }
+.andon { background: var(--color-lamp-body); box-shadow: 0 0 0 1px var(--color-key-edge); }
+.graphite { background: var(--color-graphite); box-shadow: 0 0 0 1px var(--color-rule); }
+.graphite td.mono { color: var(--color-accent-light); }
+.toast { background: var(--color-paper-3); color: var(--ink); box-shadow: 0 0 0 1px var(--color-rule-2), var(--cast-stock-lift); }
+.login { background: var(--color-side); }
+.login > form, .authcard { background: var(--color-cotton); box-shadow: 0 0 0 1px var(--color-rule), var(--cast-stock-lift); }
+.drawer { background: var(--color-paper); box-shadow: -1px 0 0 var(--color-rule), var(--cast-stock-lift); }
+.drawer .dhead, .drawer.create, .cfoot { background: var(--color-cotton); }
+.step { background: var(--color-cotton); box-shadow: 0 0 0 1px var(--color-rule); }
+.step .ball { background: var(--color-paper-2); }
+.step.done .ball { background: var(--color-accent-edge); border-color: var(--color-accent-edge); color: var(--color-on-accent); }
+.step.current { box-shadow: inset 0 0 0 1px var(--accent); }
+.opt, .chip { background: var(--color-paper-2); box-shadow: 0 0 0 1px var(--color-rule-2); color: var(--ink); }
+.opt.on { box-shadow: inset 0 0 0 1.5px var(--accent); background: var(--color-accent-wash); }
+.chip.on { background: var(--color-btn-primary); box-shadow: 0 0 0 1px var(--color-accent-edge); }
+.opt.stop { background: var(--color-stop-solid); color: var(--color-accent-ink); box-shadow: 0 0 0 1px var(--stop); }
+.photo-drop { border-color: var(--color-edge-hover); color: var(--ink-2); }
+.photo-drop:hover { background: var(--color-paper-2); }
+.qr-foot { background: var(--color-paper); }
+.qres { background: var(--color-paper-2); }
+.qres button:hover, .qres button:focus-visible { background: var(--color-paper-3); }
+.avatar { background: var(--color-paper-3); color: var(--ink-2); }
+.track { background-image: linear-gradient(to right, var(--color-rule) 1px, transparent 1px); }
+::selection { background: var(--color-selection); color: var(--ink); }
+html { scrollbar-color: var(--color-rule-2) transparent; }
+@media (max-width: 60rem) { .shell { background: none; } .side { border-bottom: 1px solid var(--color-rule); } }
+html.tv .shell { background: none; }
+.side { border-right: 1px solid var(--color-rule); }
+@media (max-width: 60rem) { .side { border-right: 0; } }

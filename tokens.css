@@ -1,32 +1,32 @@
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
-  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem;
+  --text-xs: 0.8rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem;
   --text-display-s: 1.44rem; --text-display: 1.728rem; --text-section: 1.2rem; --text-title: 1rem; --text-lead: 1rem;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --dur-micro: 150ms; --dur-short: 220ms; --dur-long: 420ms;
   --color-error: oklch(52% 0.19 27); --color-success: oklch(50% 0.12 150);
   --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
   --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
-  /* Cobalt: cool near-white paper, blue-grey ink and hairlines, one electric cobalt signal, graphite as the dark material */
-  --color-paper: oklch(98.6% 0.005 250); --color-paper-2: oklch(96.2% 0.008 252); --color-paper-3: oklch(93% 0.011 252);
-  --color-ink: oklch(21% 0.028 262); --color-ink-2: oklch(36% 0.022 260); --color-muted: oklch(48% 0.018 258);
-  --color-rule: oklch(90% 0.009 252); --color-rule-2: oklch(83% 0.012 252);
-  --color-graphite: oklch(21% 0.024 262); --color-graphite-2: oklch(26.5% 0.026 262); --color-graphite-ink: oklch(93% 0.010 250); --color-graphite-muted: oklch(69% 0.022 256);
-  --color-accent: oklch(52% 0.19 258); --color-accent-hover: oklch(47% 0.2 260); --color-accent-2: oklch(52% 0.19 258); --color-accent-wash: oklch(95% 0.028 256); --color-accent-ink: oklch(98.6% 0.005 250); --color-focus: oklch(52% 0.19 258);
-  --color-accent-soft: oklch(95% 0.028 256); --color-accent-edge: oklch(39% 0.16 260); --color-accent-light: oklch(76% 0.13 254); --color-orange: oklch(68% 0.15 60);
-  --color-key-face: oklch(99.4% 0.003 250); --color-key-edge: oklch(80% 0.016 254);
-  --color-cotton: oklch(99.4% 0.003 250); --color-desk: oklch(98.6% 0.005 250); --color-print: oklch(21% 0.028 262);
-  --color-board: oklch(52% 0.19 258); --color-board-type: oklch(98.6% 0.005 250); --color-paid: oklch(52% 0.19 258);
-  --font-display: "Familjen Grotesk", "IBM Plex Sans Thai", Tahoma, system-ui, sans-serif; --font-body: "IBM Plex Sans Thai", "Noto Sans Thai", Tahoma, system-ui, sans-serif;
+  /* dark console: near-black surfaces in a few steps, grey hairlines, one emerald signal for the primary action and selection */
+  --color-paper: #1c1c1c; --color-paper-2: #232323; --color-paper-3: #2a2a2a;
+  --color-ink: #ededed; --color-ink-2: #b4b4b4; --color-muted: #9a9a9a;
+  --color-rule: #2e2e2e; --color-rule-2: #3e3e3e;
+  --color-graphite: #171717; --color-graphite-2: #232323; --color-graphite-ink: #ededed; --color-graphite-muted: #9a9a9a;
+  --color-accent: #3ecf8e; --color-accent-hover: #34b27b; --color-accent-2: #3ecf8e; --color-accent-wash: #1d2a23; --color-accent-ink: #fafafa; --color-focus: #3ecf8e;
+  --color-accent-soft: #1d2a23; --color-accent-edge: #24b47e; --color-accent-light: #6ee7b7; --color-orange: #f59e0b;
+  --color-btn-primary: #006239; --color-btn-primary-hover: #00703f;
+  --color-key-face: #262626; --color-key-edge: #3a3a3a;
+  --color-cotton: #212121; --color-desk: #1c1c1c; --color-print: #ededed;
+  --color-board: #006239; --color-board-type: #fafafa; --color-paid: #3ecf8e;
+  --color-side: #171717; --color-edge-hover: #4a4a4a; --color-on-accent: #0b1f16; --color-lamp-body: #0e0e0e; --color-stop-solid: #7f1d1d; --color-selection: #1f4a37;
+  --font-display: "Inter", "IBM Plex Sans Thai", Tahoma, system-ui, sans-serif; --font-body: "Inter", "IBM Plex Sans Thai", "Noto Sans Thai", Tahoma, system-ui, sans-serif;
   --font-outlier: "JetBrains Mono", "IBM Plex Sans Thai", ui-monospace, monospace;
   --radius-card: 8px; --radius-input: 6px; --radius-pill: 999px; --radius-stock: 6px; --cut: 8px; --cut-l: 16px; --rule-hair: 1px;
   --shadow-card: 0 1px 2px oklch(20% 0.01 35 / 0.05);
-  --edge-stock: 0 0 0 1px var(--color-rule), 0 1px 2px oklch(21% 0.028 262 / 0.06);
-  --cast-stock: 0 1px 2px oklch(21% 0.028 262 / 0.06); --cast-stock-lift: 0 12px 28px -8px oklch(21% 0.028 262 / 0.22);
-  --press-groove: inset 0 1px 2px oklch(21% 0.028 262 / 0.14);
-  --shadow-key: 0 3px 0 0 var(--color-key-edge), 0 6px 8px -4px oklch(21% 0.028 262 / 0.28), inset 0 1px 0 oklch(100% 0 0 / 0.9);
-  --shadow-key-accent: 0 3px 0 0 var(--color-accent-edge), 0 6px 8px -4px oklch(30% 0.12 260 / 0.45), inset 0 1px 0 oklch(100% 0 0 / 0.22);
-  --shadow-key-press: inset 0 1px 2px oklch(21% 0.028 262 / 0.14);
-  --tracking-display: -0.028em; --display-weight: 600;
+  --edge-stock: 0 0 0 1px var(--color-rule);
+  --cast-stock: none; --cast-stock-lift: 0 12px 32px rgb(0 0 0 / 0.5);
+  --press-groove: inset 0 0 0 1px var(--color-rule);
+  --shadow-key: none; --shadow-key-accent: none; --shadow-key-press: none;
+  --tracking-display: -0.01em; --display-weight: 600;
 }
