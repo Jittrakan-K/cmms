@@ -1043,7 +1043,7 @@ function viewServer() {
     ${live ? `<form class="pad" data-form="user" style="border-bottom:1px solid var(--rule)"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:var(--space-sm);align-items:end">
       <div class="field"><label for="u-name">ชื่อที่แสดง</label><input id="u-name" name="name" required autocomplete="off"></div>
       <div class="field"><label for="u-emp">รหัสพนักงาน</label><input id="u-emp" name="empId" required autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]{1,19}" title="A-Z 0-9 . _ - ยาว 2–20 ตัว" placeholder="เช่น M0112"></div>
-      <div class="field"><label for="u-role">ตำแหน่ง</label><select id="u-role" name="position">${Object.entries(POSITIONS).map(([k, [label, r]]) => `<option value="${k}">${label} (${ROLE_LABEL[r]})</option>`).join('')}</select></div>
+      <div class="field"><label for="u-role">ตำแหน่ง</label><select id="u-role" name="position">${Object.entries(POSITIONS).map(([k, [label]]) => `<option value="${k}">${label}</option>`).join('')}</select></div>
       <button class="btn solid">เพิ่มผู้ใช้</button></div>
       <p class="hint">ระบบจะสร้างรหัสผ่านชั่วคราวให้ โปรดแจ้งพนักงานโดยตรง พนักงานต้องตั้งรหัสผ่านใหม่เมื่อเข้าสู่ระบบครั้งแรก</p></form>
       ${issuedBox()}` : '<p class="notice u-mbox">โหมดตัวอย่างแสดงรายชื่อตัวอย่าง สามารถเพิ่มผู้ใช้จริงได้หลังเชื่อมต่อ Firebase</p>'}
