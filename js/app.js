@@ -26,6 +26,7 @@ const FILTERS = {
 const PAGES = {
   quick: ['SH-00', 'แจ้งงานด่วน', 'แจ้งงานด่วน'],
   overview: ['SH-01', 'ภาพรวม', 'ภาพรวมโรงงาน'],
+  board: ['SH-09', 'แดชบอร์ด', 'แดชบอร์ดสถานะ'],
   work: ['SH-02', 'งานซ่อม', 'งานซ่อม'],
   assets: ['SH-03', 'เครื่องจักร', 'ทะเบียนเครื่องจักร'],
   pm: ['SH-04', 'แผน PM', 'แผนบำรุงรักษา'],
@@ -40,7 +41,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [],
-  page: 'overview', filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
+  page: 'overview', tv: false, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
 
@@ -70,6 +71,7 @@ const relDate = (t) => { const d0 = startOfToday(); if (t >= d0) return 'วั�
 const NAV_ICON = {
   quick: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   overview: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  board: '<rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 17v4M7 13V9M11 13V7M15 13v-3"/>',
   work: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>',
   assets: '<path d="M3 21V10l6 4V10l6 4V4h6v17z"/>',
   pm: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
@@ -168,6 +170,151 @@ function metrics() {
 }
 
 /* ---------- ส่วนประกอบ ---------- */
+
+/* ---------- SH-09 แดชบอร์ดสถานะ: ดูสถานะทุกส่วนในจอเดียว ใช้บนจอทีวีในห้องซ่อมบำรุงได้ ---------- */
+const MSTATE = {
+  stop: ['หยุดเสีย', 'stop'], wait: ['รออะไหล่', 'wait'], pm: ['กำลังทำ PM', 'pm'], late: ['PM เลยกำหนด', 'late'], run: ['เดินเครื่อง', 'run']
+};
+function machineState(a) {
+  const open = state.workOrders.filter((w) => w.asset === a.id && w.status !== 'done');
+  const brk = open.filter((w) => w.type === 'breakdown').sort((x, y) => x.startAt - y.startAt);
+  const stop = brk.find((w) => w.status !== 'parts');
+  if (stop) return { k: 'stop', w: stop, since: stop.startAt };
+  const wait = brk.find((w) => w.status === 'parts') || open.find((w) => w.status === 'parts');
+  if (wait) return { k: 'wait', w: wait, since: wait.startAt };
+  const pm = open.find((w) => w.type === 'pm' && w.status === 'doing');
+  if (pm) return { k: 'pm', w: pm, since: pm.startAt };
+  const late = state.pmPlans.find((p) => p.asset === a.id && p.dueDate < startOfToday());
+  if (late) return { k: 'late', plan: late, since: late.dueDate };
+  return { k: 'run' };
+}
+// แถบสัดส่วน: ช่องละสถานะ กว้างตามจำนวน
+const meter = (parts, label) => {
+  const total = parts.reduce((s, x) => s + x.n, 0) || 1;
+  return `<div class="meter" role="img" aria-label="${esc(label)}">${parts.filter((x) => x.n).map((x) => `<span class="m-${x.k}" style="flex:${x.n}"></span>`).join('')}</div>
+    <ul class="mkey">${parts.map((x) => `<li><i class="m-${x.k}" aria-hidden="true"></i>${esc(x.label)}<b class="mono">${x.n}</b></li>`).join('')}</ul>`;
+};
+const ago = (t) => { const ms = Date.now() - t; return ms < DAY ? `${hm(ms)} ชม.` : `${Math.floor(ms / DAY)} วัน`; };
+
+function viewBoard(m) {
+  const t0 = startOfToday();
+  const now = Date.now();
+  // เครื่องจักร
+  const ms = state.assets.map((a) => ({ a, ...machineState(a) }));
+  const countM = (k) => ms.filter((x) => x.k === k).length;
+  const lines = [...new Set(state.assets.map((a) => a.line || 'ไม่ระบุไลน์'))];
+  const tile = (x) => {
+    const [label] = MSTATE[x.k];
+    const act = x.w ? `data-act="open-wo" data-id="${esc(x.w.id)}"` : `data-act="open-asset" data-id="${esc(x.a.id)}"`;
+    const cut = (t) => { const c = [...String(t || '')]; return esc(c.length > 56 ? `${c.slice(0, 54).join('').trim()}…` : c.join('')); };
+    const detail = x.w ? cut(x.w.title) : x.plan ? cut(x.plan.task) : '';
+    const who = x.w ? (x.w.tech ? esc(x.w.tech) : 'ยังไม่มีช่างรับงาน') : '';
+    return `<button type="button" class="mtile s-${x.k}" ${act} aria-label="${esc(`${x.a.id} ${x.a.name} ${label}`)}">
+      <span class="mt-top"><span class="tag">${esc(x.a.id)}</span><span class="mt-state">${label}${x.since && x.k !== 'run' ? ` <span class="mono">${x.k === 'late' ? relDate(x.since) : ago(x.since)}</span>` : ''}</span></span>
+      <span class="mt-name">${esc(x.a.name)}</span>
+      ${detail ? `<span class="mt-detail">${detail}</span>` : ''}${who ? `<span class="mt-who">${who}</span>` : ''}
+    </button>`;
+  };
+  // ใบงานตามขั้นตอน
+  const open = state.workOrders.filter((w) => w.status !== 'done');
+  const doneToday = state.workOrders.filter((w) => w.status === 'done' && w.endAt >= t0);
+  const stage = (k, label, list, note) => {
+    const old = [...list].sort((x, y) => x.startAt - y.startAt);
+    return `<div class="stage">
+      <h3>${label}</h3><p class="fig ${k === 'doing' && list.length ? '' : ''}">${list.length}</p>
+      <p class="cap">${note(old)}</p>
+      <ul>${old.slice(0, 3).map((w) => `<li><button type="button" class="link" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.id)}</button><span>${esc(w.asset)}</span></li>`).join('')}</ul>
+    </div>`;
+  };
+  const oldest = (l) => (l.length ? `เก่าสุด ${ago(l[0].startAt)}` : 'ไม่มีค้าง');
+  const overdue = open.filter((w) => w.dueDate && w.dueDate < t0);
+  const unassigned = open.filter((w) => w.status === 'open' && !w.tech);
+  // PM
+  const pmLate = state.pmPlans.filter((p) => p.dueDate < t0).sort((a, b) => a.dueDate - b.dueDate);
+  const pmToday = state.pmPlans.filter((p) => p.dueDate >= t0 && p.dueDate < t0 + DAY);
+  const pmWeek = state.pmPlans.filter((p) => p.dueDate >= t0 + DAY && p.dueDate <= t0 + 7 * DAY);
+  const pmLater = state.pmPlans.length - pmLate.length - pmToday.length - pmWeek.length;
+  const comp = pmCompliance(t0 - 29 * DAY);
+  // อะไหล่
+  const out = state.parts.filter((p) => p.qty <= 0);
+  const low = state.parts.filter((p) => p.qty > 0 && p.qty <= p.min);
+  const okParts = state.parts.length - out.length - low.length;
+  const reorder = [...out, ...low];
+  // เครื่องมือวัด
+  const gs = state.gauges.map((g) => ({ g, s: gaugeState(g) }));
+  const gN = (k) => gs.filter((x) => x.s[0] === k).length;
+  const gAlert = gs.filter((x) => x.s[0] !== 'ok').sort((a, b) => a.g.dueDate - b.g.dueDate);
+  // ทีมช่าง
+  const techNames = [...new Set([...state.users.filter((u) => u.role === 'tech').map((u) => u.name), ...open.map((w) => w.tech).filter(Boolean).flatMap((t) => t.split(/,\s*/))])];
+  const team = techNames.map((name) => {
+    const holding = open.filter((w) => (w.tech || '').split(/,\s*/).includes(name) && w.status !== 'pending');
+    const closed = state.workOrders.filter((w) => w.status === 'done' && w.endAt >= now - 7 * DAY && (w.tech || '').split(/,\s*/).includes(name)).length;
+    return { name, holding, closed };
+  }).sort((a, b) => b.holding.length - a.holding.length);
+
+  const stopN = countM('stop');
+  const headline = stopN
+    ? `<span class="alarm">เครื่องหยุดเสีย ${stopN} เครื่อง</span> จาก ${state.assets.length} เครื่อง`
+    : countM('wait') ? `<span class="warnt">รออะไหล่ ${countM('wait')} เครื่อง</span> ที่เหลือเดินปกติ` : 'ทุกเครื่องเดินปกติ';
+  const seeAll = (page, label) => `<button type="button" class="link" data-act="nav" data-id="${page}">${label}</button>`;
+
+  return `<section class="now" aria-live="polite">
+      <h2>${headline}</h2>
+      <p class="dim">อัปเดตเองเมื่อมีการเปลี่ยนแปลง ล่าสุด ${fmtTime(state.lastSync || now)}</p>
+    </section>
+    <div class="dash">
+      <div class="dash-main">
+      <section class="box dash-machines">
+        <div class="bar"><h2>เครื่องจักร</h2>
+          <ul class="mkey inline">${Object.entries(MSTATE).map(([k, [label]]) => `<li><i class="m-${k}" aria-hidden="true"></i>${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
+        ${lines.map((ln) => `<div class="mline"><h3>${esc(ln)}</h3><div class="mgrid">${ms.filter((x) => (x.a.line || 'ไม่ระบุไลน์') === ln).map(tile).join('')}</div></div>`).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
+      </section>
+
+      <section class="box dash-flow">
+        <div class="bar"><h2>ใบงานตามขั้นตอน</h2>${seeAll('work', 'เปิดหน้างานซ่อม')}</div>
+        <div class="stages">
+          ${stage('pending', 'รออนุมัติ', open.filter((w) => w.status === 'pending'), oldest)}
+          ${stage('open', 'รอเริ่มงาน', open.filter((w) => w.status === 'open'), (l) => (unassigned.length ? `ยังไม่มอบหมาย ${unassigned.length} ใบ` : oldest(l)))}
+          ${stage('doing', 'กำลังซ่อม', open.filter((w) => w.status === 'doing'), oldest)}
+          ${stage('parts', 'รออะไหล่', open.filter((w) => w.status === 'parts'), oldest)}
+          ${stage('done', 'ปิดวันนี้', doneToday, (l) => (l.length ? `ล่าสุด ${fmtTime(Math.max(...l.map((w) => w.endAt)))}` : 'ยังไม่มีงานปิด'))}
+        </div>
+        ${overdue.length ? `<p class="notice err u-mbox">ใบงานเลยวันกำหนดเสร็จ ${overdue.length} ใบ: ${overdue.slice(0, 4).map((w) => esc(w.id)).join(', ')}</p>` : ''}
+      </section>
+      </div>
+
+      <div class="dash-side">
+        <section class="box">
+          <div class="bar"><h2>แผน PM</h2>${seeAll('pm', 'ดูแผน PM')}</div>
+          <div class="pad">
+            ${meter([{ k: 'stop', n: pmLate.length, label: 'เลยกำหนด' }, { k: 'wait', n: pmToday.length, label: 'ครบวันนี้' }, { k: 'ink', n: pmWeek.length, label: 'ภายใน 7 วัน' }, { k: 'run', n: Math.max(0, pmLater), label: 'ถัดไป' }], 'สัดส่วนแผน PM ตามกำหนด')}
+            <p class="kpi">PM ทันกำหนด 30 วัน <b class="mono">${comp.pct.toFixed(0)}%</b></p>
+            ${pmLate.length ? `<ul class="alist">${pmLate.slice(0, 4).map((p) => `<li><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}</span><span class="alarm u-nowrap">${relDate(p.dueDate)}</span></li>`).join('')}</ul>` : ''}
+          </div>
+        </section>
+        <section class="box">
+          <div class="bar"><h2>อะไหล่</h2>${seeAll('parts', 'ดูคลังอะไหล่')}</div>
+          <div class="pad">
+            ${meter([{ k: 'stop', n: out.length, label: 'หมด' }, { k: 'wait', n: low.length, label: 'ถึงจุดสั่งซื้อ' }, { k: 'run', n: okParts, label: 'ปกติ' }], 'สัดส่วนสถานะอะไหล่')}
+            ${reorder.length ? `<ul class="alist">${reorder.slice(0, 5).map((p) => `<li><span class="tag">${esc(p.id)}</span><span class="t">${esc(p.name)}</span><span class="stock"><span class="sbar"><span style="width:${Math.min(100, (100 * p.qty) / Math.max(1, p.max || p.min * 2))}%"></span></span><span class="mono ${p.qty <= 0 ? 'alarm' : ''}">${p.qty}/${p.min}</span></span></li>`).join('')}</ul>` : ''}
+          </div>
+        </section>
+        <section class="box">
+          <div class="bar"><h2>เครื่องมือวัด</h2>${seeAll('gauges', 'ดูทะเบียน')}</div>
+          <div class="pad">
+            ${meter([{ k: 'stop', n: gN('hold'), label: 'ห้ามใช้' }, { k: 'late', n: gN('late'), label: 'เลยกำหนดสอบเทียบ' }, { k: 'wait', n: gN('soon'), label: 'ครบใน 30 วัน' }, { k: 'run', n: gN('ok'), label: 'ใช้งานได้' }], 'สัดส่วนสถานะเครื่องมือวัด')}
+            ${gAlert.length ? `<ul class="alist">${gAlert.slice(0, 4).map((x) => `<li><span class="tag">${esc(x.g.id)}</span><span class="t">${esc(x.g.name)}</span><span class="u-nowrap ${x.s[0] === 'soon' ? 'dim' : 'alarm'}">${x.s[1]}</span></li>`).join('')}</ul>` : ''}
+          </div>
+        </section>
+        <section class="box">
+          <div class="bar"><h2>ทีมช่าง</h2><span class="dim u-small">งานที่ถืออยู่ / ปิดใน 7 วัน</span></div>
+          ${team.length ? `<ul class="team">${team.map((t) => `<li>${avatar(t.name)}<span class="t"><b>${esc(t.name)}</b><span>${t.holding.length ? t.holding.slice(0, 3).map((w) => esc(w.id)).join(', ') : 'ว่าง'}</span></span><span class="mono">${t.holding.length}<span class="dim"> / ${t.closed}</span></span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีช่างในระบบ เพิ่มได้ในหน้าตั้งค่า</p>'}
+          ${unassigned.length ? `<p class="hint u-pad-b">อนุมัติแล้วแต่ยังไม่มีช่างรับ ${unassigned.length} ใบ</p>` : ''}
+        </section>
+      </div>
+    </div>`;
+}
+
 /* ---------- SH-01 ภาพรวม ---------- */
 function viewOverview(m) {
   const span = 7 * DAY;
@@ -180,7 +327,8 @@ function viewOverview(m) {
         const a0 = Math.max(w.startAt, m.from), a1 = w.endAt ?? m.now;
         const style = w.type === 'pm' ? '--c:var(--card);--b:2px solid var(--pm)' : `--c:${w.status === 'parts' ? 'var(--wait)' : 'var(--stop)'}`;
         const label = esc(`${w.id} ${w.title} ${hours(a1 - w.startAt)} ชม.`);
-        return `<button type="button" data-act="open-wo" data-id="${esc(w.id)}" aria-label="${label}" title="${label}" style="left:${pct(a0)}%;width:${(((a1 - a0) / span) * 100).toFixed(2)}%;${style}"></button>`;
+        // แท่งเหตุการณ์เป็นทางลัดสำหรับเมาส์ ใบงานเดียวกันเปิดจากตารางใบงานและหน้าประวัติเครื่องได้ด้วยคีย์บอร์ด
+        return `<span class="seg" data-act="open-wo" data-id="${esc(w.id)}" aria-hidden="true" title="${label}" style="left:${pct(a0)}%;width:${(((a1 - a0) / span) * 100).toFixed(2)}%;${style}"></span>`;
       }).join('');
     const d = mergedDown(a.id, m.from, m.now);
     return `<div class="tl-row">
@@ -197,7 +345,7 @@ function viewOverview(m) {
   const pmRows = [...m.pmSoon].sort((a, b) => a.dueDate - b.dueDate).map((p) => `<div class="list-row">
       <span class="mono ${p.dueDate < t0 ? 'alarm' : ''}">${fmtDate(p.dueDate)}</span>
       <span class="t"><span>${esc(p.task)}</span><span class="s"><span>${esc(p.asset)}</span><span>ทุก ${p.intervalDays} วัน</span></span></span><span></span></div>`).join('') || '<p class="empty">ไม่มี PM ครบกำหนดใน 7 วัน</p>';
-  const lowRows = m.low.map((p) => `<div class="list-row" style="grid-template-columns:minmax(0,1fr) auto">
+  const lowRows = m.low.map((p) => `<div class="list-row u-cols-auto">
       <span class="t"><span>${esc(p.name)}</span><span class="s">${esc(p.id)}</span></span>
       <span class="mono ${p.qty === 0 ? 'alarm' : ''}">${p.qty} / ${p.min}</span></div>`).join('') || '<p class="empty">สต็อกอยู่เหนือจุดสั่งซื้อทุกรายการ</p>';
   return `<section class="box board">
@@ -216,13 +364,13 @@ function viewOverview(m) {
       </div></div>
     </section>
     <div class="split">
-      <section class="box w3" style="gap:0"><div class="bar"><h2>ใบสั่งงานที่เปิดอยู่</h2><button type="button" class="link" style="font-family:var(--sans)" data-act="nav" data-id="work">ดูทั้งหมด</button></div>
+      <section class="box w3 u-gap0"><div class="bar"><h2>ใบสั่งงานที่เปิดอยู่</h2><button type="button" class="link u-sans" data-act="nav" data-id="work">ดูทั้งหมด</button></div>
         ${openRows ? `<div class="scroll"><table style="min-width:640px"><thead><tr><th scope="col">เลขที่</th><th scope="col">เครื่อง</th><th scope="col">อาการ</th><th scope="col">เปิดมา</th><th scope="col">สถานะ</th></tr></thead><tbody>${openRows}</tbody></table></div>` : '<p class="empty">ไม่มีงานค้าง</p>'}</section>
       <div class="w2">
-        <section class="box"><div class="bar"><h2>PM ครบกำหนด 7 วัน</h2>${m.pmLate.length ? `<span class="alarm" style="font-size:13px">เลยกำหนด ${m.pmLate.length}</span>` : ''}</div>${pmRows}</section>
+        <section class="box"><div class="bar"><h2>PM ครบกำหนด 7 วัน</h2>${m.pmLate.length ? `<span class="alarm" style="font-size:var(--text-sm)">เลยกำหนด ${m.pmLate.length}</span>` : ''}</div>${pmRows}</section>
         <section class="box"><div class="bar"><h2>อะไหล่ถึงจุดสั่งซื้อ</h2></div>${lowRows}</section>
-        <section class="box"><div class="bar"><h2>เครื่องมือวัดที่ต้องดู</h2><button type="button" class="link" style="font-family:var(--sans)" data-act="nav" data-id="gauges">ทะเบียน</button></div>
-          ${m.gaugeAlert.map((g) => { const [, label, c, b] = gaugeState(g); return `<div class="list-row" style="grid-template-columns:minmax(0,1fr) auto"><span class="t"><span>${esc(g.name)}</span><span class="s"><span>${esc(g.id)}</span><span>ครบ ${fmtDate(g.dueDate)}</span></span></span><span class="lamp" style="--c:${c};--b:${b}">${label}</span></div>`; }).join('') || '<p class="empty">ทุกเครื่องมืออยู่ในรอบสอบเทียบ</p>'}</section>
+        <section class="box"><div class="bar"><h2>เครื่องมือวัดที่ต้องดู</h2><button type="button" class="link u-sans" data-act="nav" data-id="gauges">ทะเบียน</button></div>
+          ${m.gaugeAlert.map((g) => { const [, label, c, b] = gaugeState(g); return `<div class="list-row u-cols-auto"><span class="t"><span>${esc(g.name)}</span><span class="s"><span>${esc(g.id)}</span><span>ครบ ${fmtDate(g.dueDate)}</span></span></span><span class="lamp" style="--c:${c};--b:${b}">${label}</span></div>`; }).join('') || '<p class="empty">ทุกเครื่องมืออยู่ในรอบสอบเทียบ</p>'}</section>
       </div>
     </div>`;
 }
@@ -233,7 +381,7 @@ function formWorkOrder() {
   const opts = state.assets.map((a) => `<option value="${esc(a.id)}" ${d.asset === a.id ? 'selected' : ''}>${esc(a.id)} ${esc(a.name)}</option>`).join('');
   const pri = [['stop', 'เครื่องหยุด'], ['slow', 'เดินได้แต่ผิดปกติ'], ['plan', 'ซ่อมตามแผนได้']];
   return `<form class="box" data-form="wo"><div class="bar"><h2>แจ้งซ่อมใหม่</h2></div>
-    <div class="pad"><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:14px 16px">
+    <div class="pad"><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:var(--space-sm) var(--space-md)">
       <div class="field"><label for="f-asset">เครื่องจักร</label><select id="f-asset" name="asset" required>${opts}</select></div>
       <div class="field"><label for="f-pri">ผลกระทบ</label><select id="f-pri" name="priority">${pri.map(([v, l]) => `<option value="${v}" ${d.priority === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="field full"><label for="f-title">อาการที่พบ</label><textarea id="f-title" name="title" rows="2" required>${esc(d.title)}</textarea></div>
@@ -262,7 +410,7 @@ function woDetail(w) {
       ${used.map((u) => { const p = partOf(u.id); return `<tr><td class="mono">${esc(u.id)}</td><td>${esc(p?.name || '—')}</td><td class="mono num">${u.qty}</td><td class="mono num ${p && p.qty <= p.min ? 'alarm' : ''}">${p ? `${p.qty} / ${p.min}` : '—'}</td></tr>`; }).join('')}
     </tbody></table></div>` : '<p class="empty">ยังไม่มีการเบิกอะไหล่</p>'}
     ${canIssue ? `<form class="pad" data-form="issue" style="flex-direction:row;flex-wrap:wrap;align-items:flex-end;border-top:1px solid var(--line)">
-      <div class="field" style="flex:1 1 220px;min-width:0"><label for="i-part">อะไหล่</label><select id="i-part" name="part" required style="width:100%;min-width:0">${state.parts.map((p) => `<option value="${esc(p.id)}" ${p.qty ? '' : 'disabled'}>${esc(p.id)} ${esc(p.name)} (คงเหลือ ${p.qty})</option>`).join('')}</select></div>
+      <div class="field" style="flex:1 1 220px;min-width:0"><label for="i-part">อะไหล่</label><select id="i-part" name="part" required class="u-fill">${state.parts.map((p) => `<option value="${esc(p.id)}" ${p.qty ? '' : 'disabled'}>${esc(p.id)} ${esc(p.name)} (คงเหลือ ${p.qty})</option>`).join('')}</select></div>
       <div class="field" style="flex:0 1 96px"><label for="i-qty">จำนวน</label><input id="i-qty" name="qty" type="number" min="1" value="1" required></div>
       <button class="btn">เบิกเข้าใบงาน</button></form>` : ''}</section>`;
   let action = '';
@@ -288,7 +436,7 @@ function woDetail(w) {
     action = '<p class="hint">บัญชีนี้ดูได้อย่างเดียว</p>';
   }
   return `<section class="stack" aria-label="รายละเอียดใบสั่งงาน">
-    <div class="head" style="border:0;padding:0"><div><span class="doc"><span class="mono">${esc(w.id)}</span><span>${TYPE[w.type]}</span></span><h2 style="font-size:20px;line-height:28px">${esc(w.title)}</h2></div>
+    <div class="head" style="border:0;padding:0"><div><span class="doc"><span class="mono">${esc(w.id)}</span><span>${TYPE[w.type]}</span></span><h2 style="font-size:var(--text-xl);line-height:1.35">${esc(w.title)}</h2></div>
       ${lamp(w.status)}</div>
     <div class="steps">${steps}</div>
     <div class="split">
@@ -302,14 +450,14 @@ function woDetail(w) {
             ${w.dueDate ? `<div><dt>กำหนดเสร็จ</dt><dd class="mono ${!done && w.dueDate < startOfToday() ? 'alarm' : ''}">${fmtDateY(w.dueDate)}</dd></div>` : ''}
             ${(w.team || []).length > 1 ? `<div><dt>ทีม</dt><dd>${w.team.map(esc).join(', ')}</dd></div>` : ''}
           </dl>
-          ${w.note ? `<div class="pad" style="gap:4px"><span class="hint">รายละเอียด</span><p style="white-space:pre-line">${esc(w.note)}</p></div>` : ''}
-          ${w.photo ? `<div class="pad" style="gap:6px"><span class="hint">รูปจากผู้แจ้ง</span><img src="${esc(w.photo)}" alt="รูปอาการที่ผู้แจ้งถ่าย" style="max-width:100%;border-radius:10px;border:1px solid var(--line)"></div>` : ''}</section>
+          ${w.note ? `<div class="pad" style="gap:var(--space-2xs)"><span class="hint">รายละเอียด</span><p class="u-pre">${esc(w.note)}</p></div>` : ''}
+          ${w.photo ? `<div class="pad" style="gap:var(--space-2xs)"><span class="hint">รูปจากผู้แจ้ง</span><img src="${esc(w.photo)}" alt="รูปอาการที่ผู้แจ้งถ่าย" style="max-width:100%;border-radius:var(--radius-card);border:1px solid var(--line)"></div>` : ''}</section>
         ${(w.checks || []).length ? `<section class="box"><div class="bar"><h2>รายการตรวจ</h2><span class="mono dim">${w.checks.filter((c) => c.done).length} / ${w.checks.length}</span></div>
           ${w.checks.map((c, i) => `<label class="list-row" style="grid-template-columns:22px minmax(0,1fr);align-items:center;cursor:${!done && canTech() && approved ? 'pointer' : 'default'}"><input type="checkbox" data-check="${i}" ${c.done ? 'checked' : ''} ${!done && canTech() && approved ? '' : 'disabled'} style="width:18px;height:18px;accent-color:var(--accent)"><span style="${c.done ? 'color:var(--muted);text-decoration:line-through' : ''}">${esc(c.text)}</span></label>`).join('')}
-          ${!done && !approved ? '<p class="hint" style="padding:0 18px 14px">ติ๊กได้หลังหัวหน้าอนุมัติ</p>' : ''}</section>` : ''}
+          ${!done && !approved ? '<p class="hint u-pad-b">ติ๊กได้หลังหัวหน้าอนุมัติ</p>' : ''}</section>` : ''}
         <section class="box"><div class="bar"><h2>บันทึกการเปลี่ยนแปลง</h2></div>
           <table><thead><tr><th scope="col" style="width:48px">REV</th><th scope="col" style="width:140px">เวลา</th><th scope="col">รายการ</th></tr></thead>
-          <tbody>${log.map((l) => `<tr><td class="mono">${l.rev}</td><td class="mono" style="white-space:nowrap">${fmtDateTime(l.at)}</td><td>${esc(l.text)}</td></tr>`).join('')}</tbody></table></section>
+          <tbody>${log.map((l) => `<tr><td class="mono">${l.rev}</td><td class="mono u-nowrap">${fmtDateTime(l.at)}</td><td>${esc(l.text)}</td></tr>`).join('')}</tbody></table></section>
         ${partsBox}
       </div>
       <section class="box w2" style="gap:0;border-width:1.5px"><div class="bar"><h2>${done ? 'ผลการปิดงาน' : 'บันทึกผลและปิดงาน'}</h2></div><div class="pad">${action}</div></section>
@@ -326,13 +474,13 @@ function taskRow(w) {
   const [c, tb, tf] = TYPE_STYLE[w.type] || TYPE_STYLE.inspect;
   const [pl, pb, pf] = PRIO[priOf(w)];
   const sub = `<span class="mono">${esc(w.id)}</span><span>${done ? 'ปิดแล้ว' : STATUS[w.status][0]}</span>`;
-  return `<div class="trow task ${done ? 'done' : ''}" data-act="open-wo" data-id="${esc(w.id)}" aria-selected="${w.id === state.selectedWo}">
+  return `<div class="trow task ${done ? 'done' : ''}" data-act="open-wo" data-id="${esc(w.id)}"${w.id === state.selectedWo ? ' aria-current="true"' : ''}>
     <span class="stripe" style="--c:${c}"></span>
-    <span><button type="button" class="check ${done ? 'on' : ''}" data-act="open-wo" data-id="${esc(w.id)}" aria-label="${done ? 'ปิดงานแล้ว' : 'ปิดงาน'} ${esc(w.id)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button></span>
+    <span><button type="button" class="check ${done ? 'on' : ''}" data-act="open-wo" data-id="${esc(w.id)}" aria-label="เปิดใบงาน ${esc(w.id)}${done ? ' (ปิดแล้ว)' : ''}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button></span>
     <span class="tname"><button type="button" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.title)}</button><small>${sub}</small></span>
     <span class="cell">${done ? pill(TYPE[w.type], 'var(--grey-bg)', 'var(--muted)') : pill(TYPE[w.type], tb, tf)}</span>
     <span class="cell"><span class="tag">${esc(w.asset)}</span></span>
-    <span class="cell">${w.tech ? `${avatar(w.tech)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(w.tech)}</span>` : '<span class="dim">ยังไม่มอบหมาย</span>'}</span>
+    <span class="cell">${w.tech ? `${avatar(w.tech)}<span class="u-ell">${esc(w.tech)}</span>` : '<span class="dim">ยังไม่มอบหมาย</span>'}</span>
     <span class="cell mono" style="font-size:13px;${!done && w.startAt >= startOfToday() ? 'color:var(--ok-fg)' : ''}">${relDate(done ? w.endAt : w.startAt)}</span>
     <span class="cell">${done ? pill(pl, 'var(--grey-bg)', 'var(--muted)') : pill(pl, pb, pf)}</span>
   </div>`;
@@ -369,15 +517,15 @@ function viewWork() {
     const shown = k === 'done' && !state.showDone ? items.slice(0, 6) : items;
     return `<section aria-label="${label}">
       <button type="button" class="ghead" data-act="toggle-group" data-id="${k}" aria-expanded="${open}">${chevron}${label}<span class="mono">${items.length}</span></button>
-      ${open ? `${shown.map(taskRow).join('')}${!items.length && k !== 'pending' ? '<p class="empty" style="padding-left:22px">ไม่มีงานในกลุ่มนี้</p>' : ''}
+      ${open ? `${shown.map(taskRow).join('')}${!items.length && k !== 'pending' ? '<p class="empty" style="padding-left:var(--space-lg)">ไม่มีงานในกลุ่มนี้</p>' : ''}
         ${k === 'done' && items.length > shown.length ? `<button type="button" class="more" data-act="show-done">แสดงอีก ${items.length - shown.length} งาน</button>` : ''}
         ${k === 'pending' ? quickAdd() : ''}` : ''}
     </section>`;
   }).join('');
-  return `<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px"><div class="chips" role="group" aria-label="ขอบเขตงาน">${tabs}</div>
+  return `<div class="u-spread"><div class="chips" role="group" aria-label="ขอบเขตงาน">${tabs}</div>
       <button type="button" class="btn" data-act="export-wo">ส่งออก CSV</button></div>
     <div class="tasks"><div class="scroll"><div class="grid">
-      <div class="trow th"><span></span><span></span><span style="padding:0 10px">ชื่องาน</span><span style="padding:0 10px">ประเภท</span><span style="padding:0 10px">เครื่อง</span><span style="padding:0 10px">ผู้รับผิดชอบ</span><span style="padding:0 10px">วันที่</span><span style="padding:0 10px">ความสำคัญ</span></div>
+      <div class="trow th"><span></span><span></span><span class="u-px">ชื่องาน</span><span class="u-px">ประเภท</span><span class="u-px">เครื่อง</span><span class="u-px">ผู้รับผิดชอบ</span><span class="u-px">วันที่</span><span class="u-px">ความสำคัญ</span></div>
       ${body}
     </div></div></div>`;
 }
@@ -393,8 +541,8 @@ function viewQuick() {
     const w = state.workOrders.find((x) => x.id === q.sent.id);
     return `<section class="qr done" aria-live="polite">
       <span class="okmark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span>
-      <div><h2 style="font-size:24px;line-height:32px">ส่งแจ้งงานแล้ว</h2><span class="mono dim">${esc(q.sent.id)}</span></div>
-      <dl class="kv box" style="padding:16px;border-radius:12px"><dt>เครื่อง</dt><dd class="mono">${esc(q.sent.asset)}</dd><dt>อาการ</dt><dd>${esc(q.sent.title)}</dd><dt>สถานะ</dt><dd>${w ? STATUS[w.status][0] : 'รออนุมัติ'}</dd></dl>
+      <div><h2 style="font-size:var(--text-2xl);line-height:1.35">ส่งแจ้งงานแล้ว</h2><span class="mono dim">${esc(q.sent.id)}</span></div>
+      <dl class="kv box" style="padding:var(--space-md);border-radius:var(--radius-card)"><dt>เครื่อง</dt><dd class="mono">${esc(q.sent.asset)}</dd><dt>อาการ</dt><dd>${esc(q.sent.title)}</dd><dt>สถานะ</dt><dd>${w ? STATUS[w.status][0] : 'รออนุมัติ'}</dd></dl>
       <p class="dim">${q.sent.stopped ? 'แจ้งหัวหน้าซ่อมบำรุงแล้ว ถ้าไม่มีช่างมารับงานใน 15 นาที ให้โทรแจ้งห้องซ่อมบำรุง' : 'ช่างจะเข้ามาตรวจภายในกะนี้ ติดตามสถานะได้ที่หน้างานซ่อม'}</p>
       <div class="actions"><button type="button" class="btn solid big" data-act="qr-again">แจ้งงานอื่น</button><button type="button" class="btn big" data-act="open-wo" data-id="${esc(q.sent.id)}">ดูใบงาน</button></div>
     </section>`;
@@ -404,10 +552,10 @@ function viewQuick() {
   const ready = q.asset && q.symptoms.length && q.stopped !== null;
   const missing = !q.asset ? 'เลือกเครื่อง' : !q.symptoms.length ? 'เลือกอาการอย่างน้อย 1 ข้อ' : q.stopped === null ? 'บอกว่าเครื่องยังเดินอยู่ไหม' : '';
   return `<form class="qr" data-form="qr">
-    <p class="hint" style="margin:-8px 0 0">แจ้งได้ใน 3 ขั้น ใบงานจะส่งให้หัวหน้าซ่อมบำรุงอนุมัติทันที <button type="button" class="link" style="font-family:var(--sans)" data-act="nav" data-id="work">ดูงานซ่อมทั้งหมด</button></p>
+    <p class="hint" style="margin:calc(-1 * var(--space-xs)) 0 0">แจ้งได้ใน 3 ขั้น ใบงานจะส่งให้หัวหน้าซ่อมบำรุงอนุมัติทันที <button type="button" class="link u-sans" data-act="nav" data-id="work">ดูงานซ่อมทั้งหมด</button></p>
     <fieldset><legend>1. เครื่องไหน</legend>
       <label for="qr-filter" class="sr">ค้นหาเครื่อง</label><input id="qr-filter" class="qr-input" data-qr="filter" value="${esc(q.filter)}" placeholder="พิมพ์รหัสหรือชื่อเครื่อง" autocomplete="off">
-      <div class="qr-assets" id="qr-assets">${list.map((a) => `<button type="button" class="opt ${q.asset === a.id ? 'on' : ''}" aria-pressed="${q.asset === a.id}" data-act="qr-asset" data-id="${esc(a.id)}"><span class="mono" style="font-weight:500">${esc(a.id)}</span><span class="hint">${esc(a.name)}</span></button>`).join('') || '<p class="hint">ไม่พบเครื่องที่ค้นหา</p>'}</div>
+      <div class="qr-assets" id="qr-assets">${list.map((a) => `<button type="button" class="opt ${q.asset === a.id ? 'on' : ''}" aria-pressed="${q.asset === a.id}" data-act="qr-asset" data-id="${esc(a.id)}"><span class="mono u-w500">${esc(a.id)}</span><span class="hint">${esc(a.name)}</span></button>`).join('') || '<p class="hint">ไม่พบเครื่องที่ค้นหา</p>'}</div>
     </fieldset>
     <fieldset><legend>2. อาการ</legend>
       <div class="qr-chips">${SYMPTOMS.map((x) => `<button type="button" class="chip ${q.symptoms.includes(x) ? 'on' : ''}" aria-pressed="${q.symptoms.includes(x)}" data-act="qr-sym" data-id="${esc(x)}">${esc(x)}</button>`).join('')}</div>
@@ -458,21 +606,21 @@ function createPanel() {
   const P = [['stop', 'เครื่องหยุด', 'ไลน์หยุดหรือของเสียหลุด ต้องเริ่มทันที', 'var(--stop)'], ['slow', 'เดินได้แต่ผิดปกติ', 'ทำภายในกะนี้ก่อนจะลามเป็นเครื่องหยุด', 'var(--wait)'], ['plan', 'ทำตามแผนได้', 'นัดทำช่วงหยุดเปลี่ยนรุ่นหรือวันซ่อมบำรุง', 'var(--run)']];
   return `<div class="drawer-wrap"><button type="button" class="scrim" data-act="panel-close" aria-label="ปิด" tabindex="-1"></button>
     <form class="drawer create" role="dialog" aria-modal="true" aria-labelledby="cp-h" data-form="create">
-      <div class="dhead"><div><h2 id="cp-h" style="font-size:19px;line-height:26px">สร้างงานใหม่</h2><span class="mono dim" style="font-size:12px">ร่าง ส่งแล้วรอหัวหน้าอนุมัติ</span></div>
+      <div class="dhead"><div><h2 id="cp-h" style="font-size:var(--text-lg);line-height:1.35">สร้างงานใหม่</h2><span class="mono dim" style="font-size:var(--text-xs)">ร่าง ส่งแล้วรอหัวหน้าอนุมัติ</span></div>
         <button type="button" class="iconbtn" data-act="panel-close" aria-label="ปิด"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
       <div class="dbody cbody">
-        <div class="field"><label for="cp-title">ชื่องาน</label><input id="cp-title" data-c="title" value="${esc(c.title)}" placeholder="เช่น เปลี่ยนไส้กรองหัวดูด MNT-103" style="min-height:48px;font-size:16px" autocomplete="off"></div>
+        <div class="field"><label for="cp-title">ชื่องาน</label><input id="cp-title" data-c="title" value="${esc(c.title)}" placeholder="เช่น เปลี่ยนไส้กรองหัวดูด MNT-103" style="min-height:48px;font-size:var(--text-md)" autocomplete="off"></div>
         <fieldset><legend>ประเภทงาน</legend><div class="optgrid">${Object.entries(TYPE).map(([k, l]) => `<button type="button" ${opt(c.type === k)} data-act="c-type" data-id="${k}">${l}</button>`).join('')}</div></fieldset>
         <div class="cgrid">
           <div class="field"><label for="cp-asset">เครื่องจักร</label><select id="cp-asset" data-c="asset" data-rerender="1"><option value="">เลือกเครื่อง</option>${state.assets.map((x) => `<option value="${esc(x.id)}" ${c.asset === x.id ? 'selected' : ''}>${esc(x.id)} · ${esc(x.name)}</option>`).join('')}</select>
             <span class="hint">${a ? `${esc(a.line)}, ระดับความสำคัญ ${esc(a.cls)}` : 'งานต้องผูกกับเครื่องเพื่อเก็บประวัติ'}</span></div>
           <div class="field"><label for="cp-due">กำหนดเสร็จ</label><input id="cp-due" type="date" data-c="due" value="${esc(c.due)}"><span class="hint">ไม่บังคับ</span></div>
         </div>
-        <fieldset><legend>ผลกระทบ</legend><div style="display:flex;flex-direction:column;gap:8px">${P.map(([k, l, d, col]) => `<button type="button" ${opt(c.prio === k)} data-act="c-prio" data-id="${k}" style="display:grid;grid-template-columns:12px minmax(0,1fr);gap:12px;text-align:left;align-items:start;padding:12px 14px"><span style="width:12px;height:12px;margin-top:4px;border-radius:6px;background:${col}"></span><span style="display:flex;flex-direction:column;gap:2px"><b style="font-weight:500">${l}</b><span class="hint">${d}</span></span></button>`).join('')}</div></fieldset>
-        <fieldset><legend>มอบหมายให้ <span class="hint" style="font-weight:400">เลือกได้หลายคน คนแรกเป็นผู้รับผิดชอบหลัก</span></legend><div style="display:flex;flex-wrap:wrap;gap:8px">${peopleList().map((n) => { const on = c.people.includes(n); return `<button type="button" ${opt(on)} data-act="c-person" data-id="${esc(n)}" style="height:44px;padding:0 14px 0 6px;border-radius:22px;display:inline-flex;align-items:center;gap:8px">${avatar(n, false).replace('class="avatar ', `class="avatar ${on ? 'dark ' : ''}`)}${esc(n)}</button>`; }).join('')}</div></fieldset>
-        <div class="field"><span style="font-size:13px;font-weight:500">รายการตรวจ <span class="hint" style="font-weight:400">${c.checks.filter((x) => x.done).length} / ${c.checks.length}</span></span>
-          <div class="box" style="border-radius:12px">${c.checks.map((x, i) => `<div class="list-row" style="grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:6px 8px 6px 14px"><span>${esc(x.text)}</span><button type="button" class="iconbtn" style="width:32px;height:32px" data-act="c-uncheck" data-id="${i}" aria-label="ลบรายการ ${esc(x.text)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}
-            <div style="display:flex;gap:8px;padding:6px 8px 6px 14px;background:var(--hover)"><label for="cp-new" class="sr">เพิ่มรายการตรวจ</label><input id="cp-new" data-c="newCheck" value="${esc(c.newCheck)}" placeholder="เพิ่มรายการตรวจ แล้วกด Enter" style="flex:1;min-width:0;height:40px;border:0;background:transparent" autocomplete="off"><button type="button" class="btn small" data-act="c-add">เพิ่ม</button></div></div></div>
+        <fieldset><legend>ผลกระทบ</legend><div style="display:flex;flex-direction:column;gap:var(--space-xs)">${P.map(([k, l, d, col]) => `<button type="button" ${opt(c.prio === k)} data-act="c-prio" data-id="${k}" style="display:grid;grid-template-columns:12px minmax(0,1fr);gap:var(--space-sm);text-align:left;align-items:start;padding:var(--space-sm) var(--space-sm)"><span style="width:12px;height:12px;margin-top:4px;border-radius:6px;background:${col}"></span><span style="display:flex;flex-direction:column;gap:var(--space-3xs)"><b class="u-w500">${l}</b><span class="hint">${d}</span></span></button>`).join('')}</div></fieldset>
+        <fieldset><legend>มอบหมายให้ <span class="hint u-w400">เลือกได้หลายคน คนแรกเป็นผู้รับผิดชอบหลัก</span></legend><div style="display:flex;flex-wrap:wrap;gap:var(--space-xs)">${peopleList().map((n) => { const on = c.people.includes(n); return `<button type="button" ${opt(on)} data-act="c-person" data-id="${esc(n)}" style="height:44px;padding:0 var(--space-sm) 0 var(--space-2xs);border-radius:22px;display:inline-flex;align-items:center;gap:var(--space-xs)">${avatar(n, false).replace('class="avatar ', `class="avatar ${on ? 'dark ' : ''}`)}${esc(n)}</button>`; }).join('')}</div></fieldset>
+        <div class="field"><span style="font-size:var(--text-sm);font-weight:500">รายการตรวจ <span class="hint u-w400">${c.checks.filter((x) => x.done).length} / ${c.checks.length}</span></span>
+          <div class="box" style="border-radius:var(--radius-card)">${c.checks.map((x, i) => `<div class="list-row" style="grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:var(--space-2xs) var(--space-xs) var(--space-2xs) var(--space-sm)"><span>${esc(x.text)}</span><button type="button" class="iconbtn" style="width:32px;height:32px" data-act="c-uncheck" data-id="${i}" aria-label="ลบรายการ ${esc(x.text)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}
+            <div style="display:flex;gap:var(--space-xs);padding:var(--space-2xs) var(--space-xs) var(--space-2xs) var(--space-sm);background:var(--hover)"><label for="cp-new" class="sr">เพิ่มรายการตรวจ</label><input id="cp-new" data-c="newCheck" value="${esc(c.newCheck)}" placeholder="เพิ่มรายการตรวจ แล้วกด Enter" style="flex:1;min-width:0;height:40px;border:0;background:transparent" autocomplete="off"><button type="button" class="btn small" data-act="c-add">เพิ่ม</button></div></div></div>
         <div class="field"><label for="cp-note">รายละเอียดเพิ่มเติม</label><textarea id="cp-note" data-c="note" rows="3" placeholder="อาการที่พบ สิ่งที่ต้องระวัง">${esc(c.note)}</textarea></div>
       </div>
       <div class="cfoot"><span class="hint" id="cp-hint" style="${ready ? '' : 'color:var(--stop-fg)'}">${ready ? (c.people.length ? `มอบหมาย ${c.people.length} คน` : 'ยังไม่มอบหมาย งานจะเข้าคิวรวม') : 'ใส่ชื่องานและเลือกเครื่องก่อนสร้าง'}</span>
@@ -485,10 +633,10 @@ function drawer() {
   document.body.style.overflow = w || state.panel ? 'hidden' : '';
   if (!w) return createPanel();
   return `<div class="drawer-wrap"><button type="button" class="scrim" data-act="close-drawer" aria-label="ปิดรายละเอียด" tabindex="-1"></button>
-    <aside class="drawer" role="dialog" aria-modal="true" aria-label="ใบสั่งงาน ${esc(w.id)}">
+    <div class="drawer" role="dialog" aria-modal="true" aria-label="ใบสั่งงาน ${esc(w.id)}">
       <div class="dhead"><span class="mono dim">${esc(w.id)}</span><button type="button" class="iconbtn" data-act="close-drawer" aria-label="ปิด"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
       <div class="dbody">${woDetail(w)}</div>
-    </aside></div>`;
+    </div></div>`;
 }
 
 /* ---------- SH-03 เครื่องจักร ---------- */
@@ -502,7 +650,7 @@ function fieldsForm(kind, title, fields) {
         : `<input id="f-${name}" name="${name}" type="${type}" value="${esc(d[name])}" ${extra}>`
   }</div>`).join('');
   return `<form class="box" data-form="${kind}"><div class="bar"><h2>${title}</h2></div><div class="pad">
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:14px 16px">${html}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:var(--space-sm) var(--space-md)">${html}</div>
     <div class="actions"><button class="btn solid">บันทึก</button><button type="button" class="btn" data-act="close-form">ยกเลิก</button></div></div></form>`;
 }
 
@@ -531,7 +679,7 @@ function viewAssets(m) {
   };
   const rows = state.assets.map((x) => {
     const [s, label] = stateOf(x.id);
-    return `<tr class="pick" data-act="open-asset" data-id="${esc(x.id)}" aria-selected="${x.id === a?.id}">
+    return `<tr class="pick" data-act="open-asset" data-id="${esc(x.id)}"${x.id === a?.id ? ' aria-current="true"' : ''}>
       <td><button type="button" class="link" data-act="open-asset" data-id="${esc(x.id)}">${esc(x.id)}</button></td><td>${esc(x.name)}</td>
       <td class="dim">${esc(x.line)}</td><td class="mono">${esc(x.cls || '—')}</td>
       <td class="mono num">${hours(mergedDown(x.id, m.from, m.now))}</td>
@@ -543,16 +691,16 @@ function viewAssets(m) {
     const pms = state.pmPlans.filter((p) => p.asset === a.id).sort((x, y) => x.dueDate - y.dueDate);
     const t0 = startOfToday();
     detail = `<div class="split">
-      <section class="box w2"><div class="bar"><h2 style="display:flex;gap:12px;align-items:baseline"><span class="mono">${esc(a.id)}</span>${esc(a.name)}</h2><span class="actions">${editBtn('assets', a.id)}${delBtn('assets', a.id, 'ลบเครื่องนี้')}</span></div>
+      <section class="box w2"><div class="bar"><h2 style="display:flex;gap:var(--space-sm);align-items:baseline"><span class="mono">${esc(a.id)}</span>${esc(a.name)}</h2><span class="actions">${editBtn('assets', a.id)}${delBtn('assets', a.id, 'ลบเครื่องนี้')}</span></div>
         <dl class="facts"><div><dt>ตำแหน่ง</dt><dd>${esc(a.line || '—')}</dd></div><div><dt>ระดับความสำคัญ</dt><dd>${esc(a.cls || '—')}</dd></div>
           <div><dt>ผู้ผลิต</dt><dd>${esc(a.maker || '—')}</dd></div><div><dt>รุ่น</dt><dd class="mono">${esc(a.model || '—')}</dd></div>
           <div><dt>ปีที่ติดตั้ง</dt><dd class="mono">${esc(a.year || '—')}</dd></div><div><dt>หยุด 7 วัน</dt><dd class="mono">${hours(mergedDown(a.id, m.from, m.now))} ชม.</dd></div></dl>
         <div class="bar" style="border-top:1px solid var(--ink)"><h2>แผน PM ของเครื่องนี้</h2></div>
         ${pms.map((p) => `<div class="list-row"><span class="mono ${p.dueDate < t0 ? 'alarm' : ''}">${fmtDate(p.dueDate)}</span><span class="t"><span>${esc(p.task)}</span><span class="s">ทุก ${p.intervalDays} วัน</span></span><span></span></div>`).join('') || '<p class="empty">ยังไม่มีแผน PM</p>'}
       </section>
-      <section class="box w3" style="gap:0"><div class="bar"><h2>ประวัติงาน</h2></div>
+      <section class="box w3 u-gap0"><div class="bar"><h2>ประวัติงาน</h2></div>
         ${hist.length ? `<div class="scroll"><table style="min-width:520px"><thead><tr><th scope="col">วันที่</th><th scope="col">งาน</th><th scope="col">สาเหตุ</th><th scope="col" class="num">หยุด (ชม.)</th></tr></thead><tbody>
-          ${hist.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono" style="white-space:nowrap">${fmtDate(w.startAt)}</td><td>${esc(w.title)}<span class="sub"><span class="mono">${esc(w.id)}</span><span>${STATUS[w.status][0]}</span></span></td><td class="mono">${esc(w.cause || '—')}</td><td class="mono num">${['inspect', 'improve'].includes(w.type) ? '—' : hours((w.endAt ?? m.now) - w.startAt)}</td></tr>`).join('')}
+          ${hist.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono u-nowrap">${fmtDate(w.startAt)}</td><td>${esc(w.title)}<span class="sub"><span class="mono">${esc(w.id)}</span><span>${STATUS[w.status][0]}</span></span></td><td class="mono">${esc(w.cause || '—')}</td><td class="mono num">${['inspect', 'improve'].includes(w.type) ? '—' : hours((w.endAt ?? m.now) - w.startAt)}</td></tr>`).join('')}
         </tbody></table></div>` : '<p class="empty">ยังไม่มีงาน</p>'}</section></div>`;
   }
   return `${form}<section class="box" aria-label="ทะเบียนเครื่องจักร">${rows ? `<div class="scroll"><table style="min-width:640px"><thead><tr><th scope="col">รหัส</th><th scope="col">ชื่อเครื่อง</th><th scope="col">ตำแหน่ง</th><th scope="col">ระดับ</th><th scope="col" class="num">หยุด 7 วัน</th><th scope="col">สถานะ</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีเครื่องจักร</p>'}</section>${detail}`;
@@ -572,10 +720,10 @@ function viewPm() {
   const html = groups.map(([label, test, late]) => {
     const items = state.pmPlans.filter((p) => test(p.dueDate)).sort((a, b) => a.dueDate - b.dueDate);
     if (!items.length) return '';
-    return `<section class="box"><div class="bar"><h2 class="${late ? 'alarm' : ''}">${label} <span class="mono dim" style="font-size:13px;font-weight:400">${items.length}</span></h2></div>
+    return `<section class="box"><div class="bar"><h2 class="${late ? 'alarm' : ''}">${label} <span class="mono dim u-small">${items.length}</span></h2></div>
       <div class="scroll"><table style="min-width:640px"><thead><tr><th scope="col">ครบกำหนด</th><th scope="col">เครื่อง</th><th scope="col">งาน</th><th scope="col">รอบ</th><th scope="col"><span class="sr">คำสั่ง</span></th></tr></thead><tbody>
-      ${items.map((p) => `<tr><td class="mono ${late ? 'alarm' : ''}" style="white-space:nowrap">${fmtDate(p.dueDate)}</td><td>${tag(p.asset)}</td><td>${esc(p.task)}</td><td class="dim" style="white-space:nowrap">ทุก ${p.intervalDays} วัน</td>
-        <td class="num"><span class="actions" style="justify-content:flex-end">${canTech() ? `<button type="button" class="btn small" data-act="pm-done" data-id="${esc(p.id)}">บันทึกว่าทำแล้ว</button>` : ''}${editBtn('pmPlans', p.id)}${delBtn('pmPlans', p.id)}</span></td></tr>`).join('')}
+      ${items.map((p) => `<tr><td class="mono ${late ? 'alarm' : ''} u-nowrap">${fmtDate(p.dueDate)}</td><td>${tag(p.asset)}</td><td>${esc(p.task)}</td><td class="dim u-nowrap">ทุก ${p.intervalDays} วัน</td>
+        <td class="num"><span class="actions u-end">${canTech() ? `<button type="button" class="btn small" data-act="pm-done" data-id="${esc(p.id)}">บันทึกว่าทำแล้ว</button>` : ''}${editBtn('pmPlans', p.id)}${delBtn('pmPlans', p.id)}</span></td></tr>`).join('')}
       </tbody></table></div></section>`;
   }).join('');
   return `${form}${summary}${html || '<section class="box"><p class="empty">ยังไม่มีแผน PM</p></section>'}`;
@@ -586,10 +734,10 @@ function viewParts() {
   const form = recordForm('parts');
   const toOrder = (p) => (p.qty <= p.min ? Math.max((p.max || p.min * 2 || 1) - p.qty, 1) : 0);
   const rows = [...state.parts].sort((a, b) => a.qty / (a.min || 1) - b.qty / (b.min || 1)).map((p) => `<tr>
-    <td class="mono" style="white-space:nowrap">${esc(p.id)}</td><td>${esc(p.name)}</td><td class="mono">${esc(p.bin)}</td>
+    <td class="mono u-nowrap">${esc(p.id)}</td><td>${esc(p.name)}</td><td class="mono">${esc(p.bin)}</td>
     <td class="mono num ${p.qty === 0 ? 'alarm' : ''}">${p.qty} / ${p.min}</td><td class="mono num">${p.max || '—'}</td>
     <td class="mono num">${toOrder(p) ? `<b>${toOrder(p)}</b>` : '<span class="dim">—</span>'}</td>
-    <td class="num"><span class="actions" style="justify-content:flex-end">${canTech() ? `<button type="button" class="btn small" data-act="part" data-id="${esc(p.id)}" data-delta="1">รับเข้า 1</button>` : ''}${editBtn('parts', p.id)}${delBtn('parts', p.id)}</span></td></tr>`).join('');
+    <td class="num"><span class="actions u-end">${canTech() ? `<button type="button" class="btn small" data-act="part" data-id="${esc(p.id)}" data-delta="1">รับเข้า 1</button>` : ''}${editBtn('parts', p.id)}${delBtn('parts', p.id)}</span></td></tr>`).join('');
   const orders = state.parts.filter(toOrder);
   return `${form}<section class="box" aria-label="คลังอะไหล่">${rows ? `<div class="scroll"><table style="min-width:860px"><thead><tr><th scope="col">รหัส</th><th scope="col">รายการ</th><th scope="col">ที่เก็บ</th><th scope="col" class="num">คงเหลือ / Min</th><th scope="col" class="num">Max</th><th scope="col" class="num">ควรสั่ง</th><th scope="col"><span class="sr">คำสั่ง</span></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
     <div class="actions"><button type="button" class="btn" data-act="export-order" ${orders.length ? '' : 'disabled'}>ส่งออกรายการสั่งซื้อ ${orders.length} รายการ (CSV)</button><span class="hint">เบิกอะไหล่ทำผ่านใบสั่งงาน เพื่อให้รู้ว่าใช้กับเครื่องไหน</span></div>`;
@@ -603,11 +751,11 @@ function viewGauges() {
   const n = (k) => state.gauges.filter((g) => gaugeState(g)[0] === k).length;
   const rows = list.map((g) => {
     const [k, label, c, b] = gaugeState(g);
-    return `<tr><td class="mono" style="white-space:nowrap">${esc(g.id)}</td><td>${esc(g.name)}<span class="sub">${esc(g.range || '')}</span></td><td>${esc(g.location || '—')}</td>
-      <td class="dim" style="white-space:nowrap">ทุก ${g.intervalDays} วัน</td><td class="mono" style="white-space:nowrap">${g.lastCal ? fmtDateY(g.lastCal) : '—'}</td>
-      <td class="mono ${k === 'late' ? 'alarm' : ''}" style="white-space:nowrap">${fmtDateY(g.dueDate)}</td>
+    return `<tr><td class="mono u-nowrap">${esc(g.id)}</td><td>${esc(g.name)}<span class="sub">${esc(g.range || '')}</span></td><td>${esc(g.location || '—')}</td>
+      <td class="dim u-nowrap">ทุก ${g.intervalDays} วัน</td><td class="mono u-nowrap">${g.lastCal ? fmtDateY(g.lastCal) : '—'}</td>
+      <td class="mono ${k === 'late' ? 'alarm' : ''} u-nowrap">${fmtDateY(g.dueDate)}</td>
       <td><span class="lamp" style="--c:${c};--b:${b}">${label}</span>${g.note ? `<span class="sub">${esc(g.note)}</span>` : ''}</td>
-      <td class="num"><span class="actions" style="justify-content:flex-end">${canTech() ? `<button type="button" class="btn small" data-act="cal" data-id="${esc(g.id)}" data-pass="1">ผ่าน</button><button type="button" class="btn small" data-act="cal" data-id="${esc(g.id)}" data-pass="0" ${g.status === 'hold' ? 'disabled' : ''}>ไม่ผ่าน</button>` : ''}${editBtn('gauges', g.id)}${delBtn('gauges', g.id)}</span></td></tr>`;
+      <td class="num"><span class="actions u-end">${canTech() ? `<button type="button" class="btn small" data-act="cal" data-id="${esc(g.id)}" data-pass="1">ผ่าน</button><button type="button" class="btn small" data-act="cal" data-id="${esc(g.id)}" data-pass="0" ${g.status === 'hold' ? 'disabled' : ''}>ไม่ผ่าน</button>` : ''}${editBtn('gauges', g.id)}${delBtn('gauges', g.id)}</span></td></tr>`;
   }).join('');
   return `${form}<section class="stats" aria-label="สรุปเครื่องมือวัด">
       <div class="stat"><span class="label">ห้ามใช้</span><span class="fig ${n('hold') ? 'alarm' : ''}">${n('hold')}</span><span class="cap">ไม่ผ่านสอบเทียบ แยกออกจากไลน์</span></div>
@@ -634,7 +782,7 @@ function viewReport() {
   const causeTotal = causes.reduce((s, [, n]) => s + n, 0);
   let cum = 0;
   const chips = [7, 30, 90].map((d) => `<button type="button" data-act="period" data-id="${d}" aria-pressed="${state.period === d}">${d} วัน</button>`).join('');
-  return `<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px"><div class="chips" role="group" aria-label="ช่วงเวลา">${chips}</div>
+  return `<div class="u-spread"><div class="chips" role="group" aria-label="ช่วงเวลา">${chips}</div>
       <button type="button" class="btn" data-act="export-kpi">ส่งออก CSV</button></div>
     <section class="stats" aria-label="สรุป KPI">
       <div class="stat"><span class="label">Availability</span><span class="fig">${(100 * (1 - total.down / span)).toFixed(1)}<small>%</small></span><span class="cap">หยุดรวม ${hours(total.down)} ชม.</span></div>
@@ -643,17 +791,17 @@ function viewReport() {
       <div class="stat"><span class="label">PM compliance</span><span class="fig ${pmc.pct < 90 ? 'alarm' : ''}">${pmc.pct.toFixed(0)}<small>%</small></span><span class="cap">ทันกำหนด ${pmc.onTime} จาก ${pmc.done + pmc.late} งาน</span></div>
     </section>
     <div class="split">
-      <section class="box w3" style="gap:0"><div class="bar"><h2>เวลาหยุดรายเครื่อง ${state.period} วัน</h2></div>
+      <section class="box w3 u-gap0"><div class="bar"><h2>เวลาหยุดรายเครื่อง ${state.period} วัน</h2></div>
         <div class="scroll"><table style="min-width:640px"><thead><tr><th scope="col">เครื่อง</th><th scope="col" style="width:34%">เวลาหยุด (ชม.)</th><th scope="col" class="num">เสีย</th><th scope="col" class="num">MTBF</th><th scope="col" class="num">MTTR</th><th scope="col" class="num">Avail.</th></tr></thead><tbody>
         ${ranked.map((r, i) => `<tr class="pick" data-act="open-asset" data-id="${esc(r.a.id)}"><td>${tag(r.a.id)} <span class="dim">${esc(r.a.name)}</span></td>
-          <td><span style="display:flex;align-items:center;gap:8px"><span style="height:10px;width:${((r.down / maxDown) * 100).toFixed(1)}%;min-width:${r.down ? 2 : 0}px;background:${i === 0 && r.down ? 'var(--stop)' : 'var(--ink-2)'}"></span><span class="mono">${hours(r.down)}</span></span></td>
+          <td><span class="u-row"><span style="height:10px;width:${((r.down / maxDown) * 100).toFixed(1)}%;min-width:${r.down ? 2 : 0}px;background:${i === 0 && r.down ? 'var(--stop)' : 'var(--ink-2)'}"></span><span class="mono">${hours(r.down)}</span></span></td>
           <td class="mono num">${r.fails}</td><td class="mono num">${r.mtbf == null ? '—' : hours(r.mtbf)}</td><td class="mono num">${r.mttr == null ? '—' : hours(r.mttr)}</td><td class="mono num">${r.avail.toFixed(1)}%</td></tr>`).join('')}
         </tbody></table></div></section>
-      <section class="box w2" style="gap:0"><div class="bar"><h2>สาเหตุการเสีย (Pareto)</h2></div>
+      <section class="box w2 u-gap0"><div class="bar"><h2>สาเหตุการเสีย (Pareto)</h2></div>
         ${causes.length ? `<table><thead><tr><th scope="col">รหัส</th><th scope="col">สาเหตุ</th><th scope="col" class="num">ครั้ง</th><th scope="col" class="num">สะสม</th></tr></thead><tbody>
           ${causes.map(([k, nn]) => { cum += nn; return `<tr><td class="mono">${esc(k)}</td><td>${esc((CAUSES.find(([c]) => c === k) || [, k])[1])}</td><td class="mono num">${nn}</td><td class="mono num">${((100 * cum) / causeTotal).toFixed(0)}%</td></tr>`; }).join('')}
         </tbody></table>` : '<p class="empty">ยังไม่มีงานซ่อมที่ปิดพร้อมรหัสสาเหตุในช่วงนี้</p>'}
-        <p class="hint" style="padding:12px 16px">เลือกแก้สาเหตุที่สะสมถึงราว 80% ก่อน จะลดเวลาหยุดได้มากที่สุด</p></section>
+        <p class="hint u-pad-sm">เลือกแก้สาเหตุที่สะสมถึงราว 80% ก่อน จะลดเวลาหยุดได้มากที่สุด</p></section>
     </div>`;
 }
 
@@ -710,9 +858,9 @@ function importRows(coll, text) {
 function issuedBox() {
   const x = state.issued;
   if (!x) return '';
-  return `<div class="notice" style="margin:16px 18px 0"><b>${esc(x.title)}</b>
-    <dl class="kv" style="margin:8px 0"><dt>ชื่อ</dt><dd>${esc(x.name)}</dd><dt>รหัสพนักงาน</dt><dd class="mono">${esc(x.empId)}</dd><dt>รหัสผ่านชั่วคราว</dt><dd class="mono" style="font-size:18px;letter-spacing:.08em">${esc(x.temp)}</dd></dl>
-    <p class="hint" style="margin:0 0 8px">จดหรือแจ้งพนักงานตอนนี้ ปิดกล่องนี้แล้วจะดูรหัสนี้อีกไม่ได้ พนักงานต้องตั้งรหัสใหม่ตอนเข้าครั้งแรก</p>
+  return `<div class="notice u-mbox"><b>${esc(x.title)}</b>
+    <dl class="kv" style="margin:var(--space-xs) 0"><dt>ชื่อ</dt><dd>${esc(x.name)}</dd><dt>รหัสพนักงาน</dt><dd class="mono">${esc(x.empId)}</dd><dt>รหัสผ่านชั่วคราว</dt><dd class="mono" style="font-size:var(--text-lg);letter-spacing:.08em">${esc(x.temp)}</dd></dl>
+    <p class="hint" style="margin:0 0 var(--space-xs)">จดหรือแจ้งพนักงานตอนนี้ ปิดกล่องนี้แล้วจะดูรหัสนี้อีกไม่ได้ พนักงานต้องตั้งรหัสใหม่ตอนเข้าครั้งแรก</p>
     <div class="actions"><button type="button" class="btn small" data-act="copy-temp">คัดลอก</button><button type="button" class="btn small" data-act="issued-close">ปิด</button></div></div>`;
 }
 
@@ -722,8 +870,8 @@ function viewServer() {
   const admin = canAdmin();
   const colls = { assets: 'เครื่อง', workOrders: 'ใบงาน', pmPlans: 'แผน PM', parts: 'อะไหล่', gauges: 'เครื่องมือวัด' };
   const account = `<section class="box"><div class="bar"><h2>บัญชีของฉัน</h2></div>
-    <dl class="kv" style="padding:16px 18px"><dt>ชื่อ</dt><dd>${esc(state.user.name)}</dd><dt>รหัสพนักงาน</dt><dd class="mono">${esc(state.user.empId || '—')}</dd><dt>สิทธิ์</dt><dd>${esc(ROLE_LABEL[state.user.role] || 'ยังไม่มีสิทธิ์')}</dd></dl>
-    ${live ? `<form class="pad stack" data-form="mypass" style="padding-top:0;gap:10px">
+    <dl class="kv u-pad"><dt>ชื่อ</dt><dd>${esc(state.user.name)}</dd><dt>รหัสพนักงาน</dt><dd class="mono">${esc(state.user.empId || '—')}</dd><dt>สิทธิ์</dt><dd>${esc(ROLE_LABEL[state.user.role] || 'ยังไม่มีสิทธิ์')}</dd></dl>
+    ${live ? `<form class="pad stack u-pt0" data-form="mypass">
       <div class="field"><label for="m-old">รหัสผ่านเดิม</label><input id="m-old" name="current" type="password" required autocomplete="current-password"></div>
       <div class="field"><label for="m-new">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</label><input id="m-new" name="next" type="password" minlength="8" required autocomplete="new-password"></div>
       <div class="field"><label for="m-new2">ยืนยันรหัสผ่านใหม่</label><input id="m-new2" name="next2" type="password" minlength="8" required autocomplete="new-password"></div>
@@ -731,39 +879,39 @@ function viewServer() {
   if (!admin) return `<div class="split"><div class="w2" style="max-width:560px">${account}</div></div>`;
 
   const users = [...state.users].sort((x, y) => (x.role === 'disabled') - (y.role === 'disabled') || x.name.localeCompare(y.name, 'th'));
-  const usersBox = `<section class="box"><div class="bar"><h2>ผู้ใช้งาน <span class="mono dim" style="font-size:13px;font-weight:400">${users.filter((u) => u.role !== 'disabled').length}</span></h2></div>
-    ${live ? `<form class="pad" data-form="user" style="border-bottom:1px solid var(--rule)"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:12px;align-items:end">
+  const usersBox = `<section class="box"><div class="bar"><h2>ผู้ใช้งาน <span class="mono dim u-small">${users.filter((u) => u.role !== 'disabled').length}</span></h2></div>
+    ${live ? `<form class="pad" data-form="user" style="border-bottom:1px solid var(--rule)"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:var(--space-sm);align-items:end">
       <div class="field"><label for="u-name">ชื่อที่แสดง</label><input id="u-name" name="name" required autocomplete="off"></div>
       <div class="field"><label for="u-emp">รหัสพนักงาน</label><input id="u-emp" name="empId" required autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]{1,19}" title="A-Z 0-9 . _ - ยาว 2–20 ตัว" placeholder="เช่น M0112"></div>
       <div class="field"><label for="u-role">สิทธิ์</label><select id="u-role" name="role">${['operator', 'tech', 'admin'].map((r) => `<option value="${r}">${ROLE_LABEL[r]}</option>`).join('')}</select></div>
       <button class="btn solid">เพิ่มผู้ใช้</button></div>
       <p class="hint">ระบบจะสร้างรหัสผ่านชั่วคราวให้ แจ้งพนักงานด้วยตัวเอง พนักงานต้องตั้งรหัสใหม่ตอนเข้าครั้งแรก</p></form>
-      ${issuedBox()}` : '<p class="notice" style="margin:16px 18px 0">โหมดตัวอย่างแสดงรายชื่อตัวอย่าง เพิ่มผู้ใช้จริงได้หลังเชื่อม Firebase</p>'}
+      ${issuedBox()}` : '<p class="notice u-mbox">โหมดตัวอย่างแสดงรายชื่อตัวอย่าง เพิ่มผู้ใช้จริงได้หลังเชื่อม Firebase</p>'}
     <div class="scroll"><table style="min-width:680px"><thead><tr><th scope="col">ชื่อ</th><th scope="col">รหัสพนักงาน</th><th scope="col">สิทธิ์</th><th scope="col"><span class="sr">รหัสผ่าน</span></th></tr></thead><tbody>
-    ${users.map((u) => `<tr><td><span style="display:flex;align-items:center;gap:8px">${avatar(u.name)}${esc(u.name)}${u.id === state.user.uid ? ' <span class="dim">(คุณ)</span>' : ''}</span></td><td class="mono">${esc(u.empId || '—')}${u.mustChange ? ' <span class="dim" style="font-family:var(--sans)">· ยังไม่ได้ตั้งรหัส</span>' : ''}</td>
-      <td>${u.id === state.user.uid || !live ? esc(ROLE_LABEL[u.role] || u.role) : `<label for="r-${esc(u.id)}" class="sr">สิทธิ์ของ ${esc(u.name)}</label><select id="r-${esc(u.id)}" data-user-role="${esc(u.id)}" style="height:34px;padding:0 8px;border:1px solid var(--field);border-radius:8px;background:var(--card)">${['admin', 'tech', 'operator', 'disabled'].map((r) => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td>
-      <td style="text-align:right">${live && u.id !== state.user.uid && u.empId ? `<button type="button" class="btn small" data-act="reset-user" data-id="${esc(u.id)}">รีเซ็ตรหัสผ่าน</button>` : ''}</td></tr>`).join('')}
+    ${users.map((u) => `<tr><td><span class="u-row">${avatar(u.name)}${esc(u.name)}${u.id === state.user.uid ? ' <span class="dim">(คุณ)</span>' : ''}</span></td><td class="mono">${esc(u.empId || '—')}${u.mustChange ? ' <span class="dim u-sans">· ยังไม่ได้ตั้งรหัส</span>' : ''}</td>
+      <td>${u.id === state.user.uid || !live ? esc(ROLE_LABEL[u.role] || u.role) : `<label for="r-${esc(u.id)}" class="sr">สิทธิ์ของ ${esc(u.name)}</label><select id="r-${esc(u.id)}" data-user-role="${esc(u.id)}" style="height:34px;padding:0 var(--space-xs);border:1px solid var(--field);border-radius:var(--radius-card);background:var(--card)">${['admin', 'tech', 'operator', 'disabled'].map((r) => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td>
+      <td class="num">${live && u.id !== state.user.uid && u.empId ? `<button type="button" class="btn small" data-act="reset-user" data-id="${esc(u.id)}">รีเซ็ตรหัสผ่าน</button>` : ''}</td></tr>`).join('')}
     </tbody></table></div></section>`;
 
   const p = state.importPreview;
   const importBox = `<section class="box w3"><div class="bar"><h2>นำเข้าข้อมูลจาก Excel</h2></div><div class="pad">
     <p class="dim">บันทึกไฟล์ Excel เป็น "CSV UTF-8" ใช้หัวตารางตามไฟล์ตัวอย่าง รหัสซ้ำจะอัปเดตข้อมูลเดิม</p>
     <div class="actions"><button type="button" class="btn small" data-act="tpl" data-id="assets">ไฟล์ตัวอย่าง เครื่องจักร</button><button type="button" class="btn small" data-act="tpl" data-id="parts">ไฟล์ตัวอย่าง อะไหล่</button></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:12px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:var(--space-sm)">
       <div class="field"><label for="imp-assets">นำเข้าเครื่องจักร</label><input id="imp-assets" type="file" accept=".csv,text/csv" data-import="assets"></div>
       <div class="field"><label for="imp-parts">นำเข้าอะไหล่</label><input id="imp-parts" type="file" accept=".csv,text/csv" data-import="parts"></div>
     </div>
     ${p ? `<div class="notice ${p.errors.length && !p.rows.length ? 'err' : ''}"><b>${p.coll === 'assets' ? 'เครื่องจักร' : 'อะไหล่'} ${p.rows.length} รายการพร้อมนำเข้า</b>${p.rows.length ? `: ${p.rows.slice(0, 3).map((r) => esc(r.id)).join(', ')}${p.rows.length > 3 ? ' …' : ''}` : ''}
-      ${p.errors.length ? `<ul style="margin:6px 0 0;padding-left:18px">${p.errors.slice(0, 5).map((e) => `<li>${esc(e)}</li>`).join('')}${p.errors.length > 5 ? `<li>และอีก ${p.errors.length - 5} แถว</li>` : ''}</ul>` : ''}</div>
+      ${p.errors.length ? `<ul style="margin:var(--space-2xs) 0 0;padding-left:var(--space-md)">${p.errors.slice(0, 5).map((e) => `<li>${esc(e)}</li>`).join('')}${p.errors.length > 5 ? `<li>และอีก ${p.errors.length - 5} แถว</li>` : ''}</ul>` : ''}</div>
       <div class="actions"><button type="button" class="btn solid" data-act="import-go" ${p.rows.length ? '' : 'disabled'}>นำเข้า ${p.rows.length} รายการ</button><button type="button" class="btn" data-act="import-cancel">ยกเลิก</button></div>` : ''}
   </div></section>`;
 
   const plantBox = `<section class="box"><div class="bar"><h2>ข้อมูลโรงงาน</h2><span class="lamp" style="--c:${live ? 'var(--ok)' : 'var(--run)'}">${live ? 'เชื่อมฐานข้อมูลจริงแล้ว' : 'โหมดตัวอย่าง'}</span></div><div class="pad">
-    ${live ? `<form class="stack" data-form="plant" style="gap:10px"><div class="field"><label for="p-name">ชื่อโรงงาน / บริษัท</label><input id="p-name" name="plant" value="${esc(state.setup?.plant || '')}" required></div><div class="field"><label for="p-dept">แผนก</label><input id="p-dept" name="dept" value="${esc(state.setup?.dept || '')}"></div><div class="actions"><button class="btn small">บันทึก</button></div></form>
+    ${live ? `<form class="stack u-gap-sm" data-form="plant"><div class="field"><label for="p-name">ชื่อโรงงาน / บริษัท</label><input id="p-name" name="plant" value="${esc(state.setup?.plant || '')}" required></div><div class="field"><label for="p-dept">แผนก</label><input id="p-dept" name="dept" value="${esc(state.setup?.dept || '')}"></div><div class="actions"><button class="btn small">บันทึก</button></div></form>
       <p class="hint">โปรเจกต์ Firebase: <span class="mono">${esc(b.projectId)}</span></p>
       ${state.canSeed ? '<div class="actions"><button type="button" class="btn solid" data-act="seed">ใส่ข้อมูลตัวอย่างเพื่อทดลอง</button></div><p class="hint">ฐานข้อมูลยังว่าง จะใส่ข้อมูลตัวอย่างไว้ลองก่อน หรือนำเข้าข้อมูลจริงจาก Excel ก็ได้</p>' : ''}`
     : `<p class="dim">ข้อมูลตอนนี้เก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ยังไม่มีระบบล็อกอิน ใช้ดูหน้าตาและทดลองก่อนตั้งค่า Firebase</p>
-      <form class="stack" data-form="config" style="gap:10px"><div class="field"><label for="s-config">firebaseConfig (ถ้ามีแล้ว)</label>
+      <form class="stack u-gap-sm" data-form="config"><div class="field"><label for="s-config">firebaseConfig (ถ้ามีแล้ว)</label>
       <textarea id="s-config" name="config" class="code" rows="6" spellcheck="false" required placeholder='const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", appId: "..." };'>${esc(state.draft.config)}</textarea></div>
       <div class="actions"><button class="btn solid">เชื่อมต่อเครื่องนี้</button><button type="button" class="btn" data-act="reset-demo">รีเซ็ตข้อมูลตัวอย่าง</button></div></form>`}
     ${state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}</div></section>`;
@@ -784,7 +932,7 @@ function placeName() {
 function authShell(title, body) {
   const plant = placeName();
   return `<div class="login"><div class="authcard">
-    <div class="bar" style="display:flex;align-items:center;gap:12px"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>
+    <div class="bar" style="display:flex;align-items:center;gap:var(--space-sm)"><span class="mark">${icon('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.8-.6-.6-2.8z"/>')}</span>
       <div><b class="authname">CMMS</b>${plant ? `<span class="authplant">${esc(plant)}</span>` : ''}<span class="authtitle">${title}</span></div></div>
     ${body}</div></div>`;
 }
@@ -797,8 +945,8 @@ function viewLogin() {
     <div class="field"><label for="l-emp">รหัสพนักงาน</label><input id="l-emp" name="empId" autocomplete="username" autocapitalize="characters" spellcheck="false" required value="${esc(state.draft.empId)}"></div>
     <div class="field"><label for="l-pass">รหัสผ่าน</label><input id="l-pass" name="password" type="password" autocomplete="current-password" required></div>
     ${err}${note}
-    <button class="btn solid" style="justify-content:center">เข้าสู่ระบบ</button>
-    <p class="hint" style="text-align:center">ลืมรหัสผ่านหรือยังไม่มีบัญชี ให้หัวหน้าซ่อมบำรุงรีเซ็ตหรือเพิ่มให้ในหน้าตั้งค่า</p>
+    <button class="btn solid u-center">เข้าสู่ระบบ</button>
+    <p class="hint u-tc">ลืมรหัสผ่านหรือยังไม่มีบัญชี ให้หัวหน้าซ่อมบำรุงรีเซ็ตหรือเพิ่มให้ในหน้าตั้งค่า</p>
     ${fromFile ? '' : '<button type="button" class="btn small" style="align-self:center" data-act="disconnect">เลิกเชื่อมต่อเครื่องนี้</button>'}</form>`);
 }
 
@@ -810,8 +958,8 @@ function viewFirstPassword() {
     <div class="field"><label for="f-new">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</label><input id="f-new" name="next" type="password" minlength="8" required autocomplete="new-password"></div>
     <div class="field"><label for="f-new2">ยืนยันรหัสผ่านใหม่</label><input id="f-new2" name="next2" type="password" minlength="8" required autocomplete="new-password"></div>
     ${err}
-    <button class="btn solid" style="justify-content:center">บันทึกรหัสผ่าน</button>
-    <button type="button" class="btn" style="justify-content:center" data-act="logout">ออกจากระบบ</button></form>`);
+    <button class="btn solid u-center">บันทึกรหัสผ่าน</button>
+    <button type="button" class="btn u-center" data-act="logout">ออกจากระบบ</button></form>`);
 }
 
 function viewSetup() {
@@ -825,22 +973,23 @@ function viewSetup() {
     <div class="field"><label for="s-pass">รหัสผ่าน (อย่างน้อย 8 ตัว)</label><input id="s-pass" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
     <div class="field"><label for="s-pass2">ยืนยันรหัสผ่าน</label><input id="s-pass2" name="password2" type="password" minlength="8" required autocomplete="new-password"></div>
     ${err}
-    <button class="btn solid" style="justify-content:center">สร้างบัญชีแอดมินและเริ่มใช้งาน</button></form>`);
+    <button class="btn solid u-center">สร้างบัญชีแอดมินและเริ่มใช้งาน</button></form>`);
 }
 
 /* ---------- วาดหน้า ---------- */
 function render() {
-  if (!state.backend || state.user === undefined) { app.innerHTML = '<p style="padding:24px">กำลังโหลด</p>'; return; }
+  if (!state.backend || state.user === undefined) { app.innerHTML = '<p class="u-p-lg">กำลังโหลด</p>'; return; }
   if (state.needSetup) { document.body.style.overflow = ''; app.innerHTML = viewSetup(); return; }
   if (!state.user) { document.body.style.overflow = ''; app.innerHTML = viewLogin(); return; }
   if (state.user.mustChange) { document.body.style.overflow = ''; app.innerHTML = viewFirstPassword(); return; }
   const m = metrics();
   const counts = { work: m.open.length, assets: state.assets.length, pm: m.pmSoon.length, parts: m.low.length, gauges: m.gaugeAlert.length || '' };
   const nav = Object.entries(PAGES).map(([k, [, label]]) => `<button type="button" data-act="nav" data-id="${k}" ${state.page === k ? 'aria-current="page"' : ''}>${icon(NAV_ICON[k])}<span>${label}</span><span class="n">${counts[k] ?? ''}</span></button>`).join('');
-  const views = { quick: viewQuick, overview: viewOverview, work: viewWork, assets: viewAssets, pm: viewPm, parts: viewParts, gauges: viewGauges, report: viewReport, server: viewServer };
+  const views = { quick: viewQuick, overview: viewOverview, board: viewBoard, work: viewWork, assets: viewAssets, pm: viewPm, parts: viewParts, gauges: viewGauges, report: viewReport, server: viewServer };
   const noRole = !state.user.role;
   const [, , full] = PAGES[state.page];
   const add = canAdmin() && ADD_LABEL[state.page] ? `<button type="button" class="btn" data-act="add" data-id="${state.page}">${ADD_LABEL[state.page]}</button>` : '';
+  const tv = state.page === 'board' ? `<button type="button" class="btn" data-act="tv">${icon('<path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/>')}${state.tv ? 'ออกจากโหมดจอ' : 'โหมดจอทีวี'}</button>` : '';
   const report = noRole || state.page === 'quick' ? '' : `<button type="button" class="btn solid" data-act="report">${icon('<path d="M12 5v14M5 12h14"/>')}แจ้งซ่อม</button>`;
   const role = { admin: 'หัวหน้า / แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต' }[state.user.role] || 'ยังไม่มีสิทธิ์';
   const where = state.backend.mode === 'firebase' ? (placeName() || state.backend.projectId) : 'ข้อมูลตัวอย่างในเครื่องนี้';
@@ -857,8 +1006,8 @@ function render() {
       </aside>
       <main>
         <header class="head"><div><h1>${full}</h1><p class="meta"><span>${today()}</span><span>${esc(where)}</span>${sync ? `<span>${sync}</span>` : ''}</p></div>
-          <div class="actions">${add}${report}</div></header>
-        ${state.backend.mode === 'local' ? `<p class="notice demo">โหมดตัวอย่าง: ข้อมูลอยู่ในเบราว์เซอร์เครื่องนี้เท่านั้นและไม่มีล็อกอิน ${canAdmin() ? '<button type="button" class="link" style="font-family:var(--sans)" data-act="nav" data-id="server">ตั้งค่าเพื่อใช้งานจริง</button>' : ''}</p>` : ''}
+          <div class="actions">${tv}${add}${report}</div></header>
+        ${state.backend.mode === 'local' ? `<p class="notice demo">โหมดตัวอย่าง: ข้อมูลอยู่ในเบราว์เซอร์เครื่องนี้เท่านั้นและไม่มีล็อกอิน ${canAdmin() ? '<button type="button" class="link u-sans" data-act="nav" data-id="server">ตั้งค่าเพื่อใช้งานจริง</button>' : ''}</p>` : ''}
         ${noRole ? `<p class="notice err">${state.user.disabled ? 'บัญชีนี้ถูกปิดใช้งาน ติดต่อหัวหน้าซ่อมบำรุง' : 'บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อหัวหน้าซ่อมบำรุงให้เพิ่มในหน้าตั้งค่า'}</p>` : ''}
         ${state.loadError && state.page !== 'server' ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}
         ${noRole && state.page !== 'server' ? '' : views[state.page](m)}
@@ -939,6 +1088,9 @@ function go(page) {
   render();
   window.scrollTo(0, 0);
 }
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && state.tv) { state.tv = false; document.documentElement.classList.remove('tv'); render(); }
+});
 window.addEventListener('hashchange', () => { const p = location.hash.slice(1); if (PAGES[p] && p !== state.page) go(p); });
 
 function addLog(w, text) {
@@ -948,6 +1100,12 @@ function addLog(w, text) {
 /* ---------- การกระทำ ---------- */
 const actions = {
   nav: (id) => go(id),
+  tv: () => {
+    const on = !state.tv;
+    if (on) document.documentElement.requestFullscreen?.().catch(() => {});
+    else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    state.tv = on; document.documentElement.classList.toggle('tv', on); render();
+  },
   filter: (id) => { state.filter = id; render(); },
   'open-wo': (id) => {
     const w = state.workOrders.find((x) => x.id === id);
@@ -1119,6 +1277,36 @@ function paintSearch() {
     ? res.map(([act, id, code, title, sub]) => `<button type="button" data-act="${act}" data-id="${esc(id)}"><span class="mono">${esc(code)}</span><span class="t"><span>${esc(title)}</span><span class="s">${esc(sub)}</span></span></button>`).join('')
     : '<p class="empty">ไม่พบรายการที่ตรงกัน</p>';
 }
+// กักโฟกัสในแผงที่ซ้อนหน้า (role=dialog, aria-modal) ให้ Tab วนอยู่ในแผง
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  const dlg = document.querySelector('[aria-modal="true"]');
+  if (!dlg) return;
+  const items = [...dlg.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((el) => !el.disabled && !el.hidden && el.offsetParent !== null);
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1];
+  if (!dlg.contains(document.activeElement)) { e.preventDefault(); first.focus(); return; }
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+// ตารางที่เลื่อนข้างได้ต้องรับโฟกัสคีย์บอร์ดและมีชื่อ (WCAG 2.1.1)
+function labelScrollRegions() {
+  document.querySelectorAll('.scroll').forEach((el) => {
+    const wide = el.scrollWidth > el.clientWidth + 1;
+    if (wide) {
+      el.tabIndex = 0;
+      el.setAttribute('role', 'region');
+      const h = el.closest('section, .box')?.querySelector('h2');
+      el.setAttribute('aria-label', `${h ? h.textContent.trim() : 'ตาราง'} (เลื่อนซ้ายขวาได้)`);
+    } else {
+      el.removeAttribute('tabindex'); el.removeAttribute('role'); el.removeAttribute('aria-label');
+    }
+  });
+}
+new MutationObserver(() => labelScrollRegions()).observe(app, { childList: true });
+window.addEventListener('resize', () => labelScrollRegions());
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.panel && !state.q) { actions['panel-close'](); return; }
   if (e.key === 'Escape' && state.selectedWo && state.page === 'work' && !state.q) { actions['close-drawer'](); return; }
