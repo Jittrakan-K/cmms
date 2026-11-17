@@ -8,20 +8,21 @@
   --color-error: oklch(52% 0.19 27); --color-success: oklch(50% 0.12 150);
   --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
   --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
-  /* graphite ramp: neutral surfaces; colour belongs to machine state and the one accent */
-  --color-paper: #f4f4f5; --color-paper-2: #ececee; --color-paper-3: #e4e4e7;
-  --color-ink: #18181b; --color-ink-2: #3f3f46; --color-muted: #5f5f66;
-  --color-rule: #e4e4e7; --color-rule-2: #d4d4d8;
-  /* accent: ISO 3864 safety blue (mandatory action), used for the primary action, selection and focus */
-  --color-accent: #1f5fae; --color-accent-hover: #1a5096; --color-accent-ink: #ffffff; --color-accent-2: #1f5fae; --color-focus: #1f5fae;
-  --color-cotton: #ffffff; --color-desk: #f4f4f5; --color-print: #18181b;
-  --color-board: #1f5fae; --color-board-type: #ffffff; --color-paid: #1f5fae;
+  /* cool light ramp: grey page, white borderless cards; colour belongs to the data and machine state */
+  --color-paper: #eef0f4; --color-paper-2: #f3f4f7; --color-paper-3: #e5e7ed;
+  --color-ink: #161a23; --color-ink-2: #3d4350; --color-muted: #5b6170;
+  --color-rule: #eceef2; --color-rule-2: #d8dbe2;
+  /* accent: royal blue for the primary action, selection, focus and the series that matters; orange is the second series */
+  --color-accent: #3d5af1; --color-accent-hover: #2f4bd8; --color-accent-ink: #ffffff; --color-accent-2: #3d5af1; --color-focus: #3d5af1;
+  --color-accent-soft: #e8ecfe; --color-orange: #f08a24;
+  --color-cotton: #ffffff; --color-desk: #eef0f4; --color-print: #161a23;
+  --color-board: #3d5af1; --color-board-type: #ffffff; --color-paid: #3d5af1;
   --font-display: "IBM Plex Sans Thai", "Noto Sans Thai", Tahoma, ui-sans-serif, system-ui, sans-serif; --font-body: var(--font-display);
   --font-outlier: "Geist Mono", "IBM Plex Sans Thai", ui-monospace, monospace;
-  --radius-card: 12px; --radius-input: 8px; --radius-pill: 999px; --radius-stock: 8px; --rule-hair: 1px;
+  --radius-card: 16px; --radius-input: 10px; --radius-pill: 999px; --radius-stock: 10px; --rule-hair: 1px;
   --shadow-card: 0 1px 2px oklch(20% 0.01 35 / 0.05);
-  --edge-stock: 0 0 0 1px var(--color-rule);
-  --cast-stock: 0 1px 2px rgb(0 0 0 / 0.05); --cast-stock-lift: 0 8px 24px rgb(0 0 0 / 0.08);
-  --press-groove: inset 0 0 0 1px var(--color-rule-2), inset 0 1px 2px rgb(0 0 0 / 0.05);
+  --edge-stock: 0 1px 2px rgb(16 24 40 / 0.05);
+  --cast-stock: 0 1px 2px rgb(16 24 40 / 0.06); --cast-stock-lift: 0 12px 32px rgb(16 24 40 / 0.12);
+  --press-groove: inset 0 1px 2px rgb(16 24 40 / 0.08);
   --tracking-display: -0.03em; --display-weight: 600;
 }

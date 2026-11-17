@@ -41,7 +41,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [],
-  page: 'overview', tv: false, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
+  page: 'overview', tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
 
@@ -49,6 +49,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const fmt = (opts) => (t) => new Intl.DateTimeFormat('th-TH', { hour12: false, ...opts }).format(t);
 const fmtDate = fmt({ day: '2-digit', month: 'short' });
 const fmtTime = fmt({ hour: '2-digit', minute: '2-digit' });
+const fmtWd = fmt({ weekday: 'short' });
 const fmtDateY = fmt({ day: '2-digit', month: 'short', year: '2-digit' });
 const fmtDateTime = fmt({ day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const fmtSec = fmt({ hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -309,6 +310,29 @@ function viewBoard(m) {
 }
 
 /* ---------- SH-01 ภาพรวม ---------- */
+// เทียบช่วงปัจจุบันกับช่วงก่อนหน้าเท่ากัน คืนข้อความและทิศ (ดีขึ้น/แย่ลง)
+function delta(cur, prev, betterUp, unit = '%') {
+  if (!isFinite(prev) || prev === 0 && cur === 0) return '<span class="chg flat">เท่าเดิม</span>';
+  const d = cur - prev;
+  if (Math.abs(d) < 0.05) return '<span class="chg flat">เท่าเดิม</span>';
+  const good = betterUp ? d > 0 : d < 0;
+  const txt = unit === '%' ? `${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}%` : `${d > 0 ? '+' : '−'}${hours(Math.abs(d))} ชม.`;
+  return `<span class="chg ${good ? 'good' : 'bad'}">${txt}${icon(d > 0 ? '<path d="m7 14 5-5 5 5"/>' : '<path d="m7 10 5 5 5-5"/>')}</span>`;
+}
+function downtimeBuckets(range) {
+  const t0 = startOfToday();
+  const now = Date.now();
+  const size = range === 90 ? 7 * DAY : DAY;
+  const n = range === 90 ? 13 : range;
+  return Array.from({ length: n }, (_, i) => {
+    const b0 = t0 - (n - 1 - i) * size - (range === 90 ? 6 * DAY : 0);
+    const b1 = Math.min(b0 + size, now);
+    const down = state.assets.reduce((s, a) => s + mergedDown(a.id, b0, b1), 0);
+    const fails = state.workOrders.filter((w) => w.type === 'breakdown' && w.startAt >= b0 && w.startAt < b0 + size).length;
+    return { b0, b1, down, fails, label: range === 90 ? fmtDate(b0) : range === 7 ? fmtWd(b0) : String(new Date(b0).getDate()) };
+  });
+}
+
 function viewOverview(m) {
   const span = 7 * DAY;
   const pct = (t) => (((t - m.from) / span) * 100).toFixed(2);
@@ -329,43 +353,106 @@ function viewOverview(m) {
       <div class="track"><div class="base" style="width:${pct(m.now)}%"></div>${spans}<div class="now" style="left:${pct(m.now)}%"></div></div>
       <span class="tl-sum ${d ? '' : 'dim'}">${d ? hours(d) : '0'}</span></div>`;
   }).join('');
-  const openRows = m.open.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}">
-      <td><button type="button" class="link" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.id)}</button></td>
-      <td>${tag(w.asset)}</td>
-      <td>${esc(w.title)}<span class="sub"><span>${esc(w.tech || 'ยังไม่มอบหมาย')}</span><span>${TYPE[w.type]}</span></span></td>
-      <td class="mono">${hm(m.now - w.startAt)}</td><td>${lamp(w.status)}</td></tr>`).join('');
   const t0 = startOfToday();
-  const pmRows = [...m.pmSoon].sort((a, b) => a.dueDate - b.dueDate).map((p) => `<div class="list-row">
-      <span class="mono ${p.dueDate < t0 ? 'alarm' : ''}">${fmtDate(p.dueDate)}</span>
-      <span class="t"><span>${esc(p.task)}</span><span class="s"><span>${esc(p.asset)}</span><span>ทุก ${p.intervalDays} วัน</span></span></span><span></span></div>`).join('') || '<p class="empty">ไม่มี PM ครบกำหนดใน 7 วัน</p>';
-  const lowRows = m.low.map((p) => `<div class="list-row u-cols-auto">
-      <span class="t"><span>${esc(p.name)}</span><span class="s">${esc(p.id)}</span></span>
-      <span class="mono ${p.qty === 0 ? 'alarm' : ''}">${p.qty} / ${p.min}</span></div>`).join('') || '<p class="empty">สต็อกอยู่เหนือจุดสั่งซื้อทุกรายการ</p>';
-  return `<section class="box board">
+  const now = m.now;
+  // ช่วง 7 วันก่อนหน้า สำหรับเปรียบเทียบ
+  const pFrom = m.from - 7 * DAY, pTo = m.from;
+  const prev = periodStats(pFrom, pTo).rows;
+  const cur = periodStats(m.from, now).rows;
+  const prevDown = prev.reduce((x, r) => x + r.down, 0);
+  const prevAvail = prev.length ? prev.reduce((x, r) => x + r.avail, 0) / prev.length : 100;
+  const byAvail = [...cur].sort((a, b) => b.avail - a.avail);
+  const best = byAvail[0], worst = byAvail[byAvail.length - 1];
+  // หยุดรายวัน 7 วัน
+  const week = downtimeBuckets(7);
+  const maxW = Math.max(1, ...week.map((b) => b.down));
+  const peak = week.reduce((a, b) => (b.down > a.down ? b : a), week[0]);
+  // PM 10 งานล่าสุด
+  const pmDone = state.workOrders.filter((w) => w.type === 'pm' && w.status === 'done' && w.endAt).sort((a, b) => b.endAt - a.endAt).slice(0, 10).reverse();
+  const onTime = pmDone.filter((w) => w.onTime !== false).length;
+  // เครื่องหยุดนานสุด
+  const rank = [...cur].filter((r) => r.down > 0).sort((a, b) => b.down - a.down).slice(0, 3);
+  // กราฟหลัก
+  // ช่วงเริ่มต้น: ถ้าข้อมูลย้อนหลังยังไม่ถึง 2 สัปดาห์ เปิดที่ 7 วัน จะได้ไม่เห็นแท่งว่างเกือบทั้งกราฟ
+  const oldest = Math.min(now, ...state.workOrders.map((w) => w.startAt));
+  const range = state.ovRange || (now - oldest > 14 * DAY ? 30 : 7);
+  const bk = downtimeBuckets(range);
+  const maxD = Math.max(1, ...bk.map((b) => b.down));
+  const maxF = Math.max(1, ...bk.map((b) => b.fails));
+  const selI = state.ovSel != null && state.ovSel < bk.length ? state.ovSel : bk.reduce((bi, b, i) => (b.down > bk[bi].down ? i : bi), 0);
+  const sel = bk[selI];
+  const avgDay = bk.reduce((x, b) => x + b.down, 0) / (range === 90 ? 91 : range);
+  const pts = bk.map((b, i) => `${((i + 0.5) / bk.length) * 100},${100 - (b.fails / maxF) * 86}`).join(' ');
+  const STAGE = { pending: 15, open: 35, doing: 65, parts: 65 };
+
+  const openRows = m.open.map((w) => {
+    const pc = STAGE[w.status] ?? 0;
+    return `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}">
+      <td><span class="cellwo">${andon(machineState(state.assets.find((a) => a.id === w.asset) || { id: w.asset }).k)}<span class="t"><button type="button" class="link title" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.title)}</button><span class="sub"><span class="mono">${esc(w.id)}</span><span>${TYPE[w.type]}</span></span></span></span></td>
+      <td>${tag(w.asset)}</td>
+      <td>${w.tech ? `<span class="u-row">${avatar(w.tech.split(/,\s*/)[0])}<span class="u-nowrap">${esc(w.tech)}</span></span>` : '<span class="dim">ยังไม่มอบหมาย</span>'}</td>
+      <td><span class="progress ${w.status === 'parts' ? 'warn' : ''}"><span class="pbar"><span style="width:${pc}%"></span></span><span class="mono">${pc}%</span></span></td>
+      <td>${lamp(w.status)}</td>
+      <td class="num mono">${hm(now - w.startAt)}</td></tr>`;
+  }).join('');
+
+  return `<div class="cards4">
+      <section class="card">
+        <h2 class="clabel">Availability 7 วัน</h2>
+        <p class="cfig">${m.avail.toFixed(1)}%${delta(m.avail, prevAvail, true)}</p>
+        ${best ? `<div class="hl"><span class="hl-k">ดีที่สุด ${esc(best.a.id)}</span><span class="mono">${best.avail.toFixed(1)}%</span></div><div class="pbar big"><span style="width:${best.avail}%"></span></div>
+        <div class="hl"><span class="hl-k">ต่ำที่สุด ${esc(worst.a.id)}</span><span class="mono">${worst.avail.toFixed(1)}%</span></div><div class="pbar big alt"><span style="width:${worst.avail}%"></span></div>` : ''}
+      </section>
+      <section class="card">
+        <h2 class="clabel">เวลาหยุดเครื่องรวม</h2>
+        <p class="cfig">${hours(m.down)} ชม.${delta(m.down, prevDown, false, 'h')}</p>
+        <div class="hl"><span class="hl-k">รายวัน 7 วัน</span><span class="mono">สูงสุด ${hours(peak.down)} ชม.</span></div>
+        <div class="minibars" role="img" aria-label="เวลาหยุดรายวัน 7 วัน สูงสุด ${hours(peak.down)} ชั่วโมงวันที่ ${fmtDate(peak.b0)}">${week.map((b) => `<span class="${b === peak && b.down ? 'on' : ''}" style="height:${Math.max(8, (b.down / maxW) * 100)}%"></span>`).join('')}</div>
+      </section>
+      <section class="card">
+        <h2 class="clabel">PM ทันกำหนด</h2>
+        <p class="cfig">${pmDone.length ? `${onTime} จาก ${pmDone.length} งาน` : 'ยังไม่มีข้อมูล'}</p>
+        <div class="hl"><span class="hl-k">PM ที่ปิดล่าสุด</span><span class="mono">${pmDone.length ? `${Math.round((100 * onTime) / pmDone.length)}%` : ''}</span></div>
+        <ol class="streak">${pmDone.map((w) => `<li class="${w.onTime !== false ? 'ok' : 'late'}" title="${esc(`${w.id} ${w.asset} ${fmtDate(w.endAt)} ${w.onTime !== false ? 'ทันกำหนด' : 'ช้ากว่ากำหนด'}`)}"><span class="d">${new Date(w.endAt).getDate()}</span>${w.onTime !== false ? icon('<path d="m5 12 5 5 9-10"/>') : icon('<path d="M7 7l10 10M17 7 7 17"/>')}</li>`).join('')}</ol>
+      </section>
+      <section class="card">
+        <h2 class="clabel">หยุดนานที่สุด 7 วัน</h2>
+        <p class="cfig">${rank.length ? `#1 ${esc(rank[0].a.id)}` : 'ไม่มีเครื่องหยุด'}</p>
+        <ol class="rank">${rank.map((r) => `<li><button type="button" class="rk" data-act="open-asset" data-id="${esc(r.a.id)}">${andon(machineState(r.a).k)}<span class="nm">${esc(r.a.name)}</span><span class="mono">${hours(r.down)} ชม.</span></button></li>`).join('')}</ol>
+      </section>
+    </div>
+
+    <section class="card chart">
+      <div class="chart-head">
+        <div><h2>เวลาหยุดเครื่องและจำนวนครั้งที่เสีย</h2><p class="clabel">เฉลี่ยต่อวัน</p><p class="cfig">${hours(avgDay)} ชม.</p></div>
+        <div class="chart-tools">
+          <div class="seg-ctl" role="group" aria-label="ช่วงเวลา">${[[90, '90 วัน'], [30, '30 วัน'], [7, '7 วัน']].map(([v, l]) => `<button type="button" data-act="ov-range" data-id="${v}" aria-pressed="${range === v}">${l}</button>`).join('')}</div>
+          <ul class="ckey"><li><i class="k-bar"></i>ชั่วโมงหยุด</li><li><i class="k-line"></i>ครั้งที่เสีย</li></ul>
+        </div>
+      </div>
+      <div class="plot" style="--n:${bk.length}">
+        <div class="bars">${bk.map((b, i) => `<button type="button" class="b ${i === selI ? 'sel' : ''}" data-act="ov-sel" data-id="${i}" aria-label="${esc(`${b.label}: หยุด ${hours(b.down)} ชั่วโมง เสีย ${b.fails} ครั้ง`)}" aria-pressed="${i === selI}"><span style="height:${Math.max(6, (b.down / maxD) * 100)}%"></span></button>`).join('')}</div>
+        <svg class="line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" vector-effect="non-scaling-stroke"/></svg>
+        <div class="dots" aria-hidden="true">${bk.map((b, i) => `<i style="left:${((i + 0.5) / bk.length) * 100}%;top:${100 - (b.fails / maxF) * 86}%"></i>`).join('')}</div>
+        <div class="tip" style="left:clamp(80px, ${((selI + 0.5) / bk.length) * 100}%, calc(100% - 80px))"><b>${range === 90 ? `สัปดาห์ ${fmtDate(sel.b0)}` : fmtDate(sel.b0)}</b><span><i class="k-bar"></i>หยุด ${hours(sel.down)} ชม.</span><span><i class="k-line"></i>เสีย ${sel.fails} ครั้ง</span></div>
+      </div>
+      <div class="xlab" style="--n:${bk.length}">${bk.map((b, i) => `<span class="${i === selI ? 'on' : ''}">${range === 30 && i % 3 && i !== selI ? '' : b.label}</span>`).join('')}</div>
+    </section>
+
+    <section class="card flush">
+      <div class="bar"><h2>ใบสั่งงานที่เปิดอยู่ <span class="dim u-w400">${m.open.length} ใบ</span></h2><button type="button" class="link" data-act="nav" data-id="work">ดูทั้งหมด</button></div>
+      ${openRows ? `<div class="scroll"><table class="wotable" style="min-width:860px"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">ผู้รับผิดชอบ</th><th scope="col">ความคืบหน้า</th><th scope="col">สถานะ</th><th scope="col" class="num">เปิดมา</th></tr></thead><tbody>${openRows}</tbody></table></div>` : '<p class="empty">ไม่มีงานค้าง</p>'}
+    </section>
+
+    <section class="card flush board">
       <div class="bar"><h2>สถานะเครื่อง 7 วัน</h2>
         <div class="legend"><span><i class="bar" style="--c:var(--run)"></i>เดินเครื่อง</span><span><i style="--c:var(--stop)"></i>หยุดเสีย</span><span><i style="--c:var(--wait)"></i>รออะไหล่</span><span><i style="--c:var(--card);--b:2px solid var(--pm)"></i>PM ตามแผน</span></div></div>
-      <dl class="ledger" aria-label="ตัวเลขสำคัญ">
-        <div><dt>เครื่องหยุดตอนนี้</dt><dd class="fig ${m.stopped.length ? 'alarm' : ''}">${m.stopped.length}<small> / ${state.assets.length}</small></dd><dd class="cap">${esc(m.stopped.join(', ') || 'ทุกเครื่องเดินปกติ')}</dd></div>
-        <div><dt>Availability 7 วัน</dt><dd class="fig">${m.avail.toFixed(1)}<small>%</small></dd><dd class="cap">รวมเวลาหยุด ${hours(m.down)} ชม.</dd></div>
-        <div><dt>MTBF</dt><dd class="fig">${hours(m.mtbf)}<small> ชม.</small></dd><dd class="cap">เครื่องเสีย ${m.fails} ครั้งใน 7 วัน</dd></div>
-        <div><dt>MTTR</dt><dd class="fig">${hours(m.mttr)}<small> ชม.</small></dd><dd class="cap">จากงานซ่อมที่ปิดแล้ว ${m.closed} ใบ</dd></div>
-      </dl>
       <div class="scroll"><div class="tl">
         <div class="tl-row top"><span>เครื่อง</span><div class="tl-days">${days}</div><span class="num">หยุด (ชม.)</span></div>
         ${rows || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
-        <div class="tl-row foot"><span></span><span class="dim num tl-note">เส้นตั้งคือเวลาปัจจุบัน ${fmtTime(m.now)}</span><span class="tl-sum tl-total">${hours(m.down)}</span></div>
+        <div class="tl-row foot"><span></span><span class="dim num tl-note">เส้นตั้งคือเวลาปัจจุบัน ${fmtTime(m.now)}  MTBF ${hours(m.mtbf)} ชม.  MTTR ${hours(m.mttr)} ชม.</span><span class="tl-sum tl-total">${hours(m.down)}</span></div>
       </div></div>
-    </section>
-    <div class="split">
-      <section class="box w3 u-gap0"><div class="bar"><h2>ใบสั่งงานที่เปิดอยู่</h2><button type="button" class="link u-sans" data-act="nav" data-id="work">ดูทั้งหมด</button></div>
-        ${openRows ? `<div class="scroll"><table style="min-width:640px"><thead><tr><th scope="col">เลขที่</th><th scope="col">เครื่อง</th><th scope="col">อาการ</th><th scope="col">เปิดมา</th><th scope="col">สถานะ</th></tr></thead><tbody>${openRows}</tbody></table></div>` : '<p class="empty">ไม่มีงานค้าง</p>'}</section>
-      <div class="w2">
-        <section class="box"><div class="bar"><h2>PM ครบกำหนด 7 วัน</h2>${m.pmLate.length ? `<span class="alarm" style="font-size:var(--text-sm)">เลยกำหนด ${m.pmLate.length}</span>` : ''}</div>${pmRows}</section>
-        <section class="box"><div class="bar"><h2>อะไหล่ถึงจุดสั่งซื้อ</h2></div>${lowRows}</section>
-        <section class="box"><div class="bar"><h2>เครื่องมือวัดที่ต้องดู</h2><button type="button" class="link u-sans" data-act="nav" data-id="gauges">ทะเบียน</button></div>
-          ${m.gaugeAlert.map((g) => { const [, label, c, b] = gaugeState(g); return `<div class="list-row u-cols-auto"><span class="t"><span>${esc(g.name)}</span><span class="s"><span>${esc(g.id)}</span><span>ครบ ${fmtDate(g.dueDate)}</span></span></span><span class="lamp" style="--c:${c};--b:${b}">${label}</span></div>`; }).join('') || '<p class="empty">ทุกเครื่องมืออยู่ในรอบสอบเทียบ</p>'}</section>
-      </div>
-    </div>`;
+    </section>`;
 }
 
 /* ---------- SH-02 ใบสั่งงาน ---------- */
@@ -991,13 +1078,12 @@ function render() {
   app.innerHTML = `<div class="shell">
       <aside class="side">
         <div class="brand" title="${esc(placeName())}"><span class="bt"><b>CMMS</b>${plantLine.map((x) => `<span>${esc(x)}</span>`).join('')}</span></div>
-        <div class="searchwrap"><span class="sicon">${icon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}</span><label for="q" class="sr">ค้นหาเครื่อง ใบงาน อะไหล่ เครื่องมือวัด</label><input id="q" class="search" type="search" autocomplete="off" placeholder="ค้นหาทั้งระบบ" value="${esc(state.q)}"><div id="q-res" class="qres" hidden></div></div>
         <nav class="nav" aria-label="เมนูหลัก">${nav}</nav>
         <div class="me">${avatar(state.user.name, false)}<span class="who"><b>${esc(state.user.name)}</b><span>${esc(role)}</span></span>${state.backend.mode === 'firebase' ? '<button type="button" data-act="logout">ออกจากระบบ</button>' : ''}</div>
       </aside>
       <main>
         <header class="head"><div><h1>${full}</h1><p class="meta"><span>${today()}</span><span>${esc(where)}</span>${sync ? `<span>${sync}</span>` : ''}</p></div>
-          <div class="actions">${tv}${add}${report}</div></header>
+          <div class="actions">${noRole ? '' : `<div class="searchwrap"><span class="sicon">${icon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}</span><label for="q" class="sr">ค้นหาเครื่อง ใบงาน อะไหล่ เครื่องมือวัด</label><input id="q" class="search" type="search" autocomplete="off" placeholder="ค้นหาทั้งระบบ" value="${esc(state.q)}"><div id="q-res" class="qres" hidden></div></div>`}${tv}${add}${report}</div></header>
         ${state.backend.mode === 'local' ? `<p class="notice demo">โหมดตัวอย่าง: ข้อมูลอยู่ในเบราว์เซอร์เครื่องนี้เท่านั้นและไม่มีล็อกอิน ${canAdmin() ? '<button type="button" class="link u-sans" data-act="nav" data-id="server">ตั้งค่าเพื่อใช้งานจริง</button>' : ''}</p>` : ''}
         ${noRole ? `<p class="notice err">${state.user.disabled ? 'บัญชีนี้ถูกปิดใช้งาน ติดต่อหัวหน้าซ่อมบำรุง' : 'บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อหัวหน้าซ่อมบำรุงให้เพิ่มในหน้าตั้งค่า'}</p>` : ''}
         ${state.loadError && state.page !== 'server' ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}
@@ -1091,6 +1177,8 @@ function addLog(w, text) {
 /* ---------- การกระทำ ---------- */
 const actions = {
   nav: (id) => go(id),
+  'ov-range': (id) => { state.ovRange = Number(id); state.ovSel = null; render(); },
+  'ov-sel': (id) => { state.ovSel = Number(id); render(); },
   tv: () => {
     const on = !state.tv;
     if (on) document.documentElement.requestFullscreen?.().catch(() => {});
