@@ -1113,7 +1113,7 @@ function viewLogin() {
 function viewFirstPassword() {
   const err = state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : '';
   return authShell('ตั้งรหัสผ่านใหม่', `<form class="pad" data-form="firstpass">
-    <p class="dim">ยินดีต้อนรับ คุณ${esc(state.user.name)} (${esc(state.user.empId)}) ท่านเข้าสู่ระบบด้วยรหัสผ่านชั่วคราว กรุณาตั้งรหัสผ่านใหม่ก่อนเริ่มใช้งาน</p>
+    <p class="dim">ยินดีต้อนรับ คุณ <b>${esc(state.user.name)}</b> (รหัสพนักงาน <span class="mono">${esc(state.user.empId)}</span>)<br>ท่านเข้าสู่ระบบด้วยรหัสผ่านชั่วคราว กรุณาตั้งรหัสผ่านใหม่ก่อนเริ่มใช้งาน</p>
     <div class="field"><label for="f-new">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</label><input id="f-new" name="next" type="password" minlength="8" required autocomplete="new-password"></div>
     <div class="field"><label for="f-new2">ยืนยันรหัสผ่านใหม่</label><input id="f-new2" name="next2" type="password" minlength="8" required autocomplete="new-password"></div>
     ${err}
