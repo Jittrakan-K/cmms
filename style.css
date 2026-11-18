@@ -898,3 +898,11 @@ html.tv .shell { background: none; }
 /* ไฟ andon แบบเรียบ: ตัวเสาสีดำ ไม่มีไฟดับสีเทา เห็นแค่ดวงที่ติด */
 .andon { width: 7px; gap: 0; padding: 1px; border-radius: 2px; background: var(--color-ink); box-shadow: none; }
 .andon i { height: 4px; border-radius: 0; background: transparent; }
+/* สัญลักษณ์สถานะแบบ 2D: วงกลมสีทึบหนึ่งดวงต่อสถานะ */
+.andon { width: 10px; height: 10px; padding: 0; gap: 0; border-radius: 50%; background: var(--run); box-shadow: none; align-self: center; }
+.andon i { display: none; }
+.andon[data-s=stop] { background: var(--stop); }
+.andon[data-s=wait] { background: var(--wait); }
+.andon[data-s=pm] { background: var(--pm); }
+.andon[data-s=late] { background: var(--late); }
+.andon[data-s=run] { background: var(--ok); }
