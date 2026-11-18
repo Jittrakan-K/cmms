@@ -19,6 +19,13 @@ service cloud.firestore {
     function isAdmin() {
       return isMember() && role() == 'admin';
     }
+    // ผู้ดูแลเว็บ (ตำแหน่ง Admin Website) ลบบัญชีผู้อื่นได้
+    function isWebAdmin() {
+      return isAdmin() && get(userDoc()).data.get('position', '') == 'admin_web';
+    }
+    function loginDoc(empId) {
+      return /databases/$(database)/documents/logins/$(empId);
+    }
     function isTech() {
       return isMember() && role() in ['admin', 'tech'];
     }
@@ -76,7 +83,13 @@ service cloud.firestore {
       // เจ้าของบัญชีบอกว่าตั้งรหัสผ่านของตัวเองแล้ว (แก้ได้แค่ช่องนี้)
       allow update: if request.auth != null && request.auth.uid == uid
         && changedOnly(['mustChange']) && request.resource.data.mustChange == false;
-      allow delete: if isAdmin() && uid != request.auth.uid;
+      // ลบบัญชี: เฉพาะ Admin Website และลบบัญชีตัวเองไม่ได้
+      // แอดมินคนอื่นลบได้เฉพาะตอนรีเซ็ตรหัสผ่าน (รหัสพนักงานถูกย้ายไปบัญชีใหม่ใน batch เดียวกัน)
+      allow delete: if isAdmin() && uid != request.auth.uid && (
+        isWebAdmin()
+        || ('empId' in resource.data
+            && existsAfter(loginDoc(resource.data.empId))
+            && getAfter(loginDoc(resource.data.empId)).data.uid != uid));
     }
 
     // รหัสพนักงาน → อีเมลเบื้องหลังของ Firebase ใครก็อ่านทีละรหัสได้ (ใช้ตอนล็อกอิน) แต่ดึงรายชื่อทั้งหมดไม่ได้
@@ -86,7 +99,7 @@ service cloud.firestore {
         && request.resource.data.email is string
         && request.resource.data.uid is string
         && (isAdmin() || (isFirstSetup() && request.resource.data.uid == request.auth.uid));
-      allow delete: if isAdmin();
+      allow delete: if isWebAdmin();
     }
 
     match /assets/{id} {

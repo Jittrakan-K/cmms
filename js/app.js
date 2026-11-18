@@ -1038,6 +1038,7 @@ function viewServer() {
       <div class="actions"><button class="btn">เปลี่ยนรหัสผ่าน</button><button type="button" class="btn" data-act="logout">ออกจากระบบ</button></div></form>` : ''}</section>`;
   if (!admin) return `<div class="split"><div class="w2" style="max-width:560px">${account}</div></div>`;
 
+  const webAdmin = state.user.position === 'admin_web';
   const users = [...state.users].sort((x, y) => (x.role === 'disabled') - (y.role === 'disabled') || x.name.localeCompare(y.name, 'th'));
   const usersBox = `<section class="box"><div class="bar"><h2>ผู้ใช้งาน <span class="mono dim u-small">${users.filter((u) => u.role !== 'disabled').length}</span></h2></div>
     ${live ? `<form class="pad" data-form="user" style="border-bottom:1px solid var(--rule)"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:var(--space-sm);align-items:end">
@@ -1050,7 +1051,7 @@ function viewServer() {
     <div class="scroll"><table style="min-width:680px"><thead><tr><th scope="col">ชื่อ</th><th scope="col">รหัสพนักงาน</th><th scope="col">สิทธิ์</th><th scope="col"><span class="sr">รหัสผ่าน</span></th></tr></thead><tbody>
     ${users.map((u) => `<tr><td><span class="u-row">${avatar(u.name)}${esc(u.name)}${u.id === state.user.uid ? ' <span class="dim">(คุณ)</span>' : ''}</span></td><td class="mono">${esc(u.empId || '—')}${u.mustChange ? ' <span class="dim u-sans">· ยังไม่ได้ตั้งรหัสผ่าน</span>' : ''}</td>
       <td>${u.id === state.user.uid || !live ? esc(userLabel(u)) : `<label for="r-${esc(u.id)}" class="sr">ตำแหน่งของ ${esc(u.name)}</label><select id="r-${esc(u.id)}" data-user-role="${esc(u.id)}" style="height:34px;padding:0 var(--space-xs);border:1px solid var(--field);border-radius:var(--radius-card);background:var(--card)">${u.role !== 'disabled' && !POSITIONS[u.position] ? `<option value="" selected disabled>${esc(ROLE_LABEL[u.role] || u.role)}</option>` : ''}${Object.entries(POSITIONS).map(([k, [label]]) => `<option value="${k}" ${u.role !== 'disabled' && u.position === k ? 'selected' : ''}>${label}</option>`).join('')}<option value="disabled" ${u.role === 'disabled' ? 'selected' : ''}>${ROLE_LABEL.disabled}</option></select>`}</td>
-      <td class="num">${live && u.id !== state.user.uid && u.empId ? `<button type="button" class="btn small" data-act="reset-user" data-id="${esc(u.id)}">รีเซ็ตรหัสผ่าน</button>` : ''}</td></tr>`).join('')}
+      <td class="num"><span class="u-acts">${live && u.id !== state.user.uid && u.empId ? `<button type="button" class="btn small" data-act="reset-user" data-id="${esc(u.id)}">รีเซ็ตรหัสผ่าน</button>` : ''}${live && webAdmin && u.id !== state.user.uid ? `<button type="button" class="btn small danger" data-act="delete-user" data-id="${esc(u.id)}" aria-label="ลบบัญชีของ ${esc(u.name)}">ลบบัญชี</button>` : ''}</span></td></tr>`).join('')}
     </tbody></table></div></section>`;
 
   const p = state.importPreview;
@@ -1387,6 +1388,13 @@ const actions = {
   'reset-demo': () => { state.backend.reset(); toast('รีเซ็ตแล้ว'); },
   disconnect: () => { clearConfig(); location.reload(); },
   logout: () => run(() => state.backend.signOut()),
+  'delete-user': (id, el) => {
+    const u = state.users.find((x) => x.id === id);
+    if (!u) return;
+    if (!el.dataset.confirm) { el.dataset.confirm = '1'; el.textContent = 'กดอีกครั้งเพื่อลบ'; return; }
+    el.disabled = true;
+    run(() => state.backend.deleteUser(id), `ลบบัญชีของ ${u.name} แล้ว`);
+  },
   'reset-user': (id, el) => {
     const u = state.users.find((x) => x.id === id);
     if (!u) return;

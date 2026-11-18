@@ -179,6 +179,7 @@ class LocalBackend {
   async resetUser() { throw new Error('โหมดตัวอย่างไม่รองรับการรีเซ็ตรหัสผ่าน กรุณาเชื่อมต่อ Firebase ก่อน'); }
   async createUser() { throw new Error('โหมดตัวอย่างไม่รองรับการเพิ่มผู้ใช้ กรุณาเชื่อมต่อ Firebase ก่อน'); }
   async updateUser() { throw new Error('โหมดตัวอย่างไม่รองรับการแก้ไขผู้ใช้ กรุณาเชื่อมต่อ Firebase ก่อน'); }
+  async deleteUser() { throw new Error('โหมดตัวอย่างไม่รองรับการลบบัญชี กรุณาเชื่อมต่อ Firebase ก่อน'); }
   async updateSetup() { throw new Error('โหมดตัวอย่างไม่รองรับการแก้ไขข้อมูลโรงงาน'); }
   subscribeUsers(cb) {
     cb([['demo', 'อนันต์ ส.', 'admin', 'DEMO', 'asst_manager'], ['u2', 'วิชัย ร.', 'tech', 'M0112', 'machine'], ['u3', 'สมชาย ก.', 'tech', 'M0127', 'design'], ['u4', 'มาลี ท.', 'operator', 'P0451', 'document'], ['u5', 'ประเสริฐ บ.', 'admin', 'P0466', 'advisor']]
@@ -447,6 +448,23 @@ class FirebaseBackend {
 
   // รีเซ็ตรหัสผ่านโดยไม่ใช้อีเมล: สร้างบัญชีล็อกอินใหม่ให้รหัสพนักงานเดิม แล้วย้ายข้อมูลผู้ใช้ไป
   // บัญชีเก่าใช้ต่อไม่ได้ เพราะไม่มีเอกสารใน users แล้ว (กฎ isMember)
+  // ลบบัญชี: ลบข้อมูลผู้ใช้และรหัสพนักงานที่ผูกไว้ บุคคลนั้นจะเข้าสู่ระบบไม่ได้อีก
+  // (บัญชีเบื้องหลังใน Firebase Authentication ยังค้างอยู่ ลบจากหน้าเว็บไม่ได้ แต่ใช้เข้าระบบไม่ได้แล้ว)
+  async deleteUser(uid) {
+    const { doc, getDoc, writeBatch } = this.fs;
+    if (uid === this.auth.currentUser?.uid) throw new Error('ไม่สามารถลบบัญชีของตัวเองได้');
+    const snap = await getDoc(doc(this.db, 'users', uid));
+    if (!snap.exists()) throw new Error('ไม่พบผู้ใช้นี้');
+    const { empId } = snap.data();
+    const batch = writeBatch(this.db);
+    if (empId) {
+      const login = await getDoc(doc(this.db, 'logins', empId));
+      if (login.exists() && login.data().uid === uid) batch.delete(doc(this.db, 'logins', empId));
+    }
+    batch.delete(doc(this.db, 'users', uid));
+    await batch.commit();
+  }
+
   async resetUser(uid) {
     const { doc, getDoc, writeBatch, serverTimestamp } = this.fs;
     const snap = await getDoc(doc(this.db, 'users', uid));

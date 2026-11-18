@@ -891,3 +891,4 @@ html.tv .shell { background: none; }
 @media (prefers-reduced-motion: reduce) { .xbtn svg { transition: none; } }
 @media (max-width: 40rem) { .woexp dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wosearch { max-width: none; } }
 @media (max-width: 85rem) { .wot th:last-child, .wot td.num:last-child { display: none; } .wot .mrow small { max-width: 20ch; } .tlink { max-width: 26ch; } }
+.u-acts { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-xs); }
