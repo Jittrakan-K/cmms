@@ -1673,9 +1673,11 @@ app.addEventListener('submit', (e) => {
       try {
         state.loadError = ''; state.notice = '';
         state.draft = { empId: d.empId };
+        state.justLoggedIn = true;
         await state.backend.signIn(d.empId, d.password);
         state.draft = {};
       } catch (err) {
+        state.justLoggedIn = false;
         state.loadError = explain(err);
         render();
       }
@@ -1771,9 +1773,11 @@ app.addEventListener('submit', (e) => {
       listen();
       if (user.role === 'admin') {
         try { state.canSeed = await state.backend.isEmpty(); } catch { state.canSeed = false; }
-        if (state.canSeed) state.page = 'server';
+        if (state.canSeed && !state.justLoggedIn) state.page = 'server';
       }
-      if (user.role === 'operator' && !PAGES[location.hash.slice(1)]) state.page = 'quick';
+      // เข้าสู่ระบบใหม่ทุกครั้งเริ่มที่แดชบอร์ด ส่วนการรีเฟรชหน้าอยู่หน้าเดิม
+      if (state.justLoggedIn) { state.justLoggedIn = false; state.page = 'board'; history.replaceState(null, '', '#board'); }
+      else if (user.role === 'operator' && !PAGES[location.hash.slice(1)]) state.page = 'quick';
     } else if (user && !user.mustChange) {
       state.page = 'server';
     }
