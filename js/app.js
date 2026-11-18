@@ -965,7 +965,7 @@ function viewReport() {
 /* ---------- SH-08 ตั้งค่า ---------- */
 const ROLE_LABEL = { admin: 'แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต', disabled: 'ปิดใช้งาน' };
 // ตำแหน่งในแผนก ผูกกับสิทธิ์ในระบบ: admin อนุมัติและจัดการทุกอย่าง, tech ซ่อมและปิดงาน, operator แจ้งซ่อมและดูข้อมูล
-const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], document: ['Document', 'operator'], asst_manager: ['ASST. Manager', 'admin'], advisor: ['Advisor', 'admin'] };
+const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], document: ['Document', 'operator'], asst_manager: ['ASST. Manager', 'admin'], advisor: ['Advisor', 'admin'], admin_web: ['Admin Website', 'admin'] };
 const userLabel = (u) => (u.role === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[u.position]?.[0] || ROLE_LABEL[u.role] || 'ยังไม่มีสิทธิ์');
 const IMPORT_COLS = {
   assets: ['id', 'name', 'line', 'cls', 'maker', 'model', 'year'],
