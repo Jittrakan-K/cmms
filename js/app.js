@@ -1724,6 +1724,7 @@ app.addEventListener('submit', (e) => {
         await state.backend.setupFirstAdmin({ plant, dept, name: d.name.trim(), empId: d.empId, password: d.password });
         state.setup = { plant, dept };
         state.needSetup = false;
+        state.justSetup = true;
         state.draft = {};
         await state.backend.refreshUser();
       } catch (err) {
@@ -1756,8 +1757,9 @@ app.addEventListener('submit', (e) => {
 
 /* ---------- เริ่มระบบ ---------- */
 (async function start() {
-  const h = location.hash.slice(1);
-  if (PAGES[h]) state.page = h;
+  // เปิดเว็บทุกครั้งเริ่มที่แดชบอร์ด
+  state.page = 'board';
+  history.replaceState(null, '', '#board');
   render();
   try {
     state.backend = await createBackend();
@@ -1784,11 +1786,11 @@ app.addEventListener('submit', (e) => {
       listen();
       if (user.role === 'admin') {
         try { state.canSeed = await state.backend.isEmpty(); } catch { state.canSeed = false; }
-        if (state.canSeed && !state.justLoggedIn) state.page = 'server';
       }
-      // เข้าสู่ระบบใหม่ทุกครั้งเริ่มที่แดชบอร์ด ส่วนการรีเฟรชหน้าอยู่หน้าเดิม
-      if (state.justLoggedIn) { state.justLoggedIn = false; state.page = 'board'; history.replaceState(null, '', '#board'); }
-      else if (user.role === 'operator' && !PAGES[location.hash.slice(1)]) state.page = 'quick';
+      // เข้าสู่ระบบหรือเปิดเว็บใหม่เริ่มที่แดชบอร์ด ยกเว้นหลังตั้งค่าครั้งแรกซึ่งต้องนำเข้าข้อมูลก่อน
+      if (state.justSetup && state.canSeed) state.page = 'server';
+      else if (state.justLoggedIn) { state.page = 'board'; history.replaceState(null, '', '#board'); }
+      state.justSetup = false; state.justLoggedIn = false;
     } else if (user && !user.mustChange) {
       state.page = 'server';
     }

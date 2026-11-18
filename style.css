@@ -895,3 +895,6 @@ html.tv .shell { background: none; }
 /* โลโก้ */
 .mark { flex: none; width: 34px; height: 34px; color: var(--ink); }
 .login .bar .mark { width: 40px; height: 40px; }
+/* ไฟ andon แบบเรียบ: ตัวเสาสีดำ ไม่มีไฟดับสีเทา เห็นแค่ดวงที่ติด */
+.andon { width: 7px; gap: 0; padding: 1px; border-radius: 2px; background: var(--color-ink); box-shadow: none; }
+.andon i { height: 4px; border-radius: 0; background: transparent; }
