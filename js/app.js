@@ -1093,9 +1093,12 @@ function placeName() {
 function authShell(title, body) {
   const plant = placeName();
   return `<div class="login"><div class="authcard">
-    <div class="bar" style="display:flex;align-items:center;gap:var(--space-sm)"><div><b class="authname">CMMS</b>${plant ? `<span class="authplant">${esc(plant)}</span>` : ''}<span class="authtitle">${title}</span></div></div>
+    <div class="bar" style="display:flex;align-items:center;gap:var(--space-sm)">${brandMark('lm')}<div><b class="authname">CMMS</b>${plant ? `<span class="authplant">${esc(plant)}</span>` : ''}<span class="authtitle">${title}</span></div></div>
     ${body}</div></div>`;
 }
+
+/* โลโก้: น็อตหกเหลี่ยม ครึ่งทึบ ครึ่งลายเส้น */
+const brandMark = (k) => `<svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="${k}r"><path d="M32 12.95 L43 12.95 L54 32 L43 51.05 L32 51.05 Z"/></clipPath><mask id="${k}h" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64"><rect width="64" height="64" fill="#fff"/><circle cx="32" cy="32" r="8" fill="#000"/></mask></defs><g transform="translate(32 32) scale(1.18) translate(-32 -32)"><g mask="url(#${k}h)"><path d="M32 12.95 L21 12.95 L10 32 L21 51.05 L32 51.05 Z" fill="currentColor"/><g clip-path="url(#${k}r)"><path d="M-20 64 L32 12" stroke="currentColor" stroke-width="3.4"/><path d="M-13 64 L39 12" stroke="currentColor" stroke-width="3.4"/><path d="M-6 64 L46 12" stroke="currentColor" stroke-width="3.4"/><path d="M1 64 L53 12" stroke="currentColor" stroke-width="3.4"/><path d="M8 64 L60 12" stroke="currentColor" stroke-width="3.4"/><path d="M15 64 L67 12" stroke="currentColor" stroke-width="3.4"/><path d="M22 64 L74 12" stroke="currentColor" stroke-width="3.4"/><path d="M29 64 L81 12" stroke="currentColor" stroke-width="3.4"/><path d="M36 64 L88 12" stroke="currentColor" stroke-width="3.4"/><path d="M43 64 L95 12" stroke="currentColor" stroke-width="3.4"/><path d="M50 64 L102 12" stroke="currentColor" stroke-width="3.4"/><path d="M57 64 L109 12" stroke="currentColor" stroke-width="3.4"/></g><path d="M32 12.95 L43 12.95 L54 32 L43 51.05 L32 51.05 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></g></g></svg>`;
 
 function viewLogin() {
   const err = state.loadError ? `<p class="notice err">${esc(state.loadError)}</p>` : '';
@@ -1158,7 +1161,7 @@ function render() {
   const plantLine = state.backend.mode === 'firebase' ? [state.setup?.plant, state.setup?.dept].filter(Boolean) : ['ข้อมูลตัวอย่าง'];
   app.innerHTML = `<div class="shell">
       <aside class="side">
-        <div class="brand" title="${esc(placeName())}"><span class="bt"><b>CMMS</b>${plantLine.map((x) => `<span>${esc(x)}</span>`).join('')}</span></div>
+        <div class="brand" title="${esc(placeName())}">${brandMark('sm')}<span class="bt"><b>CMMS</b>${plantLine.map((x) => `<span>${esc(x)}</span>`).join('')}</span></div>
         <nav class="nav" aria-label="เมนูหลัก">${nav}</nav>
         <div class="me">${avatar(state.user.name, false)}<span class="who"><b>${esc(state.user.name)}</b><span>${esc(role)}</span></span>${state.backend.mode === 'firebase' ? '<button type="button" data-act="logout">ออกจากระบบ</button>' : ''}</div>
       </aside>
