@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611192213';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611192213';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611192250';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611192250';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -50,7 +50,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [], checklists: [], stockMoves: [], stock: null, tpm: {}, tpmSel: {}, tpmNg: null, af: { q: '', line: '', use: '', page: 0 }, boardAll: false, costYear: new Date().getFullYear(), pmYear: new Date().getFullYear(), pmView: 'list', pmMonth: null, pmDay: null,
-  page: 'board', pg: {}, tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
+  page: 'board', pg: {}, ver: 0, fitRows: {}, tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, cancelWo: null, hideCancelled: loadHideCancelled(), toast: '', canSeed: false, unsubs: []
 };
 
@@ -116,11 +116,27 @@ const icon = (d) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
 const logo = '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="14" cy="14" r="9"/><path d="M14 1v26M1 14h26" stroke-dasharray="3 2"/></svg>';
 
 /* ---------- ตัวเลข ---------- */
+// ดัชนีใบงานและแผน PM ต่อเครื่อง สร้างใหม่เมื่อข้อมูลชุดใดชุดหนึ่งเปลี่ยน
+// (เดิมทุกเครื่องไล่ใบงานทั้งหมด 743 x 1,000+ รอบต่อการวาดหนึ่งครั้ง)
+let idx = { ver: -1 };
+function index() {
+  const day = startOfToday();
+  if (idx.ver !== state.ver || idx.day !== day) {
+    const byWo = new Map(); const byPm = new Map();
+    for (const w of state.workOrders) if (w.asset) { const l = byWo.get(w.asset); if (l) l.push(w); else byWo.set(w.asset, [w]); }
+    for (const pl of state.pmPlans) { const l = byPm.get(pl.asset); if (l) l.push(pl); else byPm.set(pl.asset, [pl]); }
+    idx = { ver: state.ver, day, byWo, byPm, ms: new Map() };
+  }
+  return idx;
+}
+const wosOf = (id) => index().byWo.get(id) || [];
+const pmsOf = (id) => index().byPm.get(id) || [];
+
 // เวลาหยุดเครื่อง: ไม่นับใบที่ยกเลิก และใบย้อนหลังจาก Job Request (มีแต่วันที่ ไม่มีเวลาหยุดจริง)
 const timed = (w) => w.status !== 'cancelled' && (!w.imported || w.hasTime);
 function mergedDown(assetId, from, to) {
-  const spans = state.workOrders
-    .filter((w) => w.asset === assetId && timed(w) && !['inspect', 'improve'].includes(w.type))
+  const spans = wosOf(assetId)
+    .filter((w) => timed(w) && !['inspect', 'improve'].includes(w.type))
     .map((w) => [Math.max(w.startAt, from), Math.min(w.endAt ?? to, to)])
     .filter(([a, b]) => b > a)
     .sort((a, b) => a[0] - b[0]);
@@ -144,7 +160,7 @@ function pmCompliance(from) {
 function periodStats(from, to) {
   const span = to - from;
   const rows = state.assets.map((a) => {
-    const fails = liveWO().filter((w) => w.asset === a.id && w.type === 'breakdown' && (w.endAt ?? to) >= from && w.startAt <= to);
+    const fails = wosOf(a.id).filter((w) => w.status !== 'cancelled' && w.type === 'breakdown' && (w.endAt ?? to) >= from && w.startAt <= to);
     const closed = fails.filter((w) => w.endAt && timed(w));
     const down = mergedDown(a.id, from, to);
     return {
@@ -198,8 +214,14 @@ function normUse(v) {
   return Object.keys(USE).find((k) => k === t || USE[k][1].toLowerCase().replace(/\s/g, '') === t || USE[k][0] === String(v || '').trim()) || 'inuse';
 }
 function machineState(a) {
+  const memo = index().ms;
+  let r = memo.get(a.id);
+  if (!r) { r = machineStateRaw(a); memo.set(a.id, r); }
+  return r;
+}
+function machineStateRaw(a) {
   // ใบงานย้อนหลังจาก Job Request ไม่ได้บอกว่าเครื่องหยุดหรือไม่ จึงไม่ใช้ตัดสินสถานะเครื่อง (ยังอยู่ในคิวงานตามปกติ)
-  const open = state.workOrders.filter((w) => w.asset === a.id && isOpen(w) && (!w.imported || w.hasTime));
+  const open = wosOf(a.id).filter((w) => isOpen(w) && (!w.imported || w.hasTime));
   const brk = open.filter((w) => w.type === 'breakdown').sort((x, y) => x.startAt - y.startAt);
   const stop = brk.find((w) => w.status !== 'parts');
   if (stop) return { k: 'stop', w: stop, since: stop.startAt };
@@ -208,7 +230,7 @@ function machineState(a) {
   const pm = open.find((w) => w.type === 'pm' && w.status === 'doing');
   if (pm) return { k: 'pm', w: pm, since: pm.startAt };
   if (!inService(a)) return { k: 'off' };
-  const late = state.pmPlans.find((p) => p.asset === a.id && p.dueDate < startOfToday());
+  const late = pmsOf(a.id).find((p) => p.dueDate < startOfToday());
   if (late) return { k: 'late', plan: late, since: late.dueDate };
   if (useOf(a) === 'standby') return { k: 'idle' };
   return { k: 'run' };
@@ -430,9 +452,12 @@ function viewOverview(m) {
   const span = 7 * DAY;
   const pct = (t) => (((t - m.from) / span) * 100).toFixed(2);
   const days = Array.from({ length: 7 }, (_, i) => `<span>${fmtDate(m.from + i * DAY)}</span>`).join('');
-  const rows = state.assets.map((a) => {
-    const spans = state.workOrders
-      .filter((w) => w.asset === a.id && !['inspect', 'improve'].includes(w.type) && (w.endAt ?? m.now) >= m.from)
+  // ไทม์ไลน์แสดงเฉพาะเครื่องที่มีเหตุการณ์ใน 7 วัน หรือสถานะไม่ปกติ (เครื่องปกติสรุปเป็นจำนวน)
+  const evOf = (a) => wosOf(a.id).filter((w) => w.status !== 'cancelled' && !(w.imported && !w.hasTime) && !['inspect', 'improve'].includes(w.type) && (w.endAt ?? m.now) >= m.from);
+  const tlAssets = state.assets.filter((a) => evOf(a).length || !['run', 'idle', 'off'].includes(machineState(a).k));
+  const quiet = state.assets.length - tlAssets.length;
+  const rows = tlAssets.map((a) => {
+    const spans = evOf(a)
       .map((w) => {
         const a0 = Math.max(w.startAt, m.from), a1 = w.endAt ?? m.now;
         const style = w.type === 'pm' ? '--c:var(--card);--b:2px solid var(--pm)' : `--c:${w.status === 'parts' ? 'var(--wait)' : 'var(--stop)'}`;
@@ -542,7 +567,8 @@ function viewOverview(m) {
         <div class="legend"><span><i class="bar" style="--c:var(--run)"></i>เดินเครื่อง</span><span><i style="--c:var(--stop)"></i>หยุดเสีย</span><span><i style="--c:var(--wait)"></i>รออะไหล่</span><span><i style="--c:var(--card);--b:2px solid var(--pm)"></i>PM ตามแผน</span></div></div>
       <div class="scroll"><div class="tl">
         <div class="tl-row top"><span>เครื่อง</span><div class="tl-days">${days}</div><span class="num">หยุด (ชม.)</span></div>
-        ${rows || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
+        ${rows || `<p class="empty">${state.assets.length ? 'ไม่มีเหตุการณ์ในช่วง 7 วัน' : 'ยังไม่มีเครื่องจักร'}</p>`}
+        ${rows && quiet ? `<p class="hint pad">เครื่องอื่นอีก ${quiet} เครื่องไม่มีเหตุการณ์ในช่วง 7 วัน</p>` : ''}
         <div class="tl-row foot"><span></span><span class="dim num tl-note">เส้นแนวตั้งแสดงเวลาปัจจุบัน ${fmtTime(m.now)}  MTBF ${hours(m.mtbf)} ชม.  MTTR ${hours(m.mttr)} ชม.</span><span class="tl-sum tl-total">${hours(m.down)}</span></div>
       </div></div>
     </section>`;
@@ -762,7 +788,7 @@ function woRow(w) {
 
 function woTable() {
   const rows = woFiltered();
-  const per = fitOn() ? Math.max(1, rows.length) : WO_PER_PAGE;
+  const per = fitOn() ? (state.fitRows.work || 12) : WO_PER_PAGE;
   const pages = Math.max(1, Math.ceil(rows.length / per));
   state.woPage = Math.min(state.woPage, pages - 1);
   const from = state.woPage * per;
@@ -1034,7 +1060,7 @@ function viewAssets(m) {
   const lines = [...new Set(state.assets.map((x) => x.line || ''))].filter(Boolean).sort();
   const list = state.assets.filter((x) => (!f.line || x.line === f.line) && (!f.use || useOf(x) === f.use)
     && (!q || `${x.id} ${x.name} ${x.model || ''} ${x.maker || ''} ${x.category || ''}`.toLowerCase().includes(q)));
-  const per = fitOn() ? Math.max(1, list.length) : 30;
+  const per = fitOn() ? (state.fitRows.assets || 14) : 30;
   const pages = Math.max(1, Math.ceil(list.length / per));
   f.page = Math.min(f.page, pages - 1);
   const rows = list.slice(f.page * per, f.page * per + per).map((x) => {
@@ -1057,8 +1083,8 @@ function viewAssets(m) {
       <button type="button" class="pbtn" data-act="af-page" data-id="1" ${f.page >= pages - 1 ? 'disabled' : ''} aria-label="หน้าถัดไป">${icon('<path d="m9 6 6 6-6 6"/>')}</button></nav>` : '';
   let detail = '';
   if (a) {
-    const hist = state.workOrders.filter((w) => w.asset === a.id).slice(0, 8);
-    const pms = state.pmPlans.filter((p) => p.asset === a.id).sort((x, y) => x.dueDate - y.dueDate);
+    const hist = wosOf(a.id).slice(0, 8);
+    const pms = [...pmsOf(a.id)].sort((x, y) => x.dueDate - y.dueDate);
     const t0 = startOfToday();
     detail = `<div class="split">
       <section class="box w2"><div class="bar"><h2 style="display:flex;gap:var(--space-sm);align-items:baseline"><span class="mono">${esc(a.id)}</span>${esc(a.name)}</h2><span class="actions">${editBtn('assets', a.id)}${delBtn('assets', a.id, 'ลบเครื่องนี้')}</span></div>
@@ -1253,6 +1279,10 @@ function viewReport() {
   const pmc = pmCompliance(from);
   const ranked = [...rows].sort((a, b) => b.down - a.down);
   const maxDown = Math.max(...ranked.map((r) => r.down), 1);
+  // แสดงเฉพาะเครื่องที่มีเหตุเสียหรือเวลาหยุด (สูงสุด 60 เครื่อง) ตารางจะไม่หน่วงเมื่อมีเครื่องหลายร้อย
+  const hit = ranked.filter((r) => r.down > 0 || r.fails > 0);
+  const shown = hit.slice(0, 60);
+  const restN = rows.length - shown.length;
   const causeTotal = causes.reduce((s, [, n]) => s + n, 0);
   let cum = 0;
   const chips = [7, 30, 90].map((d) => `<button type="button" data-act="period" data-id="${d}" aria-pressed="${state.period === d}">${d} วัน</button>`).join('');
@@ -1267,10 +1297,11 @@ function viewReport() {
     <div class="split">
       <section class="box w3 u-gap0"><div class="bar"><h2>เวลาหยุดรายเครื่อง ${state.period} วัน</h2></div>
         <div class="scroll"><table style="min-width:640px"><thead><tr><th scope="col">เครื่อง</th><th scope="col" style="width:34%">เวลาหยุด (ชม.)</th><th scope="col" class="num">เสีย</th><th scope="col" class="num">MTBF</th><th scope="col" class="num">MTTR</th><th scope="col" class="num">Avail.</th></tr></thead><tbody>
-        ${ranked.map((r, i) => `<tr class="pick" data-act="open-asset" data-id="${esc(r.a.id)}"><td>${tag(r.a.id)} <span class="dim">${esc(r.a.name)}</span></td>
+        ${shown.map((r, i) => `<tr class="pick" data-act="open-asset" data-id="${esc(r.a.id)}"><td>${tag(r.a.id)} <span class="dim">${esc(r.a.name)}</span></td>
           <td><span class="u-row"><span style="height:10px;width:${((r.down / maxDown) * 100).toFixed(1)}%;min-width:${r.down ? 2 : 0}px;background:${i === 0 && r.down ? 'var(--stop)' : 'var(--ink-2)'}"></span><span class="mono">${hours(r.down)}</span></span></td>
           <td class="mono num">${r.fails}</td><td class="mono num">${r.mtbf == null ? '—' : hours(r.mtbf)}</td><td class="mono num">${r.mttr == null ? '—' : hours(r.mttr)}</td><td class="mono num">${r.avail.toFixed(1)}%</td></tr>`).join('')}
-        </tbody></table></div></section>
+        ${shown.length ? '' : '<tr><td colspan="6" class="empty">ไม่มีเครื่องหยุดหรือเสียในช่วงนี้</td></tr>'}
+        </tbody></table></div>${restN > 0 ? `<p class="hint">เครื่องอื่นอีก ${restN} เครื่องไม่มีเวลาหยุดในช่วง ${state.period} วัน (ดูครบได้จากปุ่มส่งออก CSV)</p>` : ''}</section>
       <section class="box w2 u-gap0"><div class="bar"><h2>สาเหตุการเสีย (Pareto)</h2></div>
         ${causes.length ? `<table><thead><tr><th scope="col">รหัส</th><th scope="col">สาเหตุ</th><th scope="col" class="num">ครั้ง</th><th scope="col" class="num">สะสม</th></tr></thead><tbody>
           ${causes.map(([k, nn]) => { cum += nn; return `<tr><td class="mono">${esc(k)}</td><td>${esc((CAUSES.find(([c]) => c === k) || [, k])[1])}</td><td class="mono num">${nn}</td><td class="mono num">${((100 * cum) / causeTotal).toFixed(0)}%</td></tr>`; }).join('')}
@@ -1644,6 +1675,7 @@ function render() {
 // หน้าจอเดียวต่อหน้า: ส่วนที่เกินจอแบ่งเป็นหน้าถัดไป (เฉพาะจอกว้าง จอมือถือยังเลื่อนลงตามปกติ)
 const fitOn = () => fitWanted() && state.page !== 'quick' && !!state.user;
 let lastClick = null;
+let searchTimer = 0;
 function doFit() {
   const box = document.getElementById('pages'), bar = document.getElementById('pgbar');
   if (!box || !bar) { document.documentElement.classList.remove('fit'); return; }
@@ -1654,6 +1686,40 @@ function doFit() {
   }
   const key = state.page;
   fit(box, bar, { enabled: fitOn(), page: state.pg[key] || 0, keep, onPage: (p) => { state.pg[key] = p; } });
+  tuneRows();
+}
+
+// ตารางใหญ่ (งานซ่อม ทะเบียนเครื่อง) แบ่งหน้าเองตามจำนวนแถวที่พอดีจอ แทนการวาดทุกแถวแล้ววัดทีละแถว
+let tuning = false;
+function tuneRows() {
+  if (tuning || !fitOn() || !['work', 'assets'].includes(state.page)) return;
+  const key = state.page;
+  const find = () => (key === 'work' ? document.querySelector('#wo-body tbody') : document.querySelector('[aria-label="ทะเบียนเครื่องจักร"] tbody'));
+  const box = document.getElementById('pages');
+  const bar = document.getElementById('pgbar');
+  const redo = (n) => { state.fitRows[key] = n; tuning = true; try { render(); } finally { tuning = false; } };
+  let body = find();
+  if (!box || !body || body.closest('[data-off]')) return;
+  const rows = [...body.children].filter((r) => !r.hasAttribute('data-off') && !r.classList.contains('band') && r.getBoundingClientRect().height > 0);
+  if (rows.length < 2) return;
+  const hs = rows.slice(0, 8).map((r) => r.getBoundingClientRect().height).sort((x, y) => x - y);
+  const rowH = hs[Math.floor(hs.length / 2)];
+  const pager = body.closest('.box, #wo-body')?.querySelector('.pager');
+  const pagerH = pager ? pager.getBoundingClientRect().height + 12 : 52;
+  // วัดจากขอบล่างจริงของพื้นที่ (ไม่หักแถบเปลี่ยนหน้า ถ้าตารางพอดีจอแถบนั้นจะหายไปเอง)
+  const barH = bar && !bar.hidden ? bar.getBoundingClientRect().height + 16 : 0;
+  const room = box.getBoundingClientRect().bottom + barH - body.getBoundingClientRect().top - pagerH - 8;
+  let want = Math.max(5, Math.floor(room / rowH));
+  if (want === state.fitRows[key]) return;
+  redo(want);
+  // ถ้ายังล้นจนตารางถูกแบ่งไปหน้าถัดไป ลดทีละแถว
+  for (let i = 0; i < 4 && want > 5; i++) {
+    body = find();
+    const cut = body && [...body.children].some((r) => r.hasAttribute('data-off'));
+    const pg = body?.closest('.box, #wo-body')?.querySelector('.pager');
+    if (!cut && !(pg && pg.closest('[data-off]'))) break;
+    redo(--want);
+  }
 }
 let tvTimer = null;
 function tvRotate() {
@@ -1670,7 +1736,13 @@ window.addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = set
 // ข้อมูลเรียลไทม์อาจมาตอนคนกำลังพิมพ์หรือกดเมาส์ค้าง จึงพักการวาดใหม่ไว้ก่อน
 let pending = false;
 let pointerDown = false;
+// ข้อมูลหลายชุดมาพร้อมกันตอนเปิดหรือซิงก์ รวมเป็นการวาดครั้งเดียวต่อเฟรม
+let refreshQueued = 0;
 function refresh() {
+  if (refreshQueued) return;
+  refreshQueued = requestAnimationFrame(() => { refreshQueued = 0; refreshNow(); });
+}
+function refreshNow() {
   const el = document.activeElement;
   if (pointerDown || (el && el !== document.body && el.matches('input,textarea,select'))) { pending = true; return; }
   render();
@@ -1756,6 +1828,7 @@ function listen() {
   const usersUnsub = state.backend.subscribeUsers((rows) => { state.users = rows; refresh(); }, (err) => console.warn('อ่านรายชื่อผู้ใช้ไม่ได้', err));
   state.unsubs = COLLECTIONS.map((c) => state.backend.subscribe(c, (rows) => {
     state[c] = c === 'assets' ? rows.sort((a, b) => a.id.localeCompare(b.id)) : (c === 'workOrders' ? rows.sort((a, b) => b.startAt - a.startAt) : rows);
+    state.ver++;
     state.loadError = '';
     state.lastSync = Date.now();
     refresh();
@@ -2110,6 +2183,10 @@ document.addEventListener('keydown', (e) => {
   if (fitActive() && !e.altKey && !e.ctrlKey && !e.metaKey && !document.querySelector('[aria-modal="true"]') && !e.target.closest?.('input, textarea, select, [contenteditable]')) {
     const d = { PageDown: 1, PageUp: -1, ArrowRight: 1, ArrowLeft: -1 }[e.key];
     if (d && !(e.key.startsWith('Arrow') && e.target.closest?.('.scroll, [role="tablist"], [role="radiogroup"]'))) { e.preventDefault(); fitStep(d); return; }
+  } else if (fitOn() && ['work', 'assets'].includes(state.page) && !e.altKey && !e.ctrlKey && !e.metaKey && !document.querySelector('[aria-modal="true"]') && !e.target.closest?.('input, textarea, select, [contenteditable]')) {
+    const d = { PageDown: 1, PageUp: -1 }[e.key];
+    const btn = d && document.querySelector(state.page === 'work' ? `#pages [data-act="wo-page"][data-id="${d > 0 ? 'next' : 'prev'}"]` : `#pages [data-act="af-page"][data-id="${d}"]`);
+    if (btn && !btn.disabled) { e.preventDefault(); btn.click(); return; }
   }
   if (e.key === 'Escape' && state.woFilter) { state.woFilter = false; render(); document.querySelector('[data-act="wo-filter"]')?.focus(); return; }
   if (e.key === 'Escape' && state.panel && !state.q) { actions['panel-close'](); return; }
@@ -2119,8 +2196,19 @@ document.addEventListener('keydown', (e) => {
 
 app.addEventListener('input', (e) => {
   if (e.target.id === 'q') { state.q = e.target.value; paintSearch(); return; }
-  if (e.target.id === 'af-q') { state.af.q = e.target.value; state.af.page = 0; state.pg.assets = 0; const pos = e.target.selectionStart; render(); const el = document.getElementById('af-q'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; }
-  if (e.target.id === 'wo-q') { state.woQ = e.target.value; state.woPage = 0; const b = document.getElementById('wo-body'); if (b) b.innerHTML = woTable(); state.pg.work = 0; doFit(); return; }
+  // ค้นหา: รอให้หยุดพิมพ์สักครู่ค่อยวาดใหม่ ไม่วาดทุกตัวอักษร
+  if (e.target.id === 'af-q') {
+    state.af.q = e.target.value; state.af.page = 0; state.pg.assets = 0;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { const el0 = document.getElementById('af-q'); const pos = el0?.selectionStart ?? state.af.q.length; render(); const el = document.getElementById('af-q'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 200);
+    return;
+  }
+  if (e.target.id === 'wo-q') {
+    state.woQ = e.target.value; state.woPage = 0; state.pg.work = 0;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { const b = document.getElementById('wo-body'); if (b) { b.innerHTML = woTable(); doFit(); tuneRows(); } }, 200);
+    return;
+  }
   const qk = e.target.dataset.qr;
   if (qk && state.qr) {
     state.qr[qk] = e.target.value;

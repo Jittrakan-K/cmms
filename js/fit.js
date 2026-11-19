@@ -198,14 +198,22 @@ export function fit(box, bar, opts) {
   box.querySelectorAll('[data-off]').forEach((e) => e.removeAttribute('data-off'));
   box.style.overflowY = '';
   if (!opts.enabled) { cur = null; bar.hidden = true; bar.innerHTML = ''; return; }
-  // วัดพื้นที่ตอนแถบเปลี่ยนหน้าแสดงอยู่ ความสูงจะได้ตรงกับตอนใช้งานจริง
-  bar.hidden = false;
-  bar.innerHTML = '<span class="pg-n">&nbsp;</span><span class="pg-btns"><button type="button" class="btn small" disabled>&nbsp;</button></span>';
-  const H = box.clientHeight - 6;
-  const top0 = box.getBoundingClientRect().top;
-  const pieces = [], wrappers = [];
+  // ถ้าทั้งหมดพอดีจอเดียวโดยไม่มีแถบเปลี่ยนหน้า ใช้พื้นที่เต็ม ไม่ต้องเผื่อแถบ
+  bar.hidden = true; bar.innerHTML = '';
+  let H = box.clientHeight - 6;
+  let top0 = box.getBoundingClientRect().top;
+  let pieces = [], wrappers = [];
   collect(box, H, top0, pieces, wrappers);
-  const pages = pack(pieces, H);
+  let pages = pack(pieces, H);
+  if (pages.length > 1) {
+    // วัดพื้นที่ตอนแถบเปลี่ยนหน้าแสดงอยู่ ความสูงจะได้ตรงกับตอนใช้งานจริง
+    bar.hidden = false;
+    bar.innerHTML = '<span class="pg-n">&nbsp;</span><span class="pg-btns"><button type="button" class="btn small" disabled>&nbsp;</button></span>';
+    H = box.clientHeight - 6; top0 = box.getBoundingClientRect().top;
+    pieces = []; wrappers = [];
+    collect(box, H, top0, pieces, wrappers);
+    pages = pack(pieces, H);
+  }
   cur = { box, bar, pages, pieces, wrappers, at: 0, label: opts.label || '', onPage: opts.onPage };
   let p = Math.max(0, Math.min(pages.length - 1, opts.page || 0));
   if (opts.keep) { const k = pageOf(opts.keep); if (k >= 0) p = k; }
