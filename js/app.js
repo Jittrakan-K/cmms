@@ -1,3 +1,4 @@
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js';
 import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js';
 
 const HOUR = 3600000;
@@ -41,7 +42,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [], checklists: [], stockMoves: [], stock: null, tpm: {}, tpmSel: {}, tpmNg: null, af: { q: '', line: '', use: '', page: 0 }, boardAll: false, costYear: new Date().getFullYear(), pmYear: new Date().getFullYear(), pmView: 'list', pmMonth: null, pmDay: null,
-  page: 'board', tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
+  page: 'board', pg: {}, tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
 
@@ -287,83 +288,105 @@ function viewBoard(m) {
     const ok = inLine.filter((x) => x.k === 'run' || x.k === 'idle').length;
     // แผนผัง: ช่องละเครื่อง สีตามสถานะ เรียงเครื่องที่ต้องดูแลขึ้นก่อน
     const order = ['stop', 'wait', 'pm', 'late', 'idle', 'run', 'off'];
-    const map = big ? `<div class="pmap" role="group" aria-label="แผนผังเครื่อง ${esc(ln)}">${[...inLine].sort((x, y) => order.indexOf(x.k) - order.indexOf(y.k) || String(x.a.name).localeCompare(String(y.a.name))).map((x) => `<button type="button" class="pm-cell k-${x.k}" data-act="open-asset" data-id="${esc(x.a.id)}" title="${esc(`${x.a.id} ${x.a.name} ${MSTATE[x.k][0]}`)}" aria-label="${esc(`${x.a.id} ${MSTATE[x.k][0]}`)}"></button>`).join('')}</div>` : '';
-    return `<div class="mline"><h3>${esc(ln)} <span class="dim u-w400">${inLine.length} เครื่อง${big ? ` ปกติ ${ok}` : ''}</span></h3>${map}${shown.length ? `<div class="mgrid">${shown.map(tile).join('')}</div>` : ''}</div>`;
+    const map = big ? `<div class="pmap" data-flow role="group" aria-label="แผนผังเครื่อง ${esc(ln)}">${[...inLine].sort((x, y) => order.indexOf(x.k) - order.indexOf(y.k) || String(x.a.name).localeCompare(String(y.a.name))).map((x) => `<button type="button" class="pm-cell k-${x.k}" data-act="open-asset" data-id="${esc(x.a.id)}" title="${esc(`${x.a.id} ${x.a.name} ${MSTATE[x.k][0]}`)}" aria-label="${esc(`${x.a.id} ${MSTATE[x.k][0]}`)}"></button>`).join('')}</div>` : '';
+    return `<div class="mline" data-flow><h3>${esc(ln)} <span class="dim u-w400">${inLine.length} เครื่อง${big ? ` ปกติ ${ok}` : ''}</span></h3>${map}${shown.length ? `<div class="mgrid" data-flow>${shown.map(tile).join('')}</div>` : ''}</div>`;
   };
-  // แนวโน้มงานซ่อมรายเดือนปีนี้ และเวลาหยุดตามแบบเครื่อง 90 วัน
-  const yNow = new Date().getFullYear();
-  const woCols = TH_MON.map((label, mi) => {
-    const inM = state.workOrders.filter((w) => { const d = new Date(w.startAt); return d.getFullYear() === yNow && d.getMonth() === mi; });
-    return { label, values: [inM.filter((w) => w.type === 'breakdown').length, inM.filter((w) => w.type !== 'breakdown' && w.type !== 'pm').length, inM.filter((w) => w.type === 'pm').length], on: mi === new Date().getMonth() };
-  }).slice(0, new Date().getMonth() + 1);
-  const byType = new Map();
-  state.workOrders.filter((w) => w.type === 'breakdown' && w.startAt >= now - 90 * DAY).forEach((w) => {
-    const nm = assetOf(w.asset)?.name || w.asset;
-    byType.set(nm, (byType.get(nm) || 0) + ((w.endAt ?? now) - w.startAt));
-  });
-  const topType = [...byType].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const maxT = Math.max(1, ...topType.map((x) => x[1]));
-  const trends = `<div class="dash-trend">
-      <section class="box"><div class="bar"><h2>ใบงานรายเดือน ปี ${yNow + 543}</h2></div><div class="pad">${state.workOrders.length ? mbars(woCols, [{ name: 'เครื่องเสีย', cls: 'mb-bad' }, { name: 'ตรวจ/ปรับปรุง' }, { name: 'PM', cls: 'mb-s2' }], `จำนวนใบงานรายเดือน ปี ${yNow + 543}`) : '<p class="empty">ยังไม่มีใบงาน</p>'}</div></section>
-      <section class="box"><div class="bar"><h2>เวลาหยุดตามแบบเครื่อง 90 วัน</h2></div>${topType.length ? `<ul class="hb">${topType.map(([nm, ms]) => `<li><span class="t" title="${esc(nm)}">${esc(nm)}</span><span class="hb-bar"><span style="width:${((100 * ms) / maxT).toFixed(1)}%"></span></span><span class="mono">${hours(ms)} ชม.</span></li>`).join('')}</ul>` : '<p class="empty">ไม่มีเครื่องเสียใน 90 วัน</p>'}</section>
-    </div>`;
+
   const useCount = Object.keys(USE).map((k) => ({ k: `use-${k}`, label: `${USE[k][0]} (${USE[k][1]})`, n: state.assets.filter((a) => useOf(a) === k).length }));
   const headline = stopN
     ? `<span class="alarm">เครื่องหยุดเสีย ${stopN} เครื่อง</span> จาก ${activeN} เครื่องที่ใช้งาน`
     : countM('wait') ? `<span class="warnt">รออะไหล่ ${countM('wait')} เครื่อง</span> เครื่องที่เหลือทำงานปกติ` : 'เครื่องจักรทุกเครื่องทำงานปกติ';
   const seeAll = (page, label) => `<button type="button" class="link" data-act="nav" data-id="${page}">${label}</button>`;
 
-  return `<section class="now" aria-live="polite">
-      <h2>${headline}</h2>
+  // ---------- ตัวเลขสรุปและกราฟ ----------
+  const monthStart = new Date(new Date(t0).getFullYear(), new Date(t0).getMonth(), 1).getTime();
+  const doing = open.filter((w) => w.status === 'doing' || w.status === 'parts');
+  const closedMonth = state.workOrders.filter((w) => w.status === 'done' && w.endAt >= monthStart);
+  const pmNext7 = state.pmPlans.filter((p) => p.dueDate <= t0 + 7 * DAY);
+  const kpi = (k, label, value, sub, ic, act) => `<button type="button" class="kpi-card k-${k}" data-act="nav" data-id="${act}">
+      <span class="kpi-ic" aria-hidden="true">${ic}</span>
+      <span class="kpi-t"><span class="kpi-l">${label}</span><span class="kpi-v mono">${value}</span><span class="kpi-s">${sub}</span></span></button>`;
+  const I = (d) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const kpis = `<section class="kpi-row" aria-label="ตัวเลขสรุป">
+      ${kpi('asset', 'เครื่องจักรทั้งหมด', activeN.toLocaleString('th-TH'), `หยุดอยู่ ${stopN + countM('wait')} เครื่อง`, I('<rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 7V5h10v2M7 12h4M7 15h7"/>'), 'assets')}
+      ${kpi('open', 'ใบงานที่ยังไม่ปิด', open.length, `รออนุมัติ ${open.filter((w) => w.status === 'pending').length} ใบ`, I('<path d="M9 4h6l1 2h3v14H5V6h3z"/><path d="M9 12h6M9 16h4"/>'), 'work')}
+      ${kpi('doing', 'กำลังซ่อม', doing.length, `ช่างกำลังทำงาน ${new Set(doing.map((w) => w.tech).filter(Boolean)).size} คน`, I('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>'), 'work')}
+      ${kpi('done', 'ปิดงานเดือนนี้', closedMonth.length, `เวลาซ่อมเฉลี่ย ${closedMonth.length ? hm(closedMonth.reduce((t, w) => t + (w.endAt - w.startAt), 0) / closedMonth.length) : '0:00'} ชม.`, I('<circle cx="12" cy="12" r="8"/><path d="m8.5 12 2.5 2.5 4.5-5"/>'), 'work')}
+      ${kpi('pm', 'PM ภายใน 7 วัน', pmNext7.length, `เลยกำหนดแล้ว ${pmLate.length} งาน`, I('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9 15l2 2 4-4"/>'), 'pm')}
+    </section>`;
+  // ภาพรวมงานซ่อม: แท่ง = ใบแจ้งซ่อม (ไม่รวม PM) ต่อเดือน, เส้น = PM ที่ทำเสร็จ
+  const yNow = new Date().getFullYear(); const mNow = new Date().getMonth();
+  const series = TH_MON.slice(0, mNow + 1).map((label, mi) => {
+    const inM = (t) => { if (!t) return false; const d = new Date(t); return d.getFullYear() === yNow && d.getMonth() === mi; };
+    return { label, wo: state.workOrders.filter((w) => w.type !== 'pm' && inM(w.startAt)).length, pm: state.workOrders.filter((w) => w.type === 'pm' && w.status === 'done' && inM(w.endAt)).length };
+  });
+  const combo = (() => {
+    const W = 640, H = 230, L = 32, R = 12, T = 18, B = 26;
+    const max = Math.max(4, ...series.flatMap((x) => [x.wo, x.pm]));
+    const top = Math.ceil(max / 4) * 4;
+    const n = series.length; const bw = (W - L - R) / n;
+    const y = (v) => T + (H - T - B) * (1 - v / top);
+    const grid = [0, 1, 2, 3, 4].map((i) => { const v = (top / 4) * i; return `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="cg"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" class="ct">${v}</text>`; }).join('');
+    const bars = series.map((x, i) => `<g><title>${x.label}: ใบแจ้งซ่อม ${x.wo} ใบ PM เสร็จ ${x.pm} งาน</title><rect x="${L + i * bw + bw * 0.25}" y="${y(x.wo)}" width="${bw * 0.5}" height="${y(0) - y(x.wo)}" rx="3" class="cb"/>${x.wo ? `<text x="${L + i * bw + bw / 2}" y="${y(x.wo) - 4}" text-anchor="middle" class="cv">${x.wo}</text>` : ''}<text x="${L + i * bw + bw / 2}" y="${H - 8}" text-anchor="middle" class="ct${i === mNow ? ' on' : ''}">${x.label}</text></g>`).join('');
+    const pts = series.map((x, i) => [L + i * bw + bw / 2, y(x.pm)]);
+    const line = `<polyline points="${pts.map((q) => q.join(',')).join(' ')}" class="cl"/>${pts.map((q, i) => `<circle cx="${q[0]}" cy="${q[1]}" r="3.5" class="cd"><title>${series[i].label}: PM เสร็จ ${series[i].pm} งาน</title></circle>`).join('')}`;
+    return `<svg viewBox="0 0 ${W} ${H}" class="combo" role="img" aria-label="ใบแจ้งซ่อมและ PM ที่ทำเสร็จรายเดือน ปี ${yNow + 543}">${grid}${bars}${line}</svg>`;
+  })();
+  // โดนัท: สัดส่วนตามกลุ่ม ตรงกลางคือยอดรวม
+  const donut = (parts, total, label, aria) => {
+    const C = 2 * Math.PI * 52; let acc = 0;
+    const segs = parts.filter((x) => x.n).map((x) => { const len = (C * x.n) / Math.max(1, total); const seg = `<circle r="52" cx="70" cy="70" class="dn d-${x.k}" stroke-dasharray="${Math.max(0, len - 2)} ${C}" stroke-dashoffset="${-acc}"><title>${x.label} ${x.n}</title></circle>`; acc += len; return seg; }).join('');
+    return `<div class="donut"><svg viewBox="0 0 140 140" role="img" aria-label="${esc(aria)}"><circle r="52" cx="70" cy="70" class="dn-bg"/><g transform="rotate(-90 70 70)">${segs}</g><text x="70" y="68" text-anchor="middle" class="dn-n">${total.toLocaleString('th-TH')}</text><text x="70" y="88" text-anchor="middle" class="dn-l">${label}</text></svg>
+      <ul class="dlist">${parts.map((x) => `<li><i class="d-${x.k}" aria-hidden="true"></i><span>${x.label}</span><b class="mono">${x.n.toLocaleString('th-TH')}</b><span class="dim mono">${total ? Math.round((100 * x.n) / total) : 0}%</span></li>`).join('')}</ul></div>`;
+  };
+  const woParts = [['pending', 'รออนุมัติ'], ['open', 'รอเริ่มงาน'], ['doing', 'กำลังซ่อม'], ['parts', 'รออะไหล่']].map(([k, label]) => ({ k: `w-${k}`, label, n: open.filter((w) => w.status === k).length }));
+  woParts.push({ k: 'w-done', label: 'ปิดเดือนนี้', n: closedMonth.length });
+  const woTotal = woParts.reduce((t, x) => t + x.n, 0);
+  const healthParts = [['run', 'ปกติ'], ['late', 'PM เลยกำหนด'], ['pm', 'กำลังทำ PM'], ['wait', 'รออะไหล่'], ['stop', 'หยุดเสีย'], ['idle', 'สำรอง'], ['off', 'ไม่ได้ใช้งาน']].map(([k, label]) => ({ k: `h-${k}`, label, n: countM(k) })).filter((x) => x.n || ['run', 'stop', 'late'].includes(x.k.slice(2)));
+  // หมวดเครื่อง
+  const cats = new Map();
+  state.assets.forEach((a) => { const c = a.category || a.line || 'ไม่ระบุหมวด'; const x = cats.get(c) || { n: 0, bad: 0 }; x.n++; if (needsCare(ms.find((y) => y.a.id === a.id) || {})) x.bad++; cats.set(c, x); });
+  const catList = [...cats].sort((a, b) => b[1].n - a[1].n).slice(0, 7);
+  // ใบงานล่าสุด
+  const recent = [...state.workOrders].sort((a, b) => b.startAt - a.startAt).slice(0, 6);
+  const prioChip = (w) => { const [l, bg, fg] = PRIO[priOf(w)]; return `<span class="schip" style="background:${bg};color:${fg}">${l}</span>`; };
+  // PM ที่จะถึง
+  const upcoming = [...state.pmPlans].sort((a, b) => a.dueDate - b.dueDate).slice(0, 6);
+
+  return `${kpis}
+    <div class="bgrid g3">
+      <section class="box"><div class="bar"><h2>ภาพรวมงานซ่อม ปี ${yNow + 543}</h2><ul class="mkey inline"><li><i class="ck-b" aria-hidden="true"></i>ใบแจ้งซ่อม</li><li><i class="ck-l" aria-hidden="true"></i>PM ที่ทำเสร็จ</li></ul></div><div class="pad">${combo}</div></section>
+      <section class="box"><div class="bar"><h2>สถานะใบงาน</h2>${seeAll('work', 'ดูทั้งหมด')}</div><div class="pad">${donut(woParts, woTotal, 'ใบงาน', 'สัดส่วนใบงานตามสถานะ')}</div></section>
+      <section class="box"><div class="bar"><h2>สุขภาพเครื่องจักร</h2>${seeAll('assets', 'ดูทะเบียน')}</div><div class="pad">${donut(healthParts, state.assets.length, 'เครื่อง', 'สัดส่วนเครื่องตามสถานะ')}</div></section>
+    </div>
+
+    <section class="box dash-machines" data-flow>
+      <div class="bar"><h2>แผนผังเครื่องจักร</h2>
+        <ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => countM(k) || !['idle', 'off'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
+      ${state.assets.length > 48 ? `<p class="hint u-pad-sm">${big ? 'หนึ่งช่องคือหนึ่งเครื่อง สีตามสถานะ กดที่ช่องเพื่อเปิดเครื่อง เครื่องที่ต้องดูแลแสดงเป็นการ์ดใต้แผนผัง' : 'แสดงทุกเครื่องเป็นการ์ด'} <button type="button" class="link" data-act="board-all">${big ? 'แสดงทุกเครื่องเป็นการ์ด' : 'กลับไปแบบแผนผัง'}</button></p>` : ''}
+      ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
     </section>
-    <div class="dash">
-      <div class="dash-main">
-      <section class="box dash-machines">
-        <div class="bar"><h2>เครื่องจักร</h2>
-          <ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => countM(k) || !['idle', 'off'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
-        ${state.assets.length > 48 ? `<p class="hint u-pad-sm">${big ? 'แผนผัง: หนึ่งช่องคือหนึ่งเครื่อง สีตามสถานะ กดที่ช่องเพื่อเปิดเครื่อง ด้านล่างแผนผังคือเครื่องที่ต้องดูแล' : 'แสดงทุกเครื่องเป็นการ์ด'} <button type="button" class="link" data-act="board-all">${big ? 'แสดงทุกเครื่องเป็นการ์ด' : 'กลับไปแบบแผนผัง'}</button></p>` : ''}
-        ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
-      </section>
 
-      <section class="box dash-flow">
-        <div class="bar"><h2>ใบงานตามขั้นตอน</h2>${seeAll('work', 'ไปที่หน้างานซ่อม')}</div>
-        <div class="stages">
-          ${stage('pending', 'รออนุมัติ', open.filter((w) => w.status === 'pending'), oldest)}
-          ${stage('open', 'รอเริ่มงาน', open.filter((w) => w.status === 'open'), (l) => (unassigned.length ? `ยังไม่ได้มอบหมาย ${unassigned.length} ใบ` : oldest(l)))}
-          ${stage('doing', 'กำลังซ่อม', open.filter((w) => w.status === 'doing'), oldest)}
-          ${stage('parts', 'รออะไหล่', open.filter((w) => w.status === 'parts'), oldest)}
-          ${stage('done', 'ปิดวันนี้', doneToday, (l) => (l.length ? `ล่าสุด ${fmtTime(Math.max(...l.map((w) => w.endAt)))}` : 'ยังไม่มีงานที่ปิด'))}
-        </div>
-        ${overdue.length ? `<p class="notice err u-mbox">ใบงานเลยวันกำหนดเสร็จ ${overdue.length} ใบ: ${overdue.slice(0, 4).map((w) => esc(w.id)).join(', ')}</p>` : ''}
-      </section>
-      ${trends}
-      </div>
+    <div class="bgrid g3b">
+      <section class="box"><div class="bar"><h2>ใบงานล่าสุด</h2>${seeAll('work', 'ดูทั้งหมด')}</div>
+        ${recent.length ? `<div class="scroll"><table class="btable"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">ความสำคัญ</th><th scope="col">สถานะ</th></tr></thead><tbody>
+          ${recent.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="bt-t"><b class="mono">${esc(w.id)}</b><small>${esc(w.title)}</small></td><td>${tag(w.asset)}</td><td>${prioChip(w)}</td><td>${statusChip(w.status)}</td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="empty">ยังไม่มีใบงาน</p>'}</section>
+      <section class="box"><div class="bar"><h2>PM ที่จะถึง</h2>${seeAll('pm', 'ดูแผน PM')}</div>
+        ${upcoming.length ? `<ul class="alist">${upcoming.map((p) => `<li class="pick" data-act="nav" data-id="pm"><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}<span class="s">${freqLabel(p.intervalDays)}</span></span><span class="u-nowrap mono ${p.dueDate < t0 ? 'alarm' : p.dueDate < t0 + DAY ? '' : 'dim'}">${p.dueDate < t0 + DAY && p.dueDate >= t0 ? 'วันนี้' : fmtDate(p.dueDate)}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีแผน PM</p>'}
+        <div class="pad goal"><p class="kpi">ทำ PM ทันกำหนด (30 วัน) <b class="mono">${comp.pct.toFixed(0)}%</b></p><div class="prog" role="img" aria-label="ทำ PM ทันกำหนด ${comp.pct.toFixed(0)} เปอร์เซ็นต์"><span style="width:${Math.min(100, comp.pct)}%"></span></div></div></section>
+      <section class="box"><div class="bar"><h2>คลังอะไหล่ <span class="dim u-w400">ต้องสั่ง ${reorder.length}</span></h2>${seeAll('parts', 'ดูคลัง')}</div>
+        ${state.parts.length ? `<ul class="plist">${[...state.parts].sort((a, b) => a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min)).slice(0, 6).map((p) => { const r = p.qty / Math.max(1, p.max || p.min * 2 || 1); const lv = p.qty <= 0 ? 'out' : p.qty <= p.min ? 'low' : 'ok'; return `<li><span class="t"><b>${esc(p.name)}</b><span class="dim mono">${esc(p.id)} คงเหลือ ${p.qty}${p.unit ? ` ${esc(p.unit)}` : ''}</span></span><span class="schip ${lv === 'ok' ? 's-ok' : 's-wait'}">${lv === 'out' ? 'หมด' : lv === 'low' ? 'ต่ำ' : 'ปกติ'}</span><span class="pbar2"><span class="l-${lv}" style="width:${Math.min(100, Math.max(3, 100 * r)).toFixed(0)}%"></span></span></li>`; }).join('')}</ul>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
+    </div>
 
-      <div class="dash-side">
-        <section class="box">
-          <div class="bar"><h2>แผน PM</h2>${seeAll('pm', 'ดูแผน PM')}</div>
-          <dl class="trio"><div><dt>เลยกำหนด</dt><dd class="${pmLate.length ? 'alarm' : ''}">${pmLate.length}</dd></div><div><dt>ครบวันนี้</dt><dd>${pmToday.length}</dd></div><div><dt>ใน 7 วัน</dt><dd>${pmWeek.length}</dd></div></dl>
-          <div class="pad goal"><p class="kpi">อัตราทำ PM ทันกำหนด (30 วัน) <b class="mono">${comp.pct.toFixed(0)}%</b></p><div class="prog" role="img" aria-label="ทำ PM ทันกำหนด ${comp.pct.toFixed(0)} เปอร์เซ็นต์"><span style="width:${Math.min(100, comp.pct)}%"></span></div></div>
-          <ul class="alist">${[...pmLate, ...pmToday, ...pmWeek].slice(0, 5).map((p) => `<li><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}</span><span class="u-nowrap ${p.dueDate < t0 ? 'alarm' : 'dim'}">${p.dueDate < t0 ? `เลย ${Math.ceil((t0 - p.dueDate) / DAY)} วัน` : relDate(p.dueDate) === 'วันนี้' ? 'วันนี้' : fmtDate(p.dueDate)}</span></li>`).join('') || '<li class="dim">ไม่มีแผน PM ภายใน 7 วัน</li>'}</ul>
-        </section>
-        <section class="box">
-          <div class="bar"><h2>สถานะการใช้งานเครื่อง <span class="dim u-w400">${state.assets.length} เครื่อง</span></h2>${seeAll('assets', 'ดูทะเบียน')}</div>
-          <div class="pad">${meter(useCount, 'สัดส่วนเครื่องตามสถานะการใช้งาน')}</div>
-        </section>
-        <section class="box">
-          <div class="bar"><h2>อะไหล่ที่ต้องสั่ง <span class="dim u-w400">${reorder.length} จาก ${state.parts.length}</span></h2>${seeAll('parts', 'ดูคลังอะไหล่')}</div>
-          ${reorder.length ? `<ul class="alist">${[...reorder].sort((a, b) => a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min)).slice(0, 6).map((p) => `<li><span class="tag">${esc(p.id)}</span><span class="t">${esc(p.name)}</span><span class="stock"><span class="sbar"><span style="width:${Math.min(100, (100 * p.qty) / Math.max(1, p.min))}%"></span></span><span class="mono ${p.qty <= 0 ? 'alarm' : ''}">${p.qty <= 0 ? 'หมดสต็อก' : `${p.qty}/${p.min}`}</span></span></li>`).join('')}</ul>` : '<p class="empty">อะไหล่ทุกรายการอยู่เหนือจุดสั่งซื้อ</p>'}
-        </section>
-        <section class="box">
-          <div class="bar"><h2>เครื่องมือวัด <span class="dim u-w400">ใช้งานได้ ${gN('ok')} จาก ${state.gauges.length}</span></h2>${seeAll('gauges', 'ดูทะเบียน')}</div>
-          ${gAlert.length ? `<ul class="alist">${gAlert.slice(0, 4).map((x) => `<li><span class="tag">${esc(x.g.id)}</span><span class="t">${esc(x.g.name)}</span><span class="u-nowrap ${x.s[0] === 'soon' ? 'dim' : 'alarm'}">${x.s[1]}</span></li>`).join('')}</ul>` : '<p class="empty">ทุกเครื่องมืออยู่ในรอบสอบเทียบ</p>'}
-        </section>
-        <section class="box">
-          <div class="bar"><h2>ทีมช่าง</h2><span class="dim u-small">งานที่รับผิดชอบ / ปิดแล้วใน 7 วัน</span></div>
-          ${team.length ? `<ul class="team">${team.map((t) => `<li>${avatar(t.name)}<span class="t"><b>${esc(t.name)}</b><span>${t.holding.length ? t.holding.slice(0, 3).map((w) => esc(w.id)).join(', ') : 'พร้อมรับงาน'}</span></span><span class="mono">${t.holding.length}<span class="dim"> / ${t.closed}</span></span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีข้อมูลช่างในระบบ สามารถเพิ่มได้ที่หน้าตั้งค่า</p>'}
-          ${unassigned.length ? `<p class="hint u-pad-b">อนุมัติแล้วแต่ยังไม่มีผู้รับผิดชอบ ${unassigned.length} ใบ</p>` : ''}
-        </section>
-      </div>
+    <div class="bgrid g3c">
+      <section class="box"><div class="bar"><h2>หมวดเครื่องจักร</h2>${seeAll('assets', 'ดูทะเบียน')}</div>
+        ${catList.length ? `<ul class="clist">${catList.map(([c, x]) => `<li><span class="c-ic" aria-hidden="true">${esc([...c.replace(/^Machine\s+/i, '')][0] || '?')}</span><span class="t">${esc(c)}${x.bad ? `<span class="alarm u-small"> ต้องดูแล ${x.bad}</span>` : ''}</span><b class="mono">${x.n.toLocaleString('th-TH')}</b></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีเครื่องจักร</p>'}</section>
+      <section class="box"><div class="bar"><h2>ทีมช่าง</h2><span class="dim u-small">ถืองาน / ปิด 7 วัน</span></div>
+        ${team.length ? `<ul class="team">${team.map((t) => `<li>${avatar(t.name)}<span class="t"><b>${esc(t.name)}</b><span>${t.holding.length ? `${t.holding.length} งาน: ${t.holding.slice(0, 2).map((w) => esc(w.asset)).join(', ')}` : 'พร้อมรับงาน'}</span></span><span class="schip ${t.holding.length ? 's-info' : 's-ok'}">${t.holding.length ? 'กำลังทำงาน' : 'ว่าง'}</span><span class="mono dim">${t.closed}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีข้อมูลช่างในระบบ</p>'}
+        ${unassigned.length ? `<p class="hint u-pad-b">อนุมัติแล้วแต่ยังไม่มีผู้รับผิดชอบ ${unassigned.length} ใบ</p>` : ''}</section>
+      <section class="box"><div class="bar"><h2>เครื่องมือวัด <span class="dim u-w400">ใช้ได้ ${gN('ok')} จาก ${state.gauges.length}</span></h2>${seeAll('gauges', 'ดูทะเบียน')}</div>
+        ${gAlert.length ? `<ul class="alist">${gAlert.slice(0, 5).map((x) => `<li><span class="tag">${esc(x.g.id)}</span><span class="t">${esc(x.g.name)}</span><span class="u-nowrap ${x.s[0] === 'soon' ? 'dim' : 'alarm'}">${x.s[1]}</span></li>`).join('')}</ul>` : '<p class="empty">ทุกเครื่องมืออยู่ในรอบสอบเทียบ</p>'}</section>
     </div>`;
 }
 
@@ -696,17 +719,18 @@ function woRow(w) {
 
 function woTable() {
   const rows = woFiltered();
-  const pages = Math.max(1, Math.ceil(rows.length / WO_PER_PAGE));
+  const per = fitOn() ? Math.max(1, rows.length) : WO_PER_PAGE;
+  const pages = Math.max(1, Math.ceil(rows.length / per));
   state.woPage = Math.min(state.woPage, pages - 1);
-  const from = state.woPage * WO_PER_PAGE;
-  const shown = rows.slice(from, from + WO_PER_PAGE);
+  const from = state.woPage * per;
+  const shown = rows.slice(from, from + per);
   if (!rows.length) return `<p class="empty">${state.woQ.trim() ? 'ไม่พบใบงานที่ตรงกับคำค้น' : 'ไม่มีใบงานในเงื่อนไขนี้'}</p>`;
   return `<div class="scroll"><table class="wot">
       <thead><tr><th scope="col" class="xcol"><span class="sr">ขยาย</span></th><th scope="col">สถานะ</th><th scope="col">ใบงาน</th><th scope="col">เครื่องจักร</th><th scope="col">ความสำคัญ</th><th scope="col">ผู้รับผิดชอบ</th><th scope="col">วันที่แจ้ง</th><th scope="col"><span class="sr">ลิงก์</span></th></tr></thead>
       <tbody>${shown.map(woRow).join('')}</tbody></table></div>
-    <nav class="pager" aria-label="เลขหน้าใบงาน"><span class="mono">${from + 1}–${from + shown.length} จาก ${rows.length}</span>
+    ${pages < 2 ? '' : `<nav class="pager" aria-label="เลขหน้าใบงาน"><span class="mono">${from + 1}–${from + shown.length} จาก ${rows.length}</span>
       <button type="button" class="pbtn" data-act="wo-page" data-id="prev" ${state.woPage === 0 ? 'disabled' : ''} aria-label="หน้าก่อนหน้า"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
-      <button type="button" class="pbtn" data-act="wo-page" data-id="next" ${state.woPage >= pages - 1 ? 'disabled' : ''} aria-label="หน้าถัดไป"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></nav>`;
+      <button type="button" class="pbtn" data-act="wo-page" data-id="next" ${state.woPage >= pages - 1 ? 'disabled' : ''} aria-label="หน้าถัดไป"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></nav>`}`;
 }
 
 function woGroups() {
@@ -962,7 +986,7 @@ function viewAssets(m) {
   const lines = [...new Set(state.assets.map((x) => x.line || ''))].filter(Boolean).sort();
   const list = state.assets.filter((x) => (!f.line || x.line === f.line) && (!f.use || useOf(x) === f.use)
     && (!q || `${x.id} ${x.name} ${x.model || ''} ${x.maker || ''} ${x.category || ''}`.toLowerCase().includes(q)));
-  const per = 30;
+  const per = fitOn() ? Math.max(1, list.length) : 30;
   const pages = Math.max(1, Math.ceil(list.length / per));
   f.page = Math.min(f.page, pages - 1);
   const rows = list.slice(f.page * per, f.page * per + per).map((x) => {
@@ -1321,7 +1345,10 @@ function viewServer() {
       <div class="field"><label for="m-new">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</label><input id="m-new" name="next" type="password" minlength="8" required autocomplete="new-password"></div>
       <div class="field"><label for="m-new2">ยืนยันรหัสผ่านใหม่</label><input id="m-new2" name="next2" type="password" minlength="8" required autocomplete="new-password"></div>
       <div class="actions"><button class="btn">เปลี่ยนรหัสผ่าน</button><button type="button" class="btn" data-act="logout">ออกจากระบบ</button></div></form>` : ''}</section>`;
-  if (!admin) return `<div class="split"><div class="w2" style="max-width:560px">${account}</div></div>`;
+  const display = `<section class="box"><div class="bar"><h2>การแสดงผล</h2></div>
+    <div class="pad stack"><label class="chk"><input type="checkbox" data-pref="fit" ${fitPref() ? 'checked' : ''}><span>จัดแต่ละหน้าให้พอดีหนึ่งจอ ส่วนที่เกินแบ่งเป็นหน้าถัดไป</span></label>
+      <p class="hint">ใช้กับจอคอมพิวเตอร์และแท็บเล็ตแนวนอน เปลี่ยนหน้าด้วยปุ่มด้านล่างหรือคีย์ PageUp/PageDown บนโทรศัพท์ยังเลื่อนลงตามปกติ</p></div></section>`;
+  if (!admin) return `<div class="split"><div class="w2" style="max-width:560px">${display}${account}</div></div>`;
 
   const webAdmin = state.user.position === 'admin_web';
   const users = [...state.users].sort((x, y) => (x.role === 'disabled') - (y.role === 'disabled') || x.name.localeCompare(y.name, 'th'));
@@ -1367,7 +1394,7 @@ function viewServer() {
     <div class="pad"><p class="dim">ดาวน์โหลดข้อมูลทั้งหมด ${COLLECTIONS.map((c) => `${state[c].length.toLocaleString()} ${colls[c]}`).join(', ')} เป็นไฟล์ JSON สำหรับเก็บเป็นหลักฐานหรือย้ายระบบ</p>
     <div class="actions"><button type="button" class="btn" data-act="backup">ดาวน์โหลดไฟล์สำรอง</button></div></div></section>`;
 
-  return `${usersBox}<div class="split">${importBox}<div class="w2">${plantBox}${account}${backupBox}</div></div>`;
+  return `${usersBox}<div class="split">${importBox}<div class="w2">${plantBox}${display}${account}${backupBox}</div></div>`;
 }
 
 // ชื่อที่แสดง: "โรงงาน / แผนก"
@@ -1457,10 +1484,38 @@ function render() {
         ${state.backend.mode === 'local' ? `<p class="notice demo">โหมดตัวอย่าง: ข้อมูลจัดเก็บในเบราว์เซอร์ของเครื่องนี้เท่านั้น ${canAdmin() ? '<button type="button" class="link u-sans" data-act="nav" data-id="server">ตั้งค่าเพื่อใช้งานจริง</button>' : ''}</p>` : ''}
         ${noRole ? `<p class="notice err">${state.user.disabled ? 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อหัวหน้าแผนกซ่อมบำรุง' : 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้งาน กรุณาติดต่อหัวหน้าแผนกซ่อมบำรุง'}</p>` : ''}
         ${state.loadError && state.page !== 'server' ? `<p class="notice err">${esc(state.loadError)}</p>` : ''}
-        ${noRole && state.page !== 'server' ? '' : views[state.page](m)}
+        <div class="pages" id="pages">${noRole && state.page !== 'server' ? '' : views[state.page](m)}</div>
+        <nav class="pgbar" id="pgbar" aria-label="เปลี่ยนหน้า" hidden></nav>
       </main>
     </div>${drawer()}${state.toast ? `<div class="toast" role="status">${esc(state.toast)}</div>` : ''}`;
+  doFit();
 }
+
+// หน้าจอเดียวต่อหน้า: ส่วนที่เกินจอแบ่งเป็นหน้าถัดไป (เฉพาะจอกว้าง จอมือถือยังเลื่อนลงตามปกติ)
+const fitOn = () => fitWanted() && state.page !== 'quick' && !!state.user;
+let lastClick = null;
+function doFit() {
+  const box = document.getElementById('pages'), bar = document.getElementById('pgbar');
+  if (!box || !bar) { document.documentElement.classList.remove('fit'); return; }
+  let keep = null;
+  if (lastClick) {
+    keep = [...box.querySelectorAll('[data-act]')].find((e) => e.dataset.act === lastClick.act && e.dataset.id === lastClick.id) || null;
+    lastClick = null;
+  }
+  const key = state.page;
+  fit(box, bar, { enabled: fitOn(), page: state.pg[key] || 0, keep, onPage: (p) => { state.pg[key] = p; } });
+}
+let tvTimer = null;
+function tvRotate() {
+  clearInterval(tvTimer);
+  if (!state.tv) return;
+  tvTimer = setInterval(() => { if (state.page === 'board' && fitActive()) { const n = document.querySelectorAll('#pgbar .pg-dot').length; const at = state.pg.board || 0; fitGoto(n && at >= n - 1 ? 0 : at + 1); } }, 20000);
+}
+let fitTimer;
+// ฟอนต์โหลดเสร็จทีหลังทำให้ความสูงเปลี่ยน ต้องจัดหน้าใหม่
+document.fonts?.addEventListener?.('loadingdone', () => { if (state.user) doFit(); });
+document.fonts?.ready?.then(() => { if (state.user) doFit(); });
+window.addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = setTimeout(() => { if (state.user) refresh(); }, 150); });
 
 // ข้อมูลเรียลไทม์อาจมาตอนคนกำลังพิมพ์หรือกดเมาส์ค้าง จึงพักการวาดใหม่ไว้ก่อน
 let pending = false;
@@ -1532,6 +1587,7 @@ function listen() {
 
 function go(page) {
   state.page = PAGES[page] ? page : 'board';
+  state.pg[state.page] = 0;
   state.form = null;
   state.draft = {};
   state.q = '';
@@ -1557,7 +1613,7 @@ const actions = {
     const on = !state.tv;
     if (on) document.documentElement.requestFullscreen?.().catch(() => {});
     else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-    state.tv = on; document.documentElement.classList.toggle('tv', on); render();
+    state.tv = on; document.documentElement.classList.toggle('tv', on); render(); tvRotate();
   },
   filter: (id) => { state.filter = id; render(); },
   'open-wo': (id) => {
@@ -1574,7 +1630,7 @@ const actions = {
   'show-done': () => { state.showDone = true; render(); },
   'wo-view': (id) => { state.woView = id; state.woFilter = false; render(); },
   'wo-filter': () => { state.woFilter = !state.woFilter; render(); },
-  'wo-status': (id) => { state.woStatus = id; state.woPage = 0; state.woFilter = false; render(); document.querySelector('[data-act="wo-filter"]')?.focus(); },
+  'wo-status': (id) => { state.woStatus = id; state.woPage = 0; state.pg.work = 0; state.woFilter = false; render(); document.querySelector('[data-act="wo-filter"]')?.focus(); },
   'wo-expand': (id) => { state.woOpen[id] = !state.woOpen[id]; render(); document.querySelector(`[data-act="wo-expand"][data-id="${CSS.escape(id)}"]`)?.focus(); },
   'wo-page': (id) => { state.woPage = Math.max(0, state.woPage + (id === 'next' ? 1 : -1)); render(); document.querySelector('.wot')?.scrollIntoView({ block: 'nearest' }); },
   'quick-open': () => { state.quick = true; state.collapsed.pending = false; state.draft = { asset: state.assets[0]?.id, priority: 'stop' }; render(); document.getElementById('qa-title')?.focus(); },
@@ -1633,7 +1689,7 @@ const actions = {
     render();
     document.getElementById('cp-title')?.focus();
   },
-  'open-asset': (id) => { state.selectedAsset = id; if (state.page !== 'assets') go('assets'); else render(); window.scrollTo(0, 0); },
+  'open-asset': (id) => { state.selectedAsset = id; if (state.page !== 'assets') go('assets'); else render(); window.scrollTo(0, 0); fitReveal(document.querySelector('#pages .split')); },
   report: () => {
     if (state.page !== 'work') go('work');
     state.selectedWo = null;
@@ -1771,7 +1827,10 @@ const actions = {
 };
 
 app.addEventListener('click', (e) => {
+  const pg = e.target.closest('[data-pg]');
+  if (pg && !pg.disabled) { fitGoto(Number(pg.dataset.pg)); return; }
   const el = e.target.closest('[data-act]');
+  if (el && el.closest('#pages')) lastClick = { act: el.dataset.act, id: el.dataset.id };
   if (state.q && (!e.target.closest('.searchwrap') || el?.closest('.qres'))) { state.q = ''; const i = document.getElementById('q'); if (i) i.value = ''; paintSearch(); }
   if (state.woFilter && !e.target.closest('.wofilter')) { state.woFilter = false; if (!el) { render(); return; } }
   if (!el || el.disabled) return;
@@ -1830,6 +1889,10 @@ new MutationObserver(() => labelScrollRegions()).observe(app, { childList: true 
 window.addEventListener('resize', () => labelScrollRegions());
 
 document.addEventListener('keydown', (e) => {
+  if (fitActive() && !e.altKey && !e.ctrlKey && !e.metaKey && !document.querySelector('[aria-modal="true"]') && !e.target.closest?.('input, textarea, select, [contenteditable]')) {
+    const d = { PageDown: 1, PageUp: -1, ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (d && !(e.key.startsWith('Arrow') && e.target.closest?.('.scroll, [role="tablist"], [role="radiogroup"]'))) { e.preventDefault(); fitStep(d); return; }
+  }
   if (e.key === 'Escape' && state.woFilter) { state.woFilter = false; render(); document.querySelector('[data-act="wo-filter"]')?.focus(); return; }
   if (e.key === 'Escape' && state.panel && !state.q) { actions['panel-close'](); return; }
   if (e.key === 'Escape' && state.selectedWo && state.page === 'work' && !state.q) { actions['close-drawer'](); return; }
@@ -1838,8 +1901,8 @@ document.addEventListener('keydown', (e) => {
 
 app.addEventListener('input', (e) => {
   if (e.target.id === 'q') { state.q = e.target.value; paintSearch(); return; }
-  if (e.target.id === 'af-q') { state.af.q = e.target.value; state.af.page = 0; const pos = e.target.selectionStart; render(); const el = document.getElementById('af-q'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; }
-  if (e.target.id === 'wo-q') { state.woQ = e.target.value; state.woPage = 0; const b = document.getElementById('wo-body'); if (b) b.innerHTML = woTable(); return; }
+  if (e.target.id === 'af-q') { state.af.q = e.target.value; state.af.page = 0; state.pg.assets = 0; const pos = e.target.selectionStart; render(); const el = document.getElementById('af-q'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; }
+  if (e.target.id === 'wo-q') { state.woQ = e.target.value; state.woPage = 0; const b = document.getElementById('wo-body'); if (b) b.innerHTML = woTable(); state.pg.work = 0; doFit(); return; }
   const qk = e.target.dataset.qr;
   if (qk && state.qr) {
     state.qr[qk] = e.target.value;
@@ -1876,6 +1939,8 @@ app.addEventListener('keydown', (e) => {
 });
 
 app.addEventListener('change', (e) => {
+  if (e.target.hasAttribute('data-pgsel')) { fitGoto(Number(e.target.value)); document.getElementById('pg-sel')?.focus(); return; }
+  if (e.target.dataset.pref === 'fit') { setFitPref(e.target.checked); render(); toast(e.target.checked ? 'จัดหน้าให้พอดีหนึ่งจอแล้ว' : 'กลับไปแสดงแบบเลื่อนยาว'); return; }
   if (e.target.dataset.import && e.target.files?.[0]) {
     const coll = e.target.dataset.import;
     e.target.files[0].text().then((text) => {
@@ -1884,7 +1949,7 @@ app.addEventListener('change', (e) => {
     });
     return;
   }
-  if (e.target.dataset.af) { state.af[e.target.dataset.af] = e.target.value; state.af.page = 0; render(); return; }
+  if (e.target.dataset.af) { state.af[e.target.dataset.af] = e.target.value; state.af.page = 0; state.pg.assets = 0; render(); return; }
   if (e.target.dataset.userRole) {
     const uid = e.target.dataset.userRole;
     const v = e.target.value;
