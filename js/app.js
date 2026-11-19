@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611191812';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611191812';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611191818';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611191818';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -1490,7 +1490,7 @@ function viewSetup() {
 
 /* ---------- วาดหน้า ---------- */
 function render() {
-  if (!state.backend || state.user === undefined) { app.innerHTML = '<p class="u-p-lg">กำลังโหลด</p>'; return; }
+  if (!state.backend || state.user === undefined) { app.innerHTML = ''; return; }
   if (state.needSetup) { document.body.style.overflow = ''; app.innerHTML = viewSetup(); return; }
   if (!state.user) { document.body.style.overflow = ''; app.innerHTML = viewLogin(); return; }
   if (state.user.mustChange) { document.body.style.overflow = ''; app.innerHTML = viewFirstPassword(); return; }
@@ -1605,6 +1605,38 @@ function explain(err) {
   return err?.message || 'ทำรายการไม่สำเร็จ';
 }
 
+// หน้าโหลด: แสดงตั้งแต่เปิดเว็บและหลังเข้าสู่ระบบ จนข้อมูลเครื่องจักรและใบงานชุดแรกมาถึง
+// แสดงอย่างน้อย 0.9 วินาที (ให้เห็นน็อตขันหนึ่งรอบ ไม่กะพริบ) และไม่เกิน 10 วินาที
+const boot = { shownAt: performance.now(), wait: null, timer: null };
+function bootShow(msg) {
+  const el = document.getElementById('boot');
+  if (!el) return;
+  if (el.hidden || el.classList.contains('out')) boot.shownAt = performance.now();
+  el.hidden = false; el.classList.remove('out');
+  const m = document.getElementById('boot-msg');
+  if (m && msg) m.textContent = msg;
+}
+function bootHide(now = false) {
+  const el = document.getElementById('boot');
+  boot.wait = null; clearTimeout(boot.timer);
+  if (!el || el.hidden || el.classList.contains('out')) return;
+  const left = now ? 0 : Math.max(0, 900 - (performance.now() - boot.shownAt));
+  boot.timer = setTimeout(() => {
+    el.classList.add('out');
+    setTimeout(() => { if (el.classList.contains('out')) el.hidden = true; }, 340);
+  }, left);
+}
+function bootWaitFor(colls) {
+  boot.wait = new Set(colls);
+  clearTimeout(boot.timer);
+  boot.timer = setTimeout(() => bootHide(true), 10000);
+}
+function bootGot(c) {
+  if (!boot.wait) return;
+  boot.wait.delete(c);
+  if (!boot.wait.size) bootHide();
+}
+
 function listen() {
   state.unsubs.forEach((u) => u());
   const usersUnsub = state.backend.subscribeUsers((rows) => { state.users = rows; refresh(); }, (err) => console.warn('อ่านรายชื่อผู้ใช้ไม่ได้', err));
@@ -1613,7 +1645,9 @@ function listen() {
     state.loadError = '';
     state.lastSync = Date.now();
     refresh();
+    bootGot(c);
   }, (err) => {
+    bootGot(c);
     // ใบตรวจ TPM เป็นส่วนเสริม อ่านไม่ได้ (เช่น ยังไม่ได้เผยแพร่กฎใหม่) ก็ใช้งานส่วนอื่นต่อได้
     if (c === 'checklists' || c === 'stockMoves') { console.warn(`อ่าน ${c} ไม่ได้`, err); state[c] = []; refresh(); return; }
     console.error(err); state.loadError = explain(err); refresh();
@@ -2193,9 +2227,11 @@ app.addEventListener('submit', (e) => {
         state.loadError = ''; state.notice = '';
         state.draft = { empId: d.empId };
         state.justLoggedIn = true;
+        bootShow('กำลังเข้าสู่ระบบ');
         await state.backend.signIn(d.empId, d.password);
         state.draft = {};
       } catch (err) {
+        bootHide(true);
         state.justLoggedIn = false;
         state.loadError = explain(err);
         render();
@@ -2275,6 +2311,7 @@ app.addEventListener('submit', (e) => {
     console.error(err);
     app.innerHTML = `<div class="login"><form><div class="bar"><b>เชื่อม Firebase ไม่สำเร็จ</b></div><div class="pad"><p class="notice err">${esc(err.message)}</p><button type="button" class="btn" id="fallback">กลับไปใช้ข้อมูลตัวอย่าง</button></div></form></div>`;
     document.getElementById('fallback').onclick = () => { clearConfig(); location.reload(); };
+    bootHide(true);
     return;
   }
   try {
@@ -2285,12 +2322,14 @@ app.addEventListener('submit', (e) => {
     state.loadError = err?.code?.includes('permission-denied') ? 'ยังไม่ได้ตั้งค่ากฎความปลอดภัย (firestore.rules) ใน Firebase console' : explain(err);
   }
   state.backend.onAuth(async (user) => {
-    if (user && state.needSetup) return;
+    if (user && state.needSetup) { bootHide(true); return; }
     state.user = user;
     state.unsubs.forEach((u) => u());
     state.unsubs = [];
     state.loadError = '';
     if (user?.role && !user.mustChange) {
+      bootShow(`ยินดีต้อนรับ ${user.name}`);
+      bootWaitFor(['assets', 'workOrders']);
       listen();
       if (user.role === 'admin') {
         try { state.canSeed = await state.backend.isEmpty(); } catch { state.canSeed = false; }
@@ -2303,6 +2342,7 @@ app.addEventListener('submit', (e) => {
       state.page = 'server';
     }
     render();
+    if (!(user?.role && !user.mustChange)) bootHide(true);
   });
   setInterval(() => refresh(), 60000);
 })();
