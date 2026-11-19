@@ -1,7 +1,7 @@
 // ชั้นเชื่อมต่อข้อมูล: หน้าเว็บคุยกับไฟล์นี้เท่านั้น
 // ถ้าวันหน้าจะย้ายไป Supabase หรือ PocketBase ให้เขียนคลาสใหม่ที่มีเมธอดชุดเดียวกัน
 // แล้วแก้ createBackend() จุดเดียว ไม่ต้องแตะ app.js
-import { firebaseConfig as fileConfig } from './firebase-config.js?v=202611192139';
+import { firebaseConfig as fileConfig } from './firebase-config.js?v=202611192209';
 
 const SDK = 'https://www.gstatic.com/firebasejs/13.1.0';
 const CONFIG_KEY = 'cmms.firebaseConfig';

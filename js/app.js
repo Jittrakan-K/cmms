@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611192139';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611192139';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611192209';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611192209';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -198,7 +198,8 @@ function normUse(v) {
   return Object.keys(USE).find((k) => k === t || USE[k][1].toLowerCase().replace(/\s/g, '') === t || USE[k][0] === String(v || '').trim()) || 'inuse';
 }
 function machineState(a) {
-  const open = state.workOrders.filter((w) => w.asset === a.id && isOpen(w));
+  // ใบงานย้อนหลังจาก Job Request ไม่ได้บอกว่าเครื่องหยุดหรือไม่ จึงไม่ใช้ตัดสินสถานะเครื่อง (ยังอยู่ในคิวงานตามปกติ)
+  const open = state.workOrders.filter((w) => w.asset === a.id && isOpen(w) && !w.imported);
   const brk = open.filter((w) => w.type === 'breakdown').sort((x, y) => x.startAt - y.startAt);
   const stop = brk.find((w) => w.status !== 'parts');
   if (stop) return { k: 'stop', w: stop, since: stop.startAt };
