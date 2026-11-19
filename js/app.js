@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611191754';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611191754';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611191812';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611191812';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -47,7 +47,7 @@ const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [], checklists: [], stockMoves: [], stock: null, tpm: {}, tpmSel: {}, tpmNg: null, af: { q: '', line: '', use: '', page: 0 }, boardAll: false, costYear: new Date().getFullYear(), pmYear: new Date().getFullYear(), pmView: 'list', pmMonth: null, pmDay: null,
   page: 'board', pg: {}, tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
-  form: null, draft: {}, close: { cause: '', action: '' }, cancelWo: null, toast: '', canSeed: false, unsubs: []
+  form: null, draft: {}, close: { cause: '', action: '' }, cancelWo: null, hideCancelled: loadHideCancelled(), toast: '', canSeed: false, unsubs: []
 };
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -352,7 +352,7 @@ function viewBoard(m) {
   state.assets.forEach((a) => { const c = a.category || a.line || 'ไม่ระบุหมวด'; const x = cats.get(c) || { n: 0, bad: 0 }; x.n++; if (needsCare(ms.find((y) => y.a.id === a.id) || {})) x.bad++; cats.set(c, x); });
   const catList = [...cats].sort((a, b) => b[1].n - a[1].n).slice(0, 7);
   // ใบงานล่าสุด
-  const recent = [...state.workOrders].sort((a, b) => b.startAt - a.startAt).slice(0, 6);
+  const recent = liveWO().sort((a, b) => b.startAt - a.startAt).slice(0, 6);
   const prioChip = (w) => { const [l, bg, fg] = PRIO[priOf(w)]; return `<span class="schip" style="background:${bg};color:${fg}">${l}</span>`; };
   // PM ที่จะถึง
   const upcoming = [...state.pmPlans].sort((a, b) => a.dueDate - b.dueDate).slice(0, 6);
@@ -660,6 +660,10 @@ function woDetail(w) {
     </div></section>`;
 }
 
+// ซ่อนใบงานที่ยกเลิก (ค่าเริ่มต้น) จำไว้ในเบราว์เซอร์ ถ้าเลือกตัวกรองสถานะ "ยกเลิก" จะแสดงเสมอ
+function loadHideCancelled() { try { return localStorage.getItem('cmms.hideCancelled') !== 'off'; } catch { return true; } }
+const cancelShown = (w) => w.status !== 'cancelled' || !state.hideCancelled || state.woStatus === 'cancelled';
+
 function scopeList() {
   const me = state.user.name;
   return state.scope === 'mine' ? state.workOrders.filter((w) => w.tech === me || w.requestedBy === me) : state.workOrders;
@@ -705,6 +709,7 @@ function woFiltered() {
   const t = state.woQ.trim().toLowerCase();
   const f = state.woStatus;
   return scopeList()
+    .filter(cancelShown)
     .filter((w) => (f === 'all' ? true : f === 'active' ? isOpen(w) : w.status === f))
     .filter((w) => !t || `${w.id} ${w.title} ${w.asset} ${assetOf(w.asset)?.name || ''} ${w.tech || ''} ${w.requestedBy || ''}`.toLowerCase().includes(t))
     .sort((a, b) => (!isOpen(a)) - (!isOpen(b)) || b.startAt - a.startAt);
@@ -750,7 +755,10 @@ function woTable() {
   state.woPage = Math.min(state.woPage, pages - 1);
   const from = state.woPage * per;
   const shown = rows.slice(from, from + per);
-  if (!rows.length) return `<p class="empty">${state.woQ.trim() ? 'ไม่พบใบงานที่ตรงกับคำค้น' : 'ไม่มีใบงานในเงื่อนไขนี้'}</p>`;
+  if (!rows.length) {
+    const hid = state.hideCancelled ? scopeList().filter((w) => w.status === 'cancelled').length : 0;
+    return `<p class="empty">${state.woQ.trim() ? 'ไม่พบใบงานที่ตรงกับคำค้น' : 'ไม่มีใบงานในเงื่อนไขนี้'}${hid ? ` (ซ่อนงานที่ยกเลิกไว้ ${hid} ใบ)` : ''}</p>`;
+  }
   return `<div class="scroll"><table class="wot">
       <thead><tr><th scope="col" class="xcol"><span class="sr">ขยาย</span></th><th scope="col">สถานะ</th><th scope="col">ใบงาน</th><th scope="col">เครื่องจักร</th><th scope="col">ความสำคัญ</th><th scope="col">ผู้รับผิดชอบ</th><th scope="col">วันที่แจ้ง</th><th scope="col"><span class="sr">ลิงก์</span></th></tr></thead>
       <tbody>${shown.map(woRow).join('')}</tbody></table></div>
@@ -760,11 +768,11 @@ function woTable() {
 }
 
 function woGroups() {
-  const list = scopeList();
+  const list = scopeList().filter(cancelShown);
   const groups = [
     ['pending', 'รออนุมัติ', (w) => w.status === 'pending'],
     ['active', 'กำลังดำเนินการ', (w) => ['open', 'doing', 'parts'].includes(w.status)],
-    ['done', 'ปิดแล้ว / ยกเลิก', (w) => !isOpen(w)]
+    ['done', state.hideCancelled ? 'ปิดแล้ว' : 'ปิดแล้ว / ยกเลิก', (w) => !isOpen(w)]
   ];
   const body = groups.map(([k, label, test]) => {
     const items = list.filter(test);
@@ -793,13 +801,15 @@ function viewWork() {
     .map(([k, l, d]) => `<button type="button" data-act="wo-view" data-id="${k}" aria-pressed="${state.woView === k}" aria-label="${l}" title="${l}">${icon(d)}</button>`).join('');
   const fLabel = WO_STATUS_FILTER.find(([k]) => k === state.woStatus)?.[1] || '';
   const pop = state.woFilter ? `<div class="wopop" role="group" aria-label="กรองตามสถานะ"><p class="hint">สถานะใบงาน</p>
-      ${WO_STATUS_FILTER.map(([k, l]) => `<button type="button" data-act="wo-status" data-id="${k}" aria-pressed="${state.woStatus === k}">${l}<span class="mono">${k === 'all' ? scopeList().length : k === 'active' ? scopeList().filter((w) => isOpen(w)).length : scopeList().filter((w) => w.status === k).length}</span></button>`).join('')}</div>` : '';
+      ${WO_STATUS_FILTER.map(([k, l]) => `<button type="button" data-act="wo-status" data-id="${k}" aria-pressed="${state.woStatus === k}">${l}<span class="mono">${k === 'all' ? scopeList().filter(cancelShown).length : k === 'active' ? scopeList().filter((w) => isOpen(w)).length : scopeList().filter((w) => w.status === k).length}</span></button>`).join('')}</div>` : '';
   const table = state.woView === 'table';
+  const nCancel = scopeList().filter((w) => w.status === 'cancelled').length;
   return `<div class="wobar">
       <div class="seg-ctl wv" role="group" aria-label="รูปแบบการแสดงผล">${views}</div>
       <div class="chips" role="group" aria-label="ขอบเขตงาน">${scopeBtns}</div>
       ${table ? `<div class="wofilter"><button type="button" class="btn" data-act="wo-filter" aria-expanded="${state.woFilter}">${icon('<path d="M4 6h16M7 12h10M10 18h4"/>')}ตัวกรอง<span class="fval">${esc(fLabel)}</span></button>${pop}</div>
       <div class="wosearch"><span class="sicon">${icon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}</span><label for="wo-q" class="sr">ค้นหาใบงาน</label><input id="wo-q" type="search" autocomplete="off" placeholder="ค้นหาเลขที่ ชื่องาน หรือเครื่องจักร" value="${esc(state.woQ)}"></div>` : '<span class="u-grow"></span>'}
+      ${nCancel ? `<button type="button" class="btn" data-act="wo-hide-cancel" aria-pressed="${!state.hideCancelled}">${state.hideCancelled ? `แสดงงานที่ยกเลิก <span class="mono dim">${nCancel}</span>` : 'ซ่อนงานที่ยกเลิก'}</button>` : ''}
       <button type="button" class="btn" data-act="export-wo">ส่งออก CSV</button>
     </div>
     ${table ? `<section class="card flush wocard" aria-label="รายการใบงาน"><div id="wo-body">${woTable()}</div></section>` : woGroups()}`;
@@ -1762,6 +1772,15 @@ const actions = {
   cal: (id, el) => {
     const pass = el.dataset.pass === '1';
     run(() => state.backend.calibrate(id, pass, pass ? '' : 'ไม่ผ่านการสอบเทียบ ต้องประเมินผลการวัดย้อนหลัง'), pass ? `บันทึก ${id} ผ่านการสอบเทียบ` : `${id} เปลี่ยนเป็นห้ามใช้`);
+  },
+  'wo-hide-cancel': () => {
+    state.hideCancelled = !state.hideCancelled;
+    try { localStorage.setItem('cmms.hideCancelled', state.hideCancelled ? 'on' : 'off'); } catch { /* ใช้ค่าในหน่วยความจำต่อ */ }
+    if (state.hideCancelled && state.woStatus === 'cancelled') state.woStatus = 'all';
+    state.woPage = 0; state.pg.work = 0;
+    render();
+    document.querySelector('[data-act="wo-hide-cancel"]')?.focus();
+    toast(state.hideCancelled ? 'ซ่อนงานที่ยกเลิกแล้ว' : 'แสดงงานที่ยกเลิกด้วย');
   },
   'export-wo': () => {
     const rows = scopeList();
