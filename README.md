@@ -54,7 +54,7 @@ ES modules ไม่ทำงานจาก `file://` ต้องเปิด�
 2. เลือก location `asia-southeast1 (Singapore)` หรือที่ใกล้โรงงานที่สุด **เปลี่ยนภายหลังไม่ได้**
 3. เลือก "Start in production mode"
 4. แท็บ Rules › ลบข้อความเดิมทั้งหมด › วางเนื้อหาไฟล์ `firestore.rules` ทั้งไฟล์ › Publish
-5. ทุกครั้งที่ไฟล์ `firestore.rules` ใน repository นี้เปลี่ยน ต้องวางใหม่และ Publish อีกครั้ง
+5. ทุกครั้งที่ไฟล์ `firestore.rules` ใน repository นี้เปลี่ยน ต้องวางใหม่และ Publish อีกครั้ง หรือตั้งค่าให้เผยแพร่อัตโนมัติตามหัวข้อ "เผยแพร่ firestore.rules อัตโนมัติ"
 
 ### 4. เชื่อมเว็บกับโปรเจกต์
 1. หน้า Project Overview › กดไอคอน `</>` (Web) › ตั้งชื่อแอป › Register app (ไม่ต้องเลือก Hosting)
@@ -88,6 +88,16 @@ ES modules ไม่ทำงานจาก `file://` ต้องเปิด�
 เปลี่ยนรหัสผ่านเอง: หน้าตั้งค่า › บัญชีของฉัน
 
 ลืมรหัสผ่าน: แอดมินกด "รีเซ็ตรหัสผ่าน" ที่แถวของพนักงานในหน้าตั้งค่า ระบบให้รหัสชั่วคราวใหม่ และบัญชีเดิมใช้ไม่ได้ทันที (เบื้องหลังคือสร้างบัญชีล็อกอินใหม่ให้รหัสพนักงานเดิม จึงเห็นบัญชีเก่าค้างใน Firebase console › Authentication ลบทิ้งได้ถ้าต้องการ) ถ้าแอดมินคนเดียวลืมรหัสผ่านเอง ให้เพิ่มแอดมินสำรองไว้อีกคนตั้งแต่แรก
+
+## เผยแพร่ firestore.rules อัตโนมัติ
+`.github/workflows/deploy-rules.yml` เผยแพร่กฎขึ้น Firebase ทุกครั้งที่ `firestore.rules` บน `main` เปลี่ยน (หรือกด Run workflow เองที่แท็บ Actions) ถ้ากฎเขียนผิด Firebase จะไม่รับและ workflow แสดงเป็นสีแดง กฎเดิมยังใช้ต่อ ตั้งค่าครั้งเดียวดังนี้
+1. เปิด https://console.cloud.google.com/iam-admin/serviceaccounts?project=cmmsepic › Create service account ตั้งชื่อ เช่น `github-rules-deploy`
+2. ขั้น Grant access เลือก role **Firebase Rules Admin** (สิทธิ์แก้กฎอย่างเดียว อ่านหรือแก้ข้อมูลในฐานข้อมูลไม่ได้) › Done
+3. เปิด service account ที่สร้าง › แท็บ Keys › Add key › Create new key › JSON จะได้ไฟล์ .json
+4. GitHub repository › Settings › Secrets and variables › Actions › New repository secret ชื่อ `FIREBASE_RULES_KEY` วางเนื้อหาไฟล์ .json ทั้งไฟล์ › Add secret แล้วลบไฟล์ .json ในเครื่องทิ้ง ห้ามนำไฟล์นี้ขึ้น repository
+5. แท็บ Actions › Deploy Firestore rules › Run workflow เพื่อเผยแพร่ครั้งแรก
+
+ถ้าองค์กรปิดการสร้างคีย์ (มีข้อความ "Service account key creation is disabled") ให้ผู้ดูแล Google Cloud ของบริษัทอนุญาต หรือวางกฎเองใน Firebase console ตามเดิม
 
 ## อัปเดตเว็บ
 ก่อน commit ทุกครั้งให้รัน `python bump-version.py` เพื่อเปลี่ยนเลขเวอร์ชันท้ายไฟล์ CSS/JS เบราว์เซอร์จะโหลดไฟล์ใหม่ทันทีโดยไม่ต้องล้างแคช

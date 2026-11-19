@@ -1,0 +1,39 @@
+# เผยแพร่ firestore.rules ขึ้น Firebase อัตโนมัติทุกครั้งที่ไฟล์นี้เปลี่ยนบน main
+# ต้องตั้ง secret FIREBASE_RULES_KEY (ไฟล์ JSON ของ service account ที่มีสิทธิ์ Firebase Rules Admin) ครั้งเดียว
+name: Deploy Firestore rules
+
+on:
+  push:
+    branches: [main]
+    paths: [firestore.rules, firebase.json, .github/workflows/deploy-rules.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firestore-rules
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.FIREBASE_RULES_KEY != '' }}
+    steps:
+      - name: Check key
+        if: env.HAS_KEY != 'true'
+        run: echo "::warning::ยังไม่ได้ตั้ง secret FIREBASE_RULES_KEY จึงยังไม่เผยแพร่กฎ ดูขั้นตอนใน README หัวข้อ 'เผยแพร่ firestore.rules อัตโนมัติ'"
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          node-version: 20
+      - uses: google-github-actions/auth@v2
+        if: env.HAS_KEY == 'true'
+        with:
+          credentials_json: ${{ secrets.FIREBASE_RULES_KEY }}
+      - name: Deploy rules
+        if: env.HAS_KEY == 'true'
+        run: npx --yes firebase-tools@13 deploy --only firestore:rules --project cmmsepic --non-interactive
