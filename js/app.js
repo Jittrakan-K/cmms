@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611191900';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611191900';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611192139';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611192139';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -13,6 +13,10 @@ const STATUS = {
   done: ['ปิดงานแล้ว', 'var(--run)', '0'],
   cancelled: ['ยกเลิก', 'var(--off)', '0']
 };
+// ระดับอะไหล่: อะไหล่ที่ยังไม่ตั้ง Min/Max และไม่มีของ (รายการจากรหัสอะไหล่/ใบสั่งซื้อ) ไม่ถือว่าหมดสต็อก
+const tracked = (p) => (Number(p.min) || 0) > 0 || (Number(p.max) || 0) > 0 || (Number(p.qty) || 0) > 0;
+const partLevel = (p) => (!tracked(p) ? 'none' : p.qty <= 0 ? 'out' : p.qty <= p.min ? 'low' : 'ok');
+const needsOrder = (p) => tracked(p) && p.qty <= p.min;
 // ใบงานที่ยังต้องทำ (ไม่นับที่ปิดแล้วหรือยกเลิก) และใบงานที่ใช้คำนวณสถิติ (ไม่นับที่ยกเลิก)
 const isOpen = (w) => w.status !== 'done' && w.status !== 'cancelled';
 const liveWO = () => state.workOrders.filter((w) => w.status !== 'cancelled');
@@ -168,7 +172,7 @@ function metrics() {
   const t0 = startOfToday();
   const pmSoon = state.pmPlans.filter((p) => p.dueDate <= t0 + 7 * DAY);
   const pmLate = state.pmPlans.filter((p) => p.dueDate < t0);
-  const low = state.parts.filter((p) => p.qty <= p.min);
+  const low = state.parts.filter(needsOrder);
   const gaugeAlert = state.gauges.filter((g) => gaugeState(g)[0] !== 'ok');
   return {
     now, from, open, stopped, down, low, pmSoon, pmLate, gaugeAlert, fails: fails.length, closed: closed.length,
@@ -267,9 +271,9 @@ function viewBoard(m) {
   const pmLater = state.pmPlans.length - pmLate.length - pmToday.length - pmWeek.length;
   const comp = pmCompliance(t0 - 29 * DAY);
   // อะไหล่
-  const out = state.parts.filter((p) => p.qty <= 0);
-  const low = state.parts.filter((p) => p.qty > 0 && p.qty <= p.min);
-  const okParts = state.parts.length - out.length - low.length;
+  const out = state.parts.filter((p) => partLevel(p) === 'out');
+  const low = state.parts.filter((p) => partLevel(p) === 'low');
+  const okParts = state.parts.filter((p) => partLevel(p) === 'ok').length;
   const reorder = [...out, ...low];
   // เครื่องมือวัด
   const gs = state.gauges.map((g) => ({ g, s: gaugeState(g) }));
@@ -383,7 +387,7 @@ function viewBoard(m) {
         ${upcoming.length ? `<ul class="alist">${upcoming.map((p) => `<li class="pick" data-act="nav" data-id="pm"><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}<span class="s">${freqLabel(p.intervalDays)}</span></span><span class="u-nowrap mono ${p.dueDate < t0 ? 'alarm' : p.dueDate < t0 + DAY ? '' : 'dim'}">${p.dueDate < t0 + DAY && p.dueDate >= t0 ? 'วันนี้' : fmtDate(p.dueDate)}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีแผน PM</p>'}
         <div class="pad goal"><p class="kpi">ทำ PM ทันกำหนด (30 วัน) <b class="mono">${comp.pct.toFixed(0)}%</b></p><div class="prog" role="img" aria-label="ทำ PM ทันกำหนด ${comp.pct.toFixed(0)} เปอร์เซ็นต์"><span style="width:${Math.min(100, comp.pct)}%"></span></div></div></section>
       <section class="box"><div class="bar"><h2>คลังอะไหล่ <span class="dim u-w400">ต้องสั่ง ${reorder.length}</span></h2>${seeAll('parts', 'ดูคลัง')}</div>
-        ${state.parts.length ? `<ul class="plist">${[...state.parts].sort((a, b) => a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min)).slice(0, 6).map((p) => { const r = p.qty / Math.max(1, p.max || p.min * 2 || 1); const lv = p.qty <= 0 ? 'out' : p.qty <= p.min ? 'low' : 'ok'; return `<li><span class="t"><b>${esc(p.name)}</b><span class="dim mono">${esc(p.id)} คงเหลือ ${p.qty}${p.unit ? ` ${esc(p.unit)}` : ''}</span></span><span class="schip ${lv === 'ok' ? 's-ok' : 's-wait'}">${lv === 'out' ? 'หมด' : lv === 'low' ? 'ต่ำ' : 'ปกติ'}</span><span class="pbar2"><span class="l-${lv}" style="width:${Math.min(100, Math.max(3, 100 * r)).toFixed(0)}%"></span></span></li>`; }).join('')}</ul>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
+        ${state.parts.filter(tracked).length ? `<ul class="plist">${state.parts.filter(tracked).sort((a, b) => a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min)).slice(0, 6).map((p) => { const r = p.qty / Math.max(1, p.max || p.min * 2 || 1); const lv = partLevel(p); return `<li><span class="t"><b>${esc(p.name)}</b><span class="dim mono">${esc(p.id)} คงเหลือ ${p.qty}${p.unit ? ` ${esc(p.unit)}` : ''}</span></span><span class="schip ${lv === 'ok' ? 's-ok' : 's-wait'}">${lv === 'out' ? 'หมด' : lv === 'low' ? 'ต่ำ' : 'ปกติ'}</span><span class="pbar2"><span class="l-${lv}" style="width:${Math.min(100, Math.max(3, 100 * r)).toFixed(0)}%"></span></span></li>`; }).join('')}</ul>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
     </div>
 
     <div class="bgrid g3c">
@@ -572,6 +576,8 @@ function cancelBox(w) {
     <div class="actions"><button type="button" class="btn danger" data-act="wo-cancel-go" ${c.reason.trim() ? '' : 'disabled'}>ยืนยันยกเลิกใบงาน</button><button type="button" class="btn" data-act="wo-cancel-close">ไม่ยกเลิก</button></div></div>`;
 }
 
+const partsValue = (used) => (used || []).reduce((t, u) => t + (Number(partOf(u.id)?.price) || 0) * u.qty, 0);
+
 function woDetail(w) {
   const now = Date.now();
   const cancelled = w.status === 'cancelled';
@@ -592,9 +598,9 @@ function woDetail(w) {
   const used = w.partsUsed || [];
   const canIssue = !closed && approved && canTech();
   const partsBox = `<section class="box"><div class="bar"><h2>อะไหล่ที่เบิก</h2></div>
-    ${used.length ? `<div class="scroll"><table style="min-width:420px"><thead><tr><th scope="col">รหัส</th><th scope="col">รายการ</th><th scope="col" class="num">จำนวน</th><th scope="col" class="num">คลังคงเหลือ</th></tr></thead><tbody>
-      ${used.map((u) => { const p = partOf(u.id); return `<tr><td class="mono">${esc(u.id)}</td><td>${esc(p?.name || '—')}</td><td class="mono num">${u.qty}</td><td class="mono num ${p && p.qty <= p.min ? 'alarm' : ''}">${p ? `${p.qty} / ${p.min}` : '—'}</td></tr>`; }).join('')}
-    </tbody></table></div>` : '<p class="empty">ยังไม่มีการเบิกอะไหล่</p>'}
+    ${used.length ? `<div class="scroll"><table style="min-width:420px"><thead><tr><th scope="col">รหัส</th><th scope="col">รายการ</th><th scope="col" class="num">จำนวน</th><th scope="col" class="num">มูลค่า (บาท)</th><th scope="col" class="num">คลังคงเหลือ</th></tr></thead><tbody>
+      ${used.map((u) => { const p = partOf(u.id); return `<tr><td class="mono">${esc(u.id)}</td><td>${esc(p?.name || '—')}</td><td class="mono num">${u.qty}</td><td class="mono num">${Number(p?.price) > 0 ? baht(p.price * u.qty) : '—'}</td><td class="mono num ${p && needsOrder(p) ? 'alarm' : ''}">${p ? `${p.qty} / ${p.min}` : '—'}</td></tr>`; }).join('')}
+    </tbody></table></div>${partsValue(used) ? `<p class="pad hint">มูลค่าอะไหล่ตามราคาในคลังรวม <b class="mono">${baht(partsValue(used))}</b> บาท</p>` : ''}` : '<p class="empty">ยังไม่มีการเบิกอะไหล่</p>'}
     ${canIssue ? `<form class="pad" data-form="issue" style="flex-direction:row;flex-wrap:wrap;align-items:flex-end;border-top:1px solid var(--line)">
       <div class="field" style="flex:1 1 220px;min-width:0"><label for="i-part">อะไหล่</label><select id="i-part" name="part" required class="u-fill">${state.parts.map((p) => `<option value="${esc(p.id)}" ${p.qty ? '' : 'disabled'}>${esc(p.id)} ${esc(p.name)} (คงเหลือ ${p.qty})</option>`).join('')}</select></div>
       <div class="field" style="flex:0 1 96px"><label for="i-qty">จำนวน</label><input id="i-qty" name="qty" type="number" min="1" value="1" required></div>
@@ -949,7 +955,7 @@ function fieldsForm(kind, title, fields) {
 const FIELDS = {
   assets: [['id', 'รหัสเครื่อง เช่น MNT-103', 'text', 'required pattern="[A-Za-z0-9\\-]+"'], ['name', 'ชื่อเครื่อง', 'text', 'required'], ['line', 'ตำแหน่ง'], ['cls', 'ระดับความสำคัญ', 'cls'], ['category', 'หมวดเครื่อง เช่น Machine Ferrule'], ['use', 'สถานะการใช้งาน', 'use'], ['maker', 'ผู้ผลิต'], ['model', 'รุ่น'], ['year', 'ปีที่ติดตั้ง'], ['wi', 'เลขที่ใบตรวจ TPM (WI)'], ['serial', 'Serial No.'], ['assetNo', 'Asset No.'], ['installed', 'วันที่ติดตั้ง (ปปปป-ดด-วว)'], ['area', 'กระบวนการ / พื้นที่ใช้งาน'], ['owner', 'ผู้รับผิดชอบ'], ['docUrl', 'ลิงก์เอกสาร WI (https://)']],
   pmPlans: [['asset', 'เครื่องจักร', 'asset'], ['task', 'งานที่ต้องทำ', 'text', 'required'], ['intervalDays', 'ทำทุกกี่วัน', 'number', 'required min="1"'], ['first', 'ครบกำหนด', 'date', 'required']],
-  parts: [['id', 'รหัส', 'text', 'required pattern="[A-Za-z0-9.\\-]+"'], ['name', 'รายการ', 'text', 'required'], ['unit', 'หน่วยนับ เช่น ชิ้น ml'], ['bin', 'ที่เก็บ'], ['qty', 'คงเหลือ', 'number', 'required min="0"'], ['min', 'จุดสั่งซื้อ (Min)', 'number', 'required min="0"'], ['max', 'สต็อกสูงสุด (Max)', 'number', 'min="0"']],
+  parts: [['id', 'รหัส', 'text', 'required pattern="[A-Za-z0-9.\\-]+"'], ['name', 'รายการ', 'text', 'required'], ['price', 'ราคาต่อหน่วย (บาท)', 'number'], ['unit', 'หน่วยนับ เช่น ชิ้น ml'], ['bin', 'ที่เก็บ'], ['qty', 'คงเหลือ', 'number', 'required min="0"'], ['min', 'จุดสั่งซื้อ (Min)', 'number', 'required min="0"'], ['max', 'สต็อกสูงสุด (Max)', 'number', 'min="0"']],
   gauges: [['id', 'รหัส เช่น GAU-008', 'text', 'required pattern="[A-Za-z0-9.\\-]+"'], ['name', 'ชื่อเครื่องมือ', 'text', 'required'], ['range', 'ช่วงการวัด'], ['location', 'ที่ตั้ง / เครื่องที่ใช้'], ['intervalDays', 'รอบสอบเทียบ (วัน)', 'number', 'required min="1"'], ['first', 'ครบกำหนดสอบเทียบ', 'date', 'required']]
 };
 const COLL_LABEL = { assets: 'เครื่องจักร', pmPlans: 'แผน PM', parts: 'อะไหล่', gauges: 'เครื่องมือวัด' };
@@ -1179,14 +1185,17 @@ function pmCalendar() {
 /* ---------- SH-05 อะไหล่ ---------- */
 function viewParts() {
   const form = recordForm('parts');
-  const toOrder = (p) => (p.qty <= p.min ? Math.max((p.max || p.min * 2 || 1) - p.qty, 1) : 0);
+  const toOrder = (p) => (needsOrder(p) ? Math.max((p.max || p.min * 2 || 1) - p.qty, 1) : 0);
   const u = (p) => (p?.unit ? ` ${esc(p.unit)}` : '');
+  const LV = { out: '<span class="schip s-wait">หมดสต็อก</span>', low: '<span class="schip s-wait">ถึงจุดสั่งซื้อ</span>', ok: '<span class="schip s-ok">ปกติ</span>', none: '<span class="schip s-grey">ยังไม่ตั้งจุดสั่งซื้อ</span>' };
   const can = canTech();
   const st = state.stock;
-  const rows = [...state.parts].sort((a, b) => a.qty / (a.min || 1) - b.qty / (b.min || 1)).map((p) => `<tr${st?.id === p.id ? ' aria-current="true"' : ''}>
+  const lvOrder = { out: 0, low: 1, ok: 2, none: 3 };
+  const rows = [...state.parts].sort((a, b) => lvOrder[partLevel(a)] - lvOrder[partLevel(b)] || a.qty / (a.min || 1) - b.qty / (b.min || 1) || a.id.localeCompare(b.id)).map((p) => `<tr${st?.id === p.id ? ' aria-current="true"' : ''}>
     <td class="mono u-nowrap">${esc(p.id)}</td><td>${esc(p.name)}</td><td class="mono">${esc(p.bin)}</td>
-    <td class="mono num ${p.qty === 0 ? 'alarm' : ''}">${p.qty}${u(p)} / ${p.min}</td><td class="mono num">${p.max || '—'}</td>
-    <td>${p.qty <= 0 ? '<span class="schip s-wait">หมดสต็อก</span>' : p.qty <= p.min ? '<span class="schip s-wait">ถึงจุดสั่งซื้อ</span>' : '<span class="schip s-ok">ปกติ</span>'}</td>
+    <td class="mono num ${partLevel(p) === 'out' ? 'alarm' : ''}">${p.qty}${u(p)} / ${p.min}</td><td class="mono num">${p.max || '—'}</td>
+    <td class="mono num">${Number(p.price) > 0 ? baht(p.price) : '<span class="dim">—</span>'}</td>
+    <td>${LV[partLevel(p)]}</td>
     <td class="mono num">${toOrder(p) ? `<b>${toOrder(p)}</b>` : '<span class="dim">—</span>'}</td>
     <td class="num"><span class="actions u-end">${can ? `<button type="button" class="btn small" data-act="stock-open" data-id="${esc(p.id)}:in">รับเข้า</button><button type="button" class="btn small" data-act="stock-open" data-id="${esc(p.id)}:out" ${p.qty ? '' : 'disabled'}>เบิกออก</button>` : ''}${editBtn('parts', p.id)}${delBtn('parts', p.id)}</span></td></tr>`).join('');
   const orders = state.parts.filter(toOrder);
@@ -1202,7 +1211,7 @@ function viewParts() {
     ${moves.length ? `<div class="scroll"><table style="min-width:760px"><thead><tr><th scope="col">วันเวลา</th><th scope="col">อะไหล่</th><th scope="col">รายการ</th><th scope="col" class="num">จำนวน</th><th scope="col" class="num">คงเหลือหลังทำรายการ</th><th scope="col">เลขที่อ้างอิง</th><th scope="col">หมายเหตุ</th><th scope="col">ผู้ทำรายการ</th></tr></thead><tbody>
       ${moves.map((m) => `<tr><td class="mono u-nowrap">${fmtDateTime(m.at)}</td><td class="mono">${esc(m.part)}</td><td>${m.dir === 'in' ? '<span class="schip s-ok">รับเข้า</span>' : '<span class="schip s-info">เบิกออก</span>'}</td><td class="mono num">${m.dir === 'in' ? '+' : '−'}${m.qty}</td><td class="mono num">${m.after ?? '—'}</td><td class="mono">${esc(m.ref || '—')}</td><td>${esc(m.note || '')}</td><td>${esc(m.by || '')}</td></tr>`).join('')}
     </tbody></table></div>` : '<p class="empty">ยังไม่มีการรับเข้าหรือเบิกออก</p>'}</section>`;
-  return `${form}${stockForm}<section class="box" aria-label="คลังอะไหล่">${rows ? `<div class="scroll"><table style="min-width:960px"><thead><tr><th scope="col">รหัส</th><th scope="col">รายการ</th><th scope="col">ที่เก็บ</th><th scope="col" class="num">คงเหลือ / Min</th><th scope="col" class="num">Max</th><th scope="col">สถานะ</th><th scope="col" class="num">ควรสั่ง</th><th scope="col"><span class="sr">คำสั่ง</span></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
+  return `${form}${stockForm}<section class="box" aria-label="คลังอะไหล่">${rows ? `<div class="scroll"><table style="min-width:1060px"><thead><tr><th scope="col">รหัส</th><th scope="col">รายการ</th><th scope="col">ที่เก็บ</th><th scope="col" class="num">คงเหลือ / Min</th><th scope="col" class="num">Max</th><th scope="col" class="num">ราคา/หน่วย (บาท)</th><th scope="col">สถานะ</th><th scope="col" class="num">ควรสั่ง</th><th scope="col"><span class="sr">คำสั่ง</span></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
     <div class="actions"><button type="button" class="btn" data-act="export-order" ${orders.length ? '' : 'disabled'}>ส่งออกรายการสั่งซื้อ ${orders.length} รายการ (CSV)</button><span class="hint">อะไหล่ที่ใช้ซ่อมเครื่อง ควรเบิกผ่านใบงาน เพื่อให้รู้ว่าใช้กับเครื่องใด ส่วนการเบิกอื่นใส่เลขที่อ้างอิงทุกครั้ง</span></div>
     ${history}`;
 }
@@ -1297,14 +1306,16 @@ const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], do
 const userLabel = (u) => (u.role === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[u.position]?.[0] || ROLE_LABEL[u.role] || 'ยังไม่มีสิทธิ์');
 const IMPORT_COLS = {
   assets: ['id', 'name', 'line', 'cls', 'category', 'use', 'maker', 'model', 'year', 'wi', 'serial', 'asset_no', 'installed', 'area', 'owner', 'doc_url'],
-  parts: ['id', 'name', 'unit', 'bin', 'qty', 'min', 'max'],
+  parts: ['id', 'name', 'unit', 'bin', 'qty', 'min', 'max', 'price'],
+  pmPlans: ['id', 'asset', 'task', 'interval_days', 'due_date', 'source'],
   workOrders: ['ref', 'section', 'request_date', 'complete_date', 'condition', 'type', 'status', 'machine_code', 'machine_name', 'process', 'detail', 'action', 'action_by', 'cost', 'note'],
   checklists: ['wi', 'machine_type', 'kind', 'part', 'check', 'freq_days', 'standard']
 };
 const IMPORT_SAMPLE = {
   assets: [['MNT-103', 'เครื่องติดตั้งชิ้นส่วนความเร็วสูง', 'ไลน์ SMT 1', 'A', 'Machine SMT', 'In Use', 'FUJI', 'NXT-III', '2562', '', 'SN-0001', '009510', '2019-11-14', 'SMT', 'สมชาย ก.', 'https://example.sharepoint.com/wi']],
   workOrders: [['FR-M26-001', 'Ferrule', '2026-01-06', '2026-01-13', 'Machine Repair', 'breakdown', 'done', 'MNT-103', 'เครื่องติดตั้งชิ้นส่วน', 'SMT', 'ร้องขอให้ซ่อมหัวดูด', 'เปลี่ยน Bearing และปรับตั้ง', 'สมชาย ก.', '', '']],
-  parts: [['NZL-1005', 'หัวดูด ขนาด 1005', 'ชิ้น', 'A-02', '2', '6', '12']],
+  parts: [['NZL-1005', 'หัวดูด ขนาด 1005', 'ชิ้น', 'A-02', '2', '6', '12', '350']],
+  pmPlans: [['PMP-MNT-103-1', 'MNT-103', 'ทาจาระบี Ball screw แกน X-Y', '30', '2026-12-15', 'แผน PM 2026']],
   checklists: [['WI-TPM-FR-001', 'BIAXIAL POLISHING MACHINE', 'จุดตรวจเช็ค', 'Motor', 'มีเสียงผิดปกติ สั่นสะเทือน', '30', 'ต้องไม่มีเสียงผิดปกติ ไม่สั่นสะเทือน']]
 };
 
@@ -1387,11 +1398,36 @@ function importJobs(rows) {
 const ASSET_KEY = { asset_no: 'assetNo', doc_url: 'docUrl' };
 const ASSET_REQ = ['id', 'name'];
 
+// แผน PM รายเครื่อง: id, เครื่อง, งาน, ทำทุกกี่วัน, ครบกำหนดครั้งถัดไป นำเข้าซ้ำจะข้ามแผนที่มีอยู่แล้ว (ไม่ทับวันครบกำหนดที่เลื่อนไปแล้ว)
+function importPm(rows) {
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const col = (r, k) => (r[head.indexOf(k)] ?? '').trim();
+  if (!['id', 'asset', 'task', 'interval_days', 'due_date'].every((k) => head.includes(k))) throw new Error(`หัวตารางต้องมีคอลัมน์ ${IMPORT_COLS.pmPlans.join(', ')}`);
+  const have = new Set(state.pmPlans.map((p) => p.id));
+  const out = []; const errors = []; let skipped = 0; let noAsset = 0;
+  rows.slice(1).forEach((r, i) => {
+    const id = col(r, 'id').toUpperCase();
+    if (!/^[A-Z0-9.\-]+$/.test(id)) { errors.push(`แถว ${i + 2}: รหัสแผน "${id}" ใช้ได้แค่ A-Z 0-9 . -`); return; }
+    if (have.has(id)) { skipped++; return; }
+    const asset = col(r, 'asset').toUpperCase();
+    const interval = Math.round(Number(col(r, 'interval_days')));
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(col(r, 'due_date'));
+    if (!col(r, 'task')) { errors.push(`แถว ${i + 2}: ไม่มีงานที่ต้องทำ`); return; }
+    if (!(interval >= 1 && interval <= 3650)) { errors.push(`แถว ${i + 2}: รอบ "${col(r, 'interval_days')}" ต้องเป็นจำนวนวัน 1–3650`); return; }
+    if (!m) { errors.push(`แถว ${i + 2}: วันครบกำหนด "${col(r, 'due_date')}" ต้องเป็น ปปปป-ดด-วว`); return; }
+    if (!assetOf(asset)) noAsset++;
+    out.push({ id, asset, task: col(r, 'task').slice(0, 200), intervalDays: interval, dueDate: new Date(+m[1], +m[2] - 1, +m[3]).getTime(), source: col(r, 'source') });
+  });
+  if (noAsset) errors.push(`มี ${noAsset} แผนที่รหัสเครื่องไม่อยู่ในทะเบียน (ยังนำเข้าได้ แต่ควรนำเข้าเครื่องจักรก่อน)`);
+  return { coll: 'pmPlans', rows: out, errors, skipped };
+}
+
 function importRows(coll, text) {
   const rows = parseCsv(text);
   if (rows.length < 2) throw new Error('ไฟล์ต้องมีหัวตารางและข้อมูลอย่างน้อย 1 แถว');
   if (coll === 'checklists') return importChecklists(rows);
   if (coll === 'workOrders') return importJobs(rows);
+  if (coll === 'pmPlans') return importPm(rows);
   const head = rows[0].map((h) => h.trim().toLowerCase());
   if (!head.includes('id') || !head.includes('name')) throw new Error(`หัวตารางต้องมีคอลัมน์ ${IMPORT_COLS[coll].join(', ')}`);
   const out = []; const errors = [];
@@ -1404,7 +1440,15 @@ function importRows(coll, text) {
     if (coll === 'assets') o.cls = ['A', 'B', 'C'].includes((o.cls || '').toUpperCase()) ? o.cls.toUpperCase() : 'B';
     if (coll === 'assets' && 'wi' in o) o.wi = o.wi.toUpperCase();
     if (coll === 'assets' && 'use' in o) o.use = normUse(o.use);
-    if (coll === 'parts') ['qty', 'min', 'max'].forEach((k) => { o[k] = Math.max(0, Number(o[k]) || 0); });
+    if (coll === 'parts') {
+      // ช่องว่าง: อะไหล่ที่มีอยู่แล้วคงค่าเดิม อะไหล่ใหม่เริ่มที่ 0
+      const had = partOf(o.id);
+      ['qty', 'min', 'max', 'price'].forEach((k) => {
+        if (!(k in o)) return;
+        if (o[k] === '') { if (had) delete o[k]; else o[k] = 0; } else o[k] = Math.max(0, Number(o[k]) || 0);
+      });
+      ['unit', 'bin'].forEach((k) => { if (k in o && o[k] === '' && had) delete o[k]; });
+    }
     if (coll === 'assets') {
       // ช่องว่างไม่เขียนทับข้อมูลเดิม นำเข้าซ้ำเพื่อเติมข้อมูลได้
       Object.keys(o).forEach((k) => { if (!ASSET_REQ.includes(k) && o[k] === '') delete o[k]; });
@@ -1463,14 +1507,15 @@ function viewServer() {
   const p = state.importPreview;
   const importBox = `<section class="box w3"><div class="bar"><h2>นำเข้าข้อมูลจาก Excel</h2></div><div class="pad">
     <p class="dim">บันทึกไฟล์ Excel เป็น "CSV UTF-8" ใช้หัวตารางตามไฟล์ตัวอย่าง หากรหัสซ้ำ ระบบจะปรับปรุงข้อมูลเดิม</p>
-    <div class="actions"><button type="button" class="btn small" data-act="tpl" data-id="assets">ไฟล์ตัวอย่าง เครื่องจักร</button><button type="button" class="btn small" data-act="tpl" data-id="parts">ไฟล์ตัวอย่าง อะไหล่</button><button type="button" class="btn small" data-act="tpl" data-id="checklists">ไฟล์ตัวอย่าง ใบตรวจ TPM</button><button type="button" class="btn small" data-act="tpl" data-id="workOrders">ไฟล์ตัวอย่าง ใบงานย้อนหลัง</button></div>
+    <div class="actions"><button type="button" class="btn small" data-act="tpl" data-id="assets">ไฟล์ตัวอย่าง เครื่องจักร</button><button type="button" class="btn small" data-act="tpl" data-id="parts">ไฟล์ตัวอย่าง อะไหล่</button><button type="button" class="btn small" data-act="tpl" data-id="checklists">ไฟล์ตัวอย่าง ใบตรวจ TPM</button><button type="button" class="btn small" data-act="tpl" data-id="workOrders">ไฟล์ตัวอย่าง ใบงานย้อนหลัง</button><button type="button" class="btn small" data-act="tpl" data-id="pmPlans">ไฟล์ตัวอย่าง แผน PM</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:var(--space-sm)">
       <div class="field"><label for="imp-assets">นำเข้าเครื่องจักร</label><input id="imp-assets" type="file" accept=".csv,text/csv" data-import="assets"></div>
       <div class="field"><label for="imp-parts">นำเข้าอะไหล่</label><input id="imp-parts" type="file" accept=".csv,text/csv" data-import="parts"></div>
       <div class="field"><label for="imp-tpm">นำเข้าใบตรวจ TPM</label><input id="imp-tpm" type="file" accept=".csv,text/csv" data-import="checklists"></div>
+      <div class="field"><label for="imp-pm">นำเข้าแผน PM</label><input id="imp-pm" type="file" accept=".csv,text/csv" data-import="pmPlans"></div>
       <div class="field"><label for="imp-wo">นำเข้าใบงานย้อนหลัง (Job Request)</label><input id="imp-wo" type="file" accept=".csv,text/csv" data-import="workOrders"></div>
     </div>
-    ${p ? `<div class="notice ${p.errors.length && !p.rows.length ? 'err' : ''}"><b>${{ assets: 'เครื่องจักร', parts: 'อะไหล่', checklists: 'ใบตรวจ TPM', workOrders: 'ใบงานย้อนหลัง' }[p.coll]} ${p.rows.length} ${p.coll === 'checklists' ? `ใบ (${p.points} จุดตรวจ)` : p.coll === 'workOrders' ? 'ใบ' : 'รายการ'} พร้อมนำเข้า</b>${p.skipped ? ` ข้าม ${p.skipped} ใบที่มีอยู่แล้ว` : ''}${p.rows.length ? `: ${p.rows.slice(0, 3).map((r) => esc(r.id)).join(', ')}${p.rows.length > 3 ? ' …' : ''}` : ''}
+    ${p ? `<div class="notice ${p.errors.length && !p.rows.length ? 'err' : ''}"><b>${{ assets: 'เครื่องจักร', parts: 'อะไหล่', checklists: 'ใบตรวจ TPM', workOrders: 'ใบงานย้อนหลัง', pmPlans: 'แผน PM' }[p.coll]} ${p.rows.length} ${p.coll === 'checklists' ? `ใบ (${p.points} จุดตรวจ)` : p.coll === 'workOrders' ? 'ใบ' : 'รายการ'} พร้อมนำเข้า</b>${p.skipped ? ` ข้าม ${p.skipped} ${p.coll === 'pmPlans' ? 'แผน' : 'ใบ'}ที่มีอยู่แล้ว` : ''}${p.rows.length ? `: ${p.rows.slice(0, 3).map((r) => esc(r.id)).join(', ')}${p.rows.length > 3 ? ' …' : ''}` : ''}
       ${p.errors.length ? `<ul style="margin:var(--space-2xs) 0 0;padding-left:var(--space-md)">${p.errors.slice(0, 5).map((e) => `<li>${esc(e)}</li>`).join('')}${p.errors.length > 5 ? `<li>และอีก ${p.errors.length - 5} แถว</li>` : ''}</ul>` : ''}</div>
       <div class="actions"><button type="button" class="btn solid" data-act="import-go" ${p.rows.length ? '' : 'disabled'}>นำเข้า ${p.rows.length} รายการ</button><button type="button" class="btn" data-act="import-cancel">ยกเลิก</button></div>` : ''}
   </div></section>`;
@@ -1891,7 +1936,7 @@ const actions = {
     ]));
   },
   'export-order': () => {
-    const rows = state.parts.filter((p) => p.qty <= p.min);
+    const rows = state.parts.filter(needsOrder);
     download(`purchase-request-${isoDate(Date.now())}.csv`, csv([
       ['รหัส', 'รายการ', 'คงเหลือ', 'Min', 'Max', 'จำนวนที่ควรสั่ง'],
       ...rows.map((p) => [p.id, p.name, p.qty, p.min, p.max || '', Math.max((p.max || p.min * 2 || 1) - p.qty, 1)])
