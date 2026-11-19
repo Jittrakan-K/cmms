@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611191818';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611191818';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611191900';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611191900';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -112,9 +112,11 @@ const icon = (d) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
 const logo = '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="14" cy="14" r="9"/><path d="M14 1v26M1 14h26" stroke-dasharray="3 2"/></svg>';
 
 /* ---------- ตัวเลข ---------- */
+// เวลาหยุดเครื่อง: ไม่นับใบที่ยกเลิก และใบย้อนหลังจาก Job Request (มีแต่วันที่ ไม่มีเวลาหยุดจริง)
+const timed = (w) => w.status !== 'cancelled' && !w.imported;
 function mergedDown(assetId, from, to) {
   const spans = state.workOrders
-    .filter((w) => w.asset === assetId && !['inspect', 'improve'].includes(w.type))
+    .filter((w) => w.asset === assetId && timed(w) && !['inspect', 'improve'].includes(w.type))
     .map((w) => [Math.max(w.startAt, from), Math.min(w.endAt ?? to, to)])
     .filter(([a, b]) => b > a)
     .sort((a, b) => a[0] - b[0]);
@@ -128,7 +130,7 @@ function mergedDown(assetId, from, to) {
 
 // PM compliance = PM ที่ทำทันกำหนดในช่วงเวลา ÷ (PM ที่ทำในช่วงเวลา + PM ที่ค้างเลยกำหนดอยู่)
 function pmCompliance(from) {
-  const doneIn = liveWO().filter((w) => w.type === 'pm' && w.endAt && w.endAt >= from);
+  const doneIn = liveWO().filter((w) => w.type === 'pm' && !w.imported && w.endAt && w.endAt >= from);
   const late = state.pmPlans.filter((p) => p.dueDate < startOfToday()).length;
   const total = doneIn.length + late;
   return { pct: total ? (100 * doneIn.filter((w) => w.onTime !== false).length) / total : 100, done: doneIn.length, late, onTime: doneIn.filter((w) => w.onTime !== false).length };
@@ -139,7 +141,7 @@ function periodStats(from, to) {
   const span = to - from;
   const rows = state.assets.map((a) => {
     const fails = liveWO().filter((w) => w.asset === a.id && w.type === 'breakdown' && (w.endAt ?? to) >= from && w.startAt <= to);
-    const closed = fails.filter((w) => w.endAt);
+    const closed = fails.filter((w) => w.endAt && timed(w));
     const down = mergedDown(a.id, from, to);
     return {
       a, fails: fails.length, down,
@@ -161,7 +163,7 @@ function metrics() {
   const down = state.assets.reduce((s, a) => s + mergedDown(a.id, from, now), 0);
   const cap = state.assets.length * (now - from);
   const fails = liveWO().filter((w) => w.type === 'breakdown' && (w.endAt ?? now) >= from && w.startAt <= now);
-  const closed = fails.filter((w) => w.endAt);
+  const closed = fails.filter((w) => w.endAt && timed(w));
   const mttr = closed.length ? closed.reduce((s, w) => s + w.endAt - w.startAt, 0) / closed.length : 0;
   const t0 = startOfToday();
   const pmSoon = state.pmPlans.filter((p) => p.dueDate <= t0 + 7 * DAY);
@@ -306,6 +308,7 @@ function viewBoard(m) {
   const monthStart = new Date(new Date(t0).getFullYear(), new Date(t0).getMonth(), 1).getTime();
   const doing = open.filter((w) => w.status === 'doing' || w.status === 'parts');
   const closedMonth = state.workOrders.filter((w) => w.status === 'done' && w.endAt >= monthStart);
+  const closedTimed = closedMonth.filter(timed);
   const pmNext7 = state.pmPlans.filter((p) => p.dueDate <= t0 + 7 * DAY);
   const kpi = (k, label, value, sub, ic, act) => `<button type="button" class="kpi-card k-${k}" data-act="nav" data-id="${act}">
       <span class="kpi-ic" aria-hidden="true">${ic}</span>
@@ -315,7 +318,7 @@ function viewBoard(m) {
       ${kpi('asset', 'เครื่องจักรทั้งหมด', activeN.toLocaleString('th-TH'), `หยุดอยู่ ${stopN + countM('wait')} เครื่อง`, I('<rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 7V5h10v2M7 12h4M7 15h7"/>'), 'assets')}
       ${kpi('open', 'ใบงานที่ยังไม่ปิด', open.length, `รออนุมัติ ${open.filter((w) => w.status === 'pending').length} ใบ`, I('<path d="M9 4h6l1 2h3v14H5V6h3z"/><path d="M9 12h6M9 16h4"/>'), 'work')}
       ${kpi('doing', 'กำลังซ่อม', doing.length, `ช่างกำลังทำงาน ${new Set(doing.map((w) => w.tech).filter(Boolean)).size} คน`, I('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>'), 'work')}
-      ${kpi('done', 'ปิดงานเดือนนี้', closedMonth.length, `เวลาซ่อมเฉลี่ย ${closedMonth.length ? hm(closedMonth.reduce((t, w) => t + (w.endAt - w.startAt), 0) / closedMonth.length) : '0:00'} ชม.`, I('<circle cx="12" cy="12" r="8"/><path d="m8.5 12 2.5 2.5 4.5-5"/>'), 'work')}
+      ${kpi('done', 'ปิดงานเดือนนี้', closedMonth.length, `เวลาซ่อมเฉลี่ย ${closedTimed.length ? hm(closedTimed.reduce((t, w) => t + (w.endAt - w.startAt), 0) / closedTimed.length) : '0:00'} ชม.`, I('<circle cx="12" cy="12" r="8"/><path d="m8.5 12 2.5 2.5 4.5-5"/>'), 'work')}
       ${kpi('pm', 'PM ภายใน 7 วัน', pmNext7.length, `เลยกำหนดแล้ว ${pmLate.length} งาน`, I('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9 15l2 2 4-4"/>'), 'pm')}
     </section>`;
   // ภาพรวมงานซ่อม: แท่ง = ใบแจ้งซ่อม (ไม่รวม PM) ต่อเดือน, เส้น = PM ที่ทำเสร็จ
@@ -625,23 +628,25 @@ function woDetail(w) {
       </div>
       <p class="hint">${ready ? 'เมื่อปิดงาน ระบบจะบันทึกเวลาและเพิ่มลงในประวัติเครื่องจักร' : 'กรุณาเลือกรหัสสาเหตุและระบุการแก้ไขที่ต้นเหตุก่อนปิดงาน'}</p>`;
   } else if (done) {
-    action = `<dl class="kv"><dt>รหัสสาเหตุ</dt><dd class="mono">${esc(w.cause || '—')}</dd><dt>การแก้ไข</dt><dd>${esc(w.action || '—')}</dd><dt>เวลาหยุดรวม</dt><dd class="mono">${hm(w.endAt - w.startAt)} ชม.</dd></dl>`;
+    action = `<dl class="kv"><dt>รหัสสาเหตุ</dt><dd class="mono">${esc(w.cause || '—')}</dd><dt>การแก้ไข</dt><dd>${esc(w.action || '—')}</dd>${w.imported ? '' : `<dt>เวลาหยุดรวม</dt><dd class="mono">${hm(w.endAt - w.startAt)} ชม.</dd>`}</dl>${w.imported ? '<p class="hint">ใบงานย้อนหลังจาก Job Request list ไม่มีข้อมูลเวลาหยุดเครื่อง จึงไม่นับใน Availability และ MTTR</p>' : ''}`;
   } else {
     action = canCancel(w) ? '' : '<p class="hint">บัญชีนี้มีสิทธิ์ดูข้อมูลเท่านั้น</p>';
   }
   action += cancelBox(w);
   return `<section class="stack" aria-label="รายละเอียดใบสั่งงาน">
-    <div class="head" style="border:0;padding:0"><div><span class="doc"><span class="mono">${esc(w.id)}</span><span>${TYPE[w.type]}</span></span><h2 style="font-size:var(--text-xl);line-height:1.35">${esc(w.title)}</h2></div>
+    <div class="head" style="border:0;padding:0"><div><span class="doc"><span class="mono">${esc(w.id)}</span><span>${esc(w.condition || TYPE[w.type])}</span></span><h2 style="font-size:var(--text-xl);line-height:1.35">${esc(w.title)}</h2></div>
       ${lamp(w.status)}</div>
     <div class="steps">${steps}</div>
     <div class="split">
       <div class="w3">
         <section class="box"><div class="bar"><h2>ข้อมูลงาน</h2></div>
           <dl class="facts">
-            <div><dt>เครื่อง</dt><dd><button type="button" class="link" data-act="open-asset" data-id="${esc(w.asset)}">${esc(w.asset)}</button> ${esc(a?.name)}</dd></div>
+            <div><dt>เครื่อง</dt><dd>${a ? `<button type="button" class="link" data-act="open-asset" data-id="${esc(w.asset)}">${esc(w.asset)}</button> ${esc(a.name)}` : `${w.asset ? `<span class="mono">${esc(w.asset)}</span> ` : ''}${esc(w.assetName || (w.asset ? 'ไม่อยู่ในทะเบียนปัจจุบัน' : '—'))}`}</dd></div>
             <div><dt>ตำแหน่ง</dt><dd>${esc(a?.line || '—')}</dd></div>
             <div><dt>ระดับเครื่อง</dt><dd>${esc(a?.cls || '—')}</dd></div>
-            <div><dt>เครื่องหยุด</dt><dd class="mono">${w.type === 'inspect' || w.type === 'improve' ? 'ไม่หยุด' : `${hm((w.endAt ?? now) - w.startAt)} ชม.`}</dd></div>
+            ${w.imported ? `<div><dt>ใช้เวลาดำเนินการ</dt><dd class="mono">${w.endAt ? `${Math.round((w.endAt - w.startAt) / DAY)} วัน` : `${Math.floor((now - w.startAt) / DAY)} วันแล้ว`}</dd></div>
+            <div><dt>ประเภทตาม Job Request</dt><dd>${esc(w.condition || '—')}</dd></div>${w.process ? `<div><dt>กระบวนการ</dt><dd>${esc(w.process)}</dd></div>` : ''}${w.section ? `<div><dt>แผนก</dt><dd>${esc(w.section)}</dd></div>` : ''}`
+              : `<div><dt>เครื่องหยุด</dt><dd class="mono">${w.type === 'inspect' || w.type === 'improve' ? 'ไม่หยุด' : `${hm((w.endAt ?? now) - w.startAt)} ชม.`}</dd></div>`}
             ${w.dueDate ? `<div><dt>กำหนดเสร็จ</dt><dd class="mono ${!done && w.dueDate < startOfToday() ? 'alarm' : ''}">${fmtDateY(w.dueDate)}</dd></div>` : ''}
             ${(w.team || []).length > 1 ? `<div><dt>ทีม</dt><dd>${w.team.map(esc).join(', ')}</dd></div>` : ''}
           </dl>
@@ -725,8 +730,8 @@ function woRow(w) {
   const main = `<tr class="worow${open ? ' open' : ''}${done ? ' done' : ''}"${w.id === state.selectedWo ? ' aria-current="true"' : ''}>
     <td class="xcol"><button type="button" class="xbtn" data-act="wo-expand" data-id="${esc(w.id)}" aria-expanded="${open}" aria-controls="${rid}" aria-label="${open ? 'ซ่อน' : 'แสดง'}รายละเอียดใบงาน ${esc(w.id)}">${chevronSvg}</button></td>
     <td>${statusChip(w.status)}</td>
-    <td class="two"><button type="button" class="tlink" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.title)}</button><small><span class="mono">${esc(w.id)}</span> ${esc(TYPE[w.type] || '')}</small></td>
-    <td class="two"><span class="mrow">${ms ? andon(ms.k) : ''}<span><b class="mono">${esc(w.asset)}</b><small>${esc(a ? `${a.name}${a.line ? `  ${a.line}` : ''}` : 'ไม่พบข้อมูลเครื่อง')}</small></span></span></td>
+    <td class="two"><button type="button" class="tlink" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.title)}</button><small><span class="mono">${esc(w.id)}</span> ${esc(w.condition || TYPE[w.type] || '')}</small></td>
+    <td class="two"><span class="mrow">${ms ? andon(ms.k) : ''}<span><b class="mono">${esc(w.asset || '—')}</b><small>${esc(a ? `${a.name}${a.line ? `  ${a.line}` : ''}` : w.assetName || 'ไม่พบข้อมูลเครื่อง')}</small></span></span></td>
     <td><span class="prio p-${done ? 'done' : p}">${esc(PRIO[p][0])}</span></td>
     <td class="two">${w.tech ? `<span class="mrow">${avatar(w.tech)}<span><b>${esc(w.tech)}</b><small>มอบหมายแล้ว</small></span></span>` : '<span class="dim">รอมอบหมาย</span>'}</td>
     <td class="two"><b class="mono">${fmtDateY(w.startAt)}</b><small class="mono">${fmtTime(w.startAt)}</small></td>
@@ -942,7 +947,7 @@ function fieldsForm(kind, title, fields) {
 }
 
 const FIELDS = {
-  assets: [['id', 'รหัสเครื่อง เช่น MNT-103', 'text', 'required pattern="[A-Za-z0-9\\-]+"'], ['name', 'ชื่อเครื่อง', 'text', 'required'], ['line', 'ตำแหน่ง'], ['cls', 'ระดับความสำคัญ', 'cls'], ['category', 'หมวดเครื่อง เช่น Machine Ferrule'], ['use', 'สถานะการใช้งาน', 'use'], ['maker', 'ผู้ผลิต'], ['model', 'รุ่น'], ['year', 'ปีที่ติดตั้ง'], ['wi', 'เลขที่ใบตรวจ TPM (WI)']],
+  assets: [['id', 'รหัสเครื่อง เช่น MNT-103', 'text', 'required pattern="[A-Za-z0-9\\-]+"'], ['name', 'ชื่อเครื่อง', 'text', 'required'], ['line', 'ตำแหน่ง'], ['cls', 'ระดับความสำคัญ', 'cls'], ['category', 'หมวดเครื่อง เช่น Machine Ferrule'], ['use', 'สถานะการใช้งาน', 'use'], ['maker', 'ผู้ผลิต'], ['model', 'รุ่น'], ['year', 'ปีที่ติดตั้ง'], ['wi', 'เลขที่ใบตรวจ TPM (WI)'], ['serial', 'Serial No.'], ['assetNo', 'Asset No.'], ['installed', 'วันที่ติดตั้ง (ปปปป-ดด-วว)'], ['area', 'กระบวนการ / พื้นที่ใช้งาน'], ['owner', 'ผู้รับผิดชอบ'], ['docUrl', 'ลิงก์เอกสาร WI (https://)']],
   pmPlans: [['asset', 'เครื่องจักร', 'asset'], ['task', 'งานที่ต้องทำ', 'text', 'required'], ['intervalDays', 'ทำทุกกี่วัน', 'number', 'required min="1"'], ['first', 'ครบกำหนด', 'date', 'required']],
   parts: [['id', 'รหัส', 'text', 'required pattern="[A-Za-z0-9.\\-]+"'], ['name', 'รายการ', 'text', 'required'], ['unit', 'หน่วยนับ เช่น ชิ้น ml'], ['bin', 'ที่เก็บ'], ['qty', 'คงเหลือ', 'number', 'required min="0"'], ['min', 'จุดสั่งซื้อ (Min)', 'number', 'required min="0"'], ['max', 'สต็อกสูงสุด (Max)', 'number', 'min="0"']],
   gauges: [['id', 'รหัส เช่น GAU-008', 'text', 'required pattern="[A-Za-z0-9.\\-]+"'], ['name', 'ชื่อเครื่องมือ', 'text', 'required'], ['range', 'ช่วงการวัด'], ['location', 'ที่ตั้ง / เครื่องที่ใช้'], ['intervalDays', 'รอบสอบเทียบ (วัน)', 'number', 'required min="1"'], ['first', 'ครบกำหนดสอบเทียบ', 'date', 'required']]
@@ -1052,13 +1057,16 @@ function viewAssets(m) {
       <section class="box w2"><div class="bar"><h2 style="display:flex;gap:var(--space-sm);align-items:baseline"><span class="mono">${esc(a.id)}</span>${esc(a.name)}</h2><span class="actions">${editBtn('assets', a.id)}${delBtn('assets', a.id, 'ลบเครื่องนี้')}</span></div>
         <dl class="facts"><div><dt>ตำแหน่ง</dt><dd>${esc(a.line || '—')}</dd></div><div><dt>หมวดเครื่อง</dt><dd>${esc(a.category || '—')}</dd></div><div><dt>สถานะการใช้งาน</dt><dd>${USE[useOf(a)][0]} (${USE[useOf(a)][1]})</dd></div><div><dt>ระดับความสำคัญ</dt><dd>${esc(a.cls || '—')}</dd></div>
           <div><dt>ผู้ผลิต</dt><dd>${esc(a.maker || '—')}</dd></div><div><dt>รุ่น</dt><dd class="mono">${esc(a.model || '—')}</dd></div>
-          <div><dt>ปีที่ติดตั้ง</dt><dd class="mono">${esc(a.year || '—')}</dd></div><div><dt>หยุด 7 วัน</dt><dd class="mono">${hours(mergedDown(a.id, m.from, m.now))} ชม.</dd></div></dl>
+          <div><dt>${a.installed ? 'วันที่ติดตั้ง' : 'ปีที่ติดตั้ง'}</dt><dd class="mono">${a.installed ? fmtDateY(new Date(`${a.installed}T00:00:00`).getTime()) : esc(a.year || '—')}</dd></div><div><dt>หยุด 7 วัน</dt><dd class="mono">${hours(mergedDown(a.id, m.from, m.now))} ชม.</dd></div>
+          ${a.serial ? `<div><dt>Serial No.</dt><dd class="mono">${esc(a.serial)}</dd></div>` : ''}${a.assetNo ? `<div><dt>Asset No.</dt><dd class="mono">${esc(a.assetNo)}</dd></div>` : ''}
+          ${a.area ? `<div><dt>กระบวนการ</dt><dd>${esc(a.area)}</dd></div>` : ''}${a.owner ? `<div><dt>ผู้รับผิดชอบ</dt><dd>${esc(a.owner)}</dd></div>` : ''}
+          ${a.wi || a.docUrl ? `<div><dt>เอกสาร WI</dt><dd>${a.docUrl && /^https:\/\//.test(a.docUrl) ? `<a class="link" href="${esc(a.docUrl)}" target="_blank" rel="noopener noreferrer">${esc(a.wi || 'เปิดเอกสาร')}</a>` : `<span class="mono">${esc(a.wi)}</span>`}</dd></div>` : ''}</dl>
         <div class="bar" style="border-top:1px solid var(--ink)"><h2>แผน PM ของเครื่องนี้</h2></div>
         ${pms.map((p) => `<div class="list-row"><span class="mono ${p.dueDate < t0 ? 'alarm' : ''}">${fmtDate(p.dueDate)}</span><span class="t"><span>${esc(p.task)}</span><span class="s">ทุก ${p.intervalDays} วัน</span></span><span></span></div>`).join('') || '<p class="empty">ยังไม่มีแผน PM</p>'}
       </section>
       <section class="box w3 u-gap0"><div class="bar"><h2>ประวัติงาน</h2></div>
         ${hist.length ? `<div class="scroll"><table style="min-width:520px"><thead><tr><th scope="col">วันที่</th><th scope="col">งาน</th><th scope="col">สาเหตุ</th><th scope="col" class="num">หยุด (ชม.)</th></tr></thead><tbody>
-          ${hist.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono u-nowrap">${fmtDate(w.startAt)}</td><td>${esc(w.title)}<span class="sub"><span class="mono">${esc(w.id)}</span><span>${STATUS[w.status][0]}</span></span></td><td class="mono">${esc(w.cause || '—')}</td><td class="mono num">${['inspect', 'improve'].includes(w.type) ? '—' : hours((w.endAt ?? m.now) - w.startAt)}</td></tr>`).join('')}
+          ${hist.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono u-nowrap">${fmtDate(w.startAt)}</td><td>${esc(w.title)}<span class="sub"><span class="mono">${esc(w.id)}</span><span>${STATUS[w.status][0]}</span></span></td><td class="mono">${esc(w.cause || '—')}</td><td class="mono num">${['inspect', 'improve'].includes(w.type) || w.imported ? '—' : hours((w.endAt ?? m.now) - w.startAt)}</td></tr>`).join('')}
         </tbody></table></div>` : '<p class="empty">ยังไม่มีงาน</p>'}</section></div>${tpmBox(a)}`;
   }
   return `${form}${state.assets.length ? filterBar : ''}<section class="box" aria-label="ทะเบียนเครื่องจักร">${rows ? `<div class="scroll"><table style="min-width:760px"><thead><tr><th scope="col">รหัส</th><th scope="col">ชื่อเครื่อง</th><th scope="col">ตำแหน่ง</th><th scope="col">หมวด</th><th scope="col">ระดับ</th><th scope="col" class="num">หยุด 7 วัน</th><th scope="col">สถานะ</th></tr></thead><tbody>${rows}</tbody></table></div>${pager}` : `<p class="empty">${state.assets.length ? 'ไม่พบเครื่องที่ตรงกับเงื่อนไข' : 'ยังไม่มีเครื่องจักร'}</p>`}</section>${detail}`;
@@ -1230,7 +1238,7 @@ function viewReport() {
   const { rows, causes } = periodStats(from, now);
   const total = rows.reduce((s, r) => ({ fails: s.fails + r.fails, down: s.down + r.down }), { fails: 0, down: 0 });
   const span = (now - from) * (rows.length || 1);
-  const closed = liveWO().filter((w) => w.type === 'breakdown' && w.endAt && w.endAt >= from);
+  const closed = liveWO().filter((w) => w.type === 'breakdown' && timed(w) && w.endAt && w.endAt >= from);
   const mttr = closed.length ? closed.reduce((s, w) => s + w.endAt - w.startAt, 0) / closed.length : 0;
   const pmc = pmCompliance(from);
   const ranked = [...rows].sort((a, b) => b.down - a.down);
@@ -1288,12 +1296,14 @@ const ROLE_LABEL = { admin: 'แอดมิน', tech: 'ช่างซ่อ�
 const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], document: ['Document', 'operator'], asst_manager: ['ASST. Manager', 'admin'], advisor: ['Advisor', 'admin'], admin_web: ['Admin Website', 'admin'] };
 const userLabel = (u) => (u.role === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[u.position]?.[0] || ROLE_LABEL[u.role] || 'ยังไม่มีสิทธิ์');
 const IMPORT_COLS = {
-  assets: ['id', 'name', 'line', 'cls', 'category', 'use', 'maker', 'model', 'year', 'wi'],
+  assets: ['id', 'name', 'line', 'cls', 'category', 'use', 'maker', 'model', 'year', 'wi', 'serial', 'asset_no', 'installed', 'area', 'owner', 'doc_url'],
   parts: ['id', 'name', 'unit', 'bin', 'qty', 'min', 'max'],
+  workOrders: ['ref', 'section', 'request_date', 'complete_date', 'condition', 'type', 'status', 'machine_code', 'machine_name', 'process', 'detail', 'action', 'action_by', 'cost', 'note'],
   checklists: ['wi', 'machine_type', 'kind', 'part', 'check', 'freq_days', 'standard']
 };
 const IMPORT_SAMPLE = {
-  assets: [['MNT-103', 'เครื่องติดตั้งชิ้นส่วนความเร็วสูง', 'ไลน์ SMT 1', 'A', 'Machine SMT', 'In Use', '', '', '2562', '']],
+  assets: [['MNT-103', 'เครื่องติดตั้งชิ้นส่วนความเร็วสูง', 'ไลน์ SMT 1', 'A', 'Machine SMT', 'In Use', 'FUJI', 'NXT-III', '2562', '', 'SN-0001', '009510', '2019-11-14', 'SMT', 'สมชาย ก.', 'https://example.sharepoint.com/wi']],
+  workOrders: [['FR-M26-001', 'Ferrule', '2026-01-06', '2026-01-13', 'Machine Repair', 'breakdown', 'done', 'MNT-103', 'เครื่องติดตั้งชิ้นส่วน', 'SMT', 'ร้องขอให้ซ่อมหัวดูด', 'เปลี่ยน Bearing และปรับตั้ง', 'สมชาย ก.', '', '']],
   parts: [['NZL-1005', 'หัวดูด ขนาด 1005', 'ชิ้น', 'A-02', '2', '6', '12']],
   checklists: [['WI-TPM-FR-001', 'BIAXIAL POLISHING MACHINE', 'จุดตรวจเช็ค', 'Motor', 'มีเสียงผิดปกติ สั่นสะเทือน', '30', 'ต้องไม่มีเสียงผิดปกติ ไม่สั่นสะเทือน']]
 };
@@ -1337,10 +1347,51 @@ function importChecklists(rows) {
   return { coll: 'checklists', rows: out, errors, points: out.reduce((n, c) => n + c.items.length, 0) };
 }
 
+// ใบงานย้อนหลังจาก Job Request list: หนึ่งแถวต่อหนึ่งใบ ใช้เลขที่ Request เป็นเลขที่ใบงาน
+// ไม่มีเวลาหยุดเครื่องจริง (มีแต่วันที่) จึงไม่นับใน Availability / MTTR ระบบเก็บไว้เป็นประวัติและจำนวนครั้งที่เสีย
+const WO_TYPES = ['breakdown', 'pm', 'inspect', 'improve'];
+function importJobs(rows) {
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const col = (r, k) => (r[head.indexOf(k)] ?? '').trim();
+  if (!head.includes('ref') || !head.includes('request_date')) throw new Error(`หัวตารางต้องมีคอลัมน์ ${IMPORT_COLS.workOrders.join(', ')}`);
+  const have = new Set(state.workOrders.map((w) => w.id));
+  const out = []; const errors = []; let skipped = 0;
+  const day = (t) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t); return m ? new Date(+m[1], +m[2] - 1, +m[3], 8).getTime() : null; };
+  rows.slice(1).forEach((r, i) => {
+    const id = col(r, 'ref').toUpperCase().replace(/\s+/g, '');
+    if (!/^[A-Z0-9-]+$/.test(id)) { errors.push(`แถว ${i + 2}: เลขที่ "${id}" ใช้ได้แค่ A-Z 0-9 -`); return; }
+    if (have.has(id)) { skipped++; return; }
+    const startAt = day(col(r, 'request_date'));
+    if (!startAt) { errors.push(`แถว ${i + 2}: วันที่แจ้ง "${col(r, 'request_date')}" ต้องเป็น ปปปป-ดด-วว`); return; }
+    const endDay = day(col(r, 'complete_date'));
+    const status = ['open', 'doing', 'parts', 'done', 'cancelled'].includes(col(r, 'status')) ? col(r, 'status') : (endDay ? 'done' : 'open');
+    const detail = col(r, 'detail') || col(r, 'condition') || 'งานจาก Job Request';
+    const title = detail.length > 140 ? `${detail.slice(0, 137)}...` : detail;
+    const tech = col(r, 'action_by');
+    const asset = col(r, 'machine_code').toUpperCase();
+    const closed = status === 'done' || status === 'cancelled';
+    out.push({
+      id, imported: true, refNo: id, section: col(r, 'section'), condition: col(r, 'condition'), process: col(r, 'process'),
+      asset, assetName: col(r, 'machine_name'), type: WO_TYPES.includes(col(r, 'type')) ? col(r, 'type') : 'improve', title, note: detail.length > 140 ? detail : '',
+      priority: '', status, startAt, endAt: closed ? Math.max(startAt, endDay ?? startAt) : null,
+      tech, team: tech ? [tech] : [], requestedBy: '', requestedUid: '', approvedBy: 'Job Request', approvedAt: startAt, dueDate: null, checks: [], photo: '',
+      cause: '', action: col(r, 'action'), partsUsed: [], cost: Number(col(r, 'cost')) || 0,
+      ...(status === 'cancelled' ? { cancelledBy: 'Job Request', cancelReason: col(r, 'note') || 'ยกเลิกตามใบ Job Request' } : {}),
+      log: [{ at: startAt, text: `นำเข้าจาก Job Request list (${col(r, 'section') || 'ไม่ระบุแผนก'})` }]
+    });
+  });
+  return { coll: 'workOrders', rows: out, errors, skipped };
+}
+
+// ช่องเพิ่มเติมของเครื่อง: หัวตาราง CSV ใช้ตัวเล็กคั่นขีดล่าง ในฐานข้อมูลใช้ camelCase
+const ASSET_KEY = { asset_no: 'assetNo', doc_url: 'docUrl' };
+const ASSET_REQ = ['id', 'name'];
+
 function importRows(coll, text) {
   const rows = parseCsv(text);
   if (rows.length < 2) throw new Error('ไฟล์ต้องมีหัวตารางและข้อมูลอย่างน้อย 1 แถว');
   if (coll === 'checklists') return importChecklists(rows);
+  if (coll === 'workOrders') return importJobs(rows);
   const head = rows[0].map((h) => h.trim().toLowerCase());
   if (!head.includes('id') || !head.includes('name')) throw new Error(`หัวตารางต้องมีคอลัมน์ ${IMPORT_COLS[coll].join(', ')}`);
   const out = []; const errors = [];
@@ -1354,6 +1405,13 @@ function importRows(coll, text) {
     if (coll === 'assets' && 'wi' in o) o.wi = o.wi.toUpperCase();
     if (coll === 'assets' && 'use' in o) o.use = normUse(o.use);
     if (coll === 'parts') ['qty', 'min', 'max'].forEach((k) => { o[k] = Math.max(0, Number(o[k]) || 0); });
+    if (coll === 'assets') {
+      // ช่องว่างไม่เขียนทับข้อมูลเดิม นำเข้าซ้ำเพื่อเติมข้อมูลได้
+      Object.keys(o).forEach((k) => { if (!ASSET_REQ.includes(k) && o[k] === '') delete o[k]; });
+      Object.entries(ASSET_KEY).forEach(([from, to]) => { if (from in o) { o[to] = o[from]; delete o[from]; } });
+      if (o.docUrl && !/^https:\/\//.test(o.docUrl)) delete o.docUrl;
+      if (o.installed && !/^\d{4}-\d{2}-\d{2}$/.test(o.installed)) delete o.installed;
+    }
     out.push(o);
   });
   return { coll, rows: out, errors };
@@ -1405,13 +1463,14 @@ function viewServer() {
   const p = state.importPreview;
   const importBox = `<section class="box w3"><div class="bar"><h2>นำเข้าข้อมูลจาก Excel</h2></div><div class="pad">
     <p class="dim">บันทึกไฟล์ Excel เป็น "CSV UTF-8" ใช้หัวตารางตามไฟล์ตัวอย่าง หากรหัสซ้ำ ระบบจะปรับปรุงข้อมูลเดิม</p>
-    <div class="actions"><button type="button" class="btn small" data-act="tpl" data-id="assets">ไฟล์ตัวอย่าง เครื่องจักร</button><button type="button" class="btn small" data-act="tpl" data-id="parts">ไฟล์ตัวอย่าง อะไหล่</button><button type="button" class="btn small" data-act="tpl" data-id="checklists">ไฟล์ตัวอย่าง ใบตรวจ TPM</button></div>
+    <div class="actions"><button type="button" class="btn small" data-act="tpl" data-id="assets">ไฟล์ตัวอย่าง เครื่องจักร</button><button type="button" class="btn small" data-act="tpl" data-id="parts">ไฟล์ตัวอย่าง อะไหล่</button><button type="button" class="btn small" data-act="tpl" data-id="checklists">ไฟล์ตัวอย่าง ใบตรวจ TPM</button><button type="button" class="btn small" data-act="tpl" data-id="workOrders">ไฟล์ตัวอย่าง ใบงานย้อนหลัง</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:var(--space-sm)">
       <div class="field"><label for="imp-assets">นำเข้าเครื่องจักร</label><input id="imp-assets" type="file" accept=".csv,text/csv" data-import="assets"></div>
       <div class="field"><label for="imp-parts">นำเข้าอะไหล่</label><input id="imp-parts" type="file" accept=".csv,text/csv" data-import="parts"></div>
       <div class="field"><label for="imp-tpm">นำเข้าใบตรวจ TPM</label><input id="imp-tpm" type="file" accept=".csv,text/csv" data-import="checklists"></div>
+      <div class="field"><label for="imp-wo">นำเข้าใบงานย้อนหลัง (Job Request)</label><input id="imp-wo" type="file" accept=".csv,text/csv" data-import="workOrders"></div>
     </div>
-    ${p ? `<div class="notice ${p.errors.length && !p.rows.length ? 'err' : ''}"><b>${{ assets: 'เครื่องจักร', parts: 'อะไหล่', checklists: 'ใบตรวจ TPM' }[p.coll]} ${p.rows.length} ${p.coll === 'checklists' ? `ใบ (${p.points} จุดตรวจ)` : 'รายการ'} พร้อมนำเข้า</b>${p.rows.length ? `: ${p.rows.slice(0, 3).map((r) => esc(r.id)).join(', ')}${p.rows.length > 3 ? ' …' : ''}` : ''}
+    ${p ? `<div class="notice ${p.errors.length && !p.rows.length ? 'err' : ''}"><b>${{ assets: 'เครื่องจักร', parts: 'อะไหล่', checklists: 'ใบตรวจ TPM', workOrders: 'ใบงานย้อนหลัง' }[p.coll]} ${p.rows.length} ${p.coll === 'checklists' ? `ใบ (${p.points} จุดตรวจ)` : p.coll === 'workOrders' ? 'ใบ' : 'รายการ'} พร้อมนำเข้า</b>${p.skipped ? ` ข้าม ${p.skipped} ใบที่มีอยู่แล้ว` : ''}${p.rows.length ? `: ${p.rows.slice(0, 3).map((r) => esc(r.id)).join(', ')}${p.rows.length > 3 ? ' …' : ''}` : ''}
       ${p.errors.length ? `<ul style="margin:var(--space-2xs) 0 0;padding-left:var(--space-md)">${p.errors.slice(0, 5).map((e) => `<li>${esc(e)}</li>`).join('')}${p.errors.length > 5 ? `<li>และอีก ${p.errors.length - 5} แถว</li>` : ''}</ul>` : ''}</div>
       <div class="actions"><button type="button" class="btn solid" data-act="import-go" ${p.rows.length ? '' : 'disabled'}>นำเข้า ${p.rows.length} รายการ</button><button type="button" class="btn" data-act="import-cancel">ยกเลิก</button></div>` : ''}
   </div></section>`;

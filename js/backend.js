@@ -1,7 +1,7 @@
 // ชั้นเชื่อมต่อข้อมูล: หน้าเว็บคุยกับไฟล์นี้เท่านั้น
 // ถ้าวันหน้าจะย้ายไป Supabase หรือ PocketBase ให้เขียนคลาสใหม่ที่มีเมธอดชุดเดียวกัน
 // แล้วแก้ createBackend() จุดเดียว ไม่ต้องแตะ app.js
-import { firebaseConfig as fileConfig } from './firebase-config.js?v=202611191818';
+import { firebaseConfig as fileConfig } from './firebase-config.js?v=202611191900';
 
 const SDK = 'https://www.gstatic.com/firebasejs/13.1.0';
 const CONFIG_KEY = 'cmms.firebaseConfig';
@@ -590,7 +590,7 @@ class FirebaseBackend {
     const { collection, query, orderBy, limit, onSnapshot } = this.fs;
     const ref = collection(this.db, coll);
     // จำกัดจำนวนใบงานที่ฟังแบบเรียลไทม์ เพื่อไม่ให้โควตาการอ่านโตตามอายุระบบ
-    const q = coll === 'workOrders' ? query(ref, orderBy('startAt', 'desc'), limit(300))
+    const q = coll === 'workOrders' ? query(ref, orderBy('startAt', 'desc'), limit(2000))
       : coll === 'stockMoves' ? query(ref, orderBy('at', 'desc'), limit(100)) : ref;
     return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ ...d.data(), id: d.id }))), onError);
   }

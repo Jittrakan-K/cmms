@@ -38,7 +38,8 @@ service cloud.firestore {
     }
     // ปิดงานได้เมื่อมีรหัสสาเหตุและการแก้ไขที่ต้นเหตุ
     function closesProperly() {
-      return request.resource.data.status != 'done'
+      return request.resource.data.get('imported', false) == true
+        || request.resource.data.status != 'done'
         || (request.resource.data.cause is string && request.resource.data.cause.size() > 0
             && request.resource.data.action is string && request.resource.data.action.size() > 0);
     }
@@ -122,6 +123,12 @@ service cloud.firestore {
         && validStatus()
         && (!('requestedUid' in request.resource.data) || request.resource.data.requestedUid in ['', request.auth.uid])
         && existsAfter(/databases/$(database)/documents/assets/$(request.resource.data.asset));
+      // แอดมินนำเข้าใบงานย้อนหลังจาก Job Request list (เครื่องอาจไม่อยู่ในทะเบียนปัจจุบันแล้ว)
+      allow create: if isAdmin()
+        && request.resource.data.get('imported', false) == true
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && validStatus();
       // ช่างทำงานได้หลังหัวหน้าอนุมัติแล้วเท่านั้น และยกเลิกใบงานไม่ได้
       allow update: if isTech()
         && resource.data.status != 'pending'
