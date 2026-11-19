@@ -33,7 +33,7 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
     function validStatus() {
-      return request.resource.data.status in ['pending', 'open', 'doing', 'parts', 'done']
+      return request.resource.data.status in ['pending', 'open', 'doing', 'parts', 'done', 'cancelled']
         && (!('type' in request.resource.data) || request.resource.data.type in ['breakdown', 'pm', 'inspect', 'improve']);
     }
     // ปิดงานได้เมื่อมีรหัสสาเหตุและการแก้ไขที่ต้นเหตุ
@@ -41,6 +41,12 @@ service cloud.firestore {
       return request.resource.data.status != 'done'
         || (request.resource.data.cause is string && request.resource.data.cause.size() > 0
             && request.resource.data.action is string && request.resource.data.action.size() > 0);
+    }
+    // ยกเลิกใบงานต้องมีเหตุผล
+    function cancelsProperly() {
+      return request.resource.data.status != 'cancelled'
+        || (request.resource.data.cancelReason is string && request.resource.data.cancelReason.size() > 0
+            && request.resource.data.cancelledBy is string);
     }
 
     // role: admin = หัวหน้า อนุมัติและจัดการทุกอย่าง, tech = ช่าง ซ่อมและปิดงาน, operator = แจ้งซ่อมและดูข้อมูล
@@ -114,14 +120,24 @@ service cloud.firestore {
         && request.resource.data.title.size() > 0
         && (request.resource.data.status == 'pending' || isTech())
         && validStatus()
+        && (!('requestedUid' in request.resource.data) || request.resource.data.requestedUid in ['', request.auth.uid])
         && existsAfter(/databases/$(database)/documents/assets/$(request.resource.data.asset));
-      // ช่างทำงานได้หลังหัวหน้าอนุมัติแล้วเท่านั้น
+      // ช่างทำงานได้หลังหัวหน้าอนุมัติแล้วเท่านั้น และยกเลิกใบงานไม่ได้
       allow update: if isTech()
         && resource.data.status != 'pending'
+        && resource.data.status != 'cancelled'
         && changedOnly(['status', 'endAt', 'tech', 'log', 'cause', 'action', 'partsUsed', 'checks', 'prNo', 'cost', 'costNote'])
         && request.resource.data.status != 'pending'
+        && request.resource.data.status != 'cancelled'
         && validStatus() && closesProperly();
-      allow update: if isAdmin() && validStatus() && closesProperly();
+      // ผู้แจ้งยกเลิกใบงานของตัวเองได้ระหว่างรออนุมัติ
+      allow update: if isMember()
+        && resource.data.status == 'pending'
+        && resource.data.get('requestedUid', '') == request.auth.uid
+        && request.resource.data.status == 'cancelled'
+        && changedOnly(['status', 'endAt', 'log', 'cancelledBy', 'cancelReason'])
+        && cancelsProperly();
+      allow update: if isAdmin() && validStatus() && closesProperly() && cancelsProperly();
       allow delete: if isAdmin();
     }
 

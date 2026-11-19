@@ -10,15 +10,19 @@ const STATUS = {
   open: ['รอเริ่มงาน', 'var(--ink)', '0'],
   doing: ['กำลังซ่อม', 'var(--stop)', '0'],
   parts: ['รออะไหล่', 'var(--wait)', '0'],
-  done: ['ปิดงานแล้ว', 'var(--run)', '0']
+  done: ['ปิดงานแล้ว', 'var(--run)', '0'],
+  cancelled: ['ยกเลิก', 'var(--off)', '0']
 };
+// ใบงานที่ยังต้องทำ (ไม่นับที่ปิดแล้วหรือยกเลิก) และใบงานที่ใช้คำนวณสถิติ (ไม่นับที่ยกเลิก)
+const isOpen = (w) => w.status !== 'done' && w.status !== 'cancelled';
+const liveWO = () => state.workOrders.filter((w) => w.status !== 'cancelled');
 const TYPE = { breakdown: 'ซ่อมฉุกเฉิน', pm: 'บำรุงรักษาตามแผน', inspect: 'แจ้งตรวจสอบ', improve: 'ปรับปรุง' };
 const CAUSES = [
   ['C-LUB', 'ขาดการหล่อลื่น/ทำความสะอาด'], ['C-WEAR', 'ชิ้นส่วนสึกหรอตามอายุ'], ['C-PM', 'ไม่ได้ทำ PM ตามรอบ'],
   ['C-SET', 'ตั้งค่าหรือปรับแต่งผิด'], ['C-ELEC', 'ระบบไฟฟ้า/เซนเซอร์'], ['C-OPR', 'การใช้งานผิดวิธี'], ['C-OTH', 'อื่นๆ (ระบุในการแก้ไข)']
 ];
 const FILTERS = {
-  active: ['งานเปิดอยู่', (w) => w.status !== 'done'],
+  active: ['งานเปิดอยู่', (w) => isOpen(w)],
   pending: ['รออนุมัติ', (w) => w.status === 'pending'],
   doing: ['กำลังซ่อม', (w) => w.status === 'doing' || w.status === 'open'],
   parts: ['รออะไหล่', (w) => w.status === 'parts'],
@@ -43,7 +47,7 @@ const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [], checklists: [], stockMoves: [], stock: null, tpm: {}, tpmSel: {}, tpmNg: null, af: { q: '', line: '', use: '', page: 0 }, boardAll: false, costYear: new Date().getFullYear(), pmYear: new Date().getFullYear(), pmView: 'list', pmMonth: null, pmDay: null,
   page: 'board', pg: {}, tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
-  form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
+  form: null, draft: {}, close: { cause: '', action: '' }, cancelWo: null, toast: '', canSeed: false, unsubs: []
 };
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -124,7 +128,7 @@ function mergedDown(assetId, from, to) {
 
 // PM compliance = PM ที่ทำทันกำหนดในช่วงเวลา ÷ (PM ที่ทำในช่วงเวลา + PM ที่ค้างเลยกำหนดอยู่)
 function pmCompliance(from) {
-  const doneIn = state.workOrders.filter((w) => w.type === 'pm' && w.endAt && w.endAt >= from);
+  const doneIn = liveWO().filter((w) => w.type === 'pm' && w.endAt && w.endAt >= from);
   const late = state.pmPlans.filter((p) => p.dueDate < startOfToday()).length;
   const total = doneIn.length + late;
   return { pct: total ? (100 * doneIn.filter((w) => w.onTime !== false).length) / total : 100, done: doneIn.length, late, onTime: doneIn.filter((w) => w.onTime !== false).length };
@@ -134,7 +138,7 @@ function pmCompliance(from) {
 function periodStats(from, to) {
   const span = to - from;
   const rows = state.assets.map((a) => {
-    const fails = state.workOrders.filter((w) => w.asset === a.id && w.type === 'breakdown' && (w.endAt ?? to) >= from && w.startAt <= to);
+    const fails = liveWO().filter((w) => w.asset === a.id && w.type === 'breakdown' && (w.endAt ?? to) >= from && w.startAt <= to);
     const closed = fails.filter((w) => w.endAt);
     const down = mergedDown(a.id, from, to);
     return {
@@ -145,18 +149,18 @@ function periodStats(from, to) {
     };
   });
   const causes = {};
-  state.workOrders.filter((w) => w.type === 'breakdown' && w.endAt && w.endAt >= from && w.cause).forEach((w) => { causes[w.cause] = (causes[w.cause] || 0) + 1; });
+  liveWO().filter((w) => w.type === 'breakdown' && w.endAt && w.endAt >= from && w.cause).forEach((w) => { causes[w.cause] = (causes[w.cause] || 0) + 1; });
   return { rows, causes: Object.entries(causes).sort((x, y) => y[1] - x[1]) };
 }
 
 function metrics() {
   const now = Date.now();
   const from = startOfToday() - 6 * DAY;
-  const open = state.workOrders.filter((w) => w.status !== 'done');
+  const open = state.workOrders.filter((w) => isOpen(w));
   const stopped = [...new Set(open.filter((w) => w.type === 'breakdown').map((w) => w.asset))];
   const down = state.assets.reduce((s, a) => s + mergedDown(a.id, from, now), 0);
   const cap = state.assets.length * (now - from);
-  const fails = state.workOrders.filter((w) => w.type === 'breakdown' && (w.endAt ?? now) >= from && w.startAt <= now);
+  const fails = liveWO().filter((w) => w.type === 'breakdown' && (w.endAt ?? now) >= from && w.startAt <= now);
   const closed = fails.filter((w) => w.endAt);
   const mttr = closed.length ? closed.reduce((s, w) => s + w.endAt - w.startAt, 0) / closed.length : 0;
   const t0 = startOfToday();
@@ -188,7 +192,7 @@ function normUse(v) {
   return Object.keys(USE).find((k) => k === t || USE[k][1].toLowerCase().replace(/\s/g, '') === t || USE[k][0] === String(v || '').trim()) || 'inuse';
 }
 function machineState(a) {
-  const open = state.workOrders.filter((w) => w.asset === a.id && w.status !== 'done');
+  const open = state.workOrders.filter((w) => w.asset === a.id && isOpen(w));
   const brk = open.filter((w) => w.type === 'breakdown').sort((x, y) => x.startAt - y.startAt);
   const stop = brk.find((w) => w.status !== 'parts');
   if (stop) return { k: 'stop', w: stop, since: stop.startAt };
@@ -241,7 +245,7 @@ function viewBoard(m) {
     </button>`;
   };
   // ใบงานตามขั้นตอน
-  const open = state.workOrders.filter((w) => w.status !== 'done');
+  const open = state.workOrders.filter((w) => isOpen(w));
   const doneToday = state.workOrders.filter((w) => w.status === 'done' && w.endAt >= t0);
   const stage = (k, label, list, note) => {
     const old = [...list].sort((x, y) => x.startAt - y.startAt);
@@ -318,7 +322,7 @@ function viewBoard(m) {
   const yNow = new Date().getFullYear(); const mNow = new Date().getMonth();
   const series = TH_MON.slice(0, mNow + 1).map((label, mi) => {
     const inM = (t) => { if (!t) return false; const d = new Date(t); return d.getFullYear() === yNow && d.getMonth() === mi; };
-    return { label, wo: state.workOrders.filter((w) => w.type !== 'pm' && inM(w.startAt)).length, pm: state.workOrders.filter((w) => w.type === 'pm' && w.status === 'done' && inM(w.endAt)).length };
+    return { label, wo: liveWO().filter((w) => w.type !== 'pm' && inM(w.startAt)).length, pm: state.workOrders.filter((w) => w.type === 'pm' && w.status === 'done' && inM(w.endAt)).length };
   });
   const combo = (() => {
     const W = 640, H = 230, L = 32, R = 12, T = 18, B = 26;
@@ -409,7 +413,7 @@ function downtimeBuckets(range) {
     const b0 = t0 - (n - 1 - i) * size - (range === 90 ? 6 * DAY : 0);
     const b1 = Math.min(b0 + size, now);
     const down = state.assets.reduce((s, a) => s + mergedDown(a.id, b0, b1), 0);
-    const fails = state.workOrders.filter((w) => w.type === 'breakdown' && w.startAt >= b0 && w.startAt < b0 + size).length;
+    const fails = liveWO().filter((w) => w.type === 'breakdown' && w.startAt >= b0 && w.startAt < b0 + size).length;
     return { b0, b1, down, fails, label: range === 90 ? fmtDate(b0) : range === 7 ? fmtWd(b0) : String(new Date(b0).getDate()) };
   });
 }
@@ -550,22 +554,40 @@ function formWorkOrder() {
     <div class="actions"><button class="btn solid">ส่งแจ้งซ่อม</button><button type="button" class="btn" data-act="close-form">ยกเลิก</button></div></div></form>`;
 }
 
+// ยกเลิกใบงาน: แอดมินยกเลิกได้ทุกใบที่ยังไม่ปิด ผู้แจ้งยกเลิกใบของตัวเองได้ระหว่างรออนุมัติ
+const canCancel = (w) => isOpen(w) && (canAdmin() || (w.status === 'pending' && !!w.requestedUid && w.requestedUid === state.user?.uid));
+
+function cancelBox(w) {
+  if (!canCancel(w)) return '';
+  const c = state.cancelWo?.id === w.id ? state.cancelWo : null;
+  if (!c) return `<div class="cancelrow"><button type="button" class="btn danger small" data-act="wo-cancel-open">ยกเลิกใบงานนี้</button><span class="hint">ใช้เมื่อสร้างผิดหรือซ้ำ</span></div>`;
+  const used = w.partsUsed || [];
+  return `<div class="cancelbox" role="group" aria-labelledby="w-cancel-l">
+    <div class="field"><label id="w-cancel-l" for="w-cancel">เหตุผลที่ยกเลิก</label><textarea id="w-cancel" data-cancel rows="2" placeholder="เช่น สร้างซ้ำกับ WO-2611-001 หรือเลือกเครื่องผิด">${esc(c.reason)}</textarea></div>
+    ${used.length ? `<p class="hint">อะไหล่ที่เบิกไว้ ${used.length} รายการจะคืนเข้าคลังให้อัตโนมัติ</p>` : ''}
+    <p class="hint">ใบงานที่ยกเลิกยังเก็บไว้ในประวัติ แต่ไม่นับในสถิติ KPI และสถานะเครื่อง ยกเลิกแล้วแก้กลับไม่ได้</p>
+    <div class="actions"><button type="button" class="btn danger" data-act="wo-cancel-go" ${c.reason.trim() ? '' : 'disabled'}>ยืนยันยกเลิกใบงาน</button><button type="button" class="btn" data-act="wo-cancel-close">ไม่ยกเลิก</button></div></div>`;
+}
+
 function woDetail(w) {
   const now = Date.now();
+  const cancelled = w.status === 'cancelled';
   const done = w.status === 'done';
+  const closed = done || cancelled;
   const st = (n, label, who, time, cls) => `<div class="step ${cls}"><span class="ball">${n}</span><span class="t"><b>${label}</b><span class="s">${esc(who)}</span><span class="m">${time}</span></span></div>`;
   const approved = !!w.approvedAt;
   const repairLabel = w.status === 'parts' ? 'รออะไหล่' : 'ซ่อม';
   const steps = [
     st(1, 'แจ้งซ่อม', w.requestedBy || '—', fmtDateTime(w.startAt), 'done'),
-    st(2, 'อนุมัติ', w.approvedBy || 'รอหัวหน้าแผนกอนุมัติ', approved ? fmtDateTime(w.approvedAt) : '—', approved ? 'done' : 'current'),
-    st(3, repairLabel, w.tech || 'ยังไม่ได้มอบหมาย', approved ? TYPE[w.type] : '—', done ? 'done' : (approved ? 'current' : '')),
-    st(4, 'ปิดงาน', done ? (w.tech || '—') : 'รอผลการซ่อม', done ? fmtDateTime(w.endAt) : '—', done ? 'done' : '')
+    st(2, 'อนุมัติ', w.approvedBy || (cancelled ? '—' : 'รอหัวหน้าแผนกอนุมัติ'), approved ? fmtDateTime(w.approvedAt) : '—', approved ? 'done' : cancelled ? '' : 'current'),
+    st(3, repairLabel, w.tech || 'ยังไม่ได้มอบหมาย', approved ? TYPE[w.type] : '—', done ? 'done' : (approved && !cancelled ? 'current' : '')),
+    cancelled ? st(4, 'ยกเลิก', w.cancelledBy || '—', fmtDateTime(w.endAt), 'cancel')
+      : st(4, 'ปิดงาน', done ? (w.tech || '—') : 'รอผลการซ่อม', done ? fmtDateTime(w.endAt) : '—', done ? 'done' : '')
   ].join('');
   const a = assetOf(w.asset);
   const log = [...(w.log || [])].map((l, i) => ({ ...l, rev: REV[i] || i })).reverse();
   const used = w.partsUsed || [];
-  const canIssue = !done && approved && canTech();
+  const canIssue = !closed && approved && canTech();
   const partsBox = `<section class="box"><div class="bar"><h2>อะไหล่ที่เบิก</h2></div>
     ${used.length ? `<div class="scroll"><table style="min-width:420px"><thead><tr><th scope="col">รหัส</th><th scope="col">รายการ</th><th scope="col" class="num">จำนวน</th><th scope="col" class="num">คลังคงเหลือ</th></tr></thead><tbody>
       ${used.map((u) => { const p = partOf(u.id); return `<tr><td class="mono">${esc(u.id)}</td><td>${esc(p?.name || '—')}</td><td class="mono num">${u.qty}</td><td class="mono num ${p && p.qty <= p.min ? 'alarm' : ''}">${p ? `${p.qty} / ${p.min}` : '—'}</td></tr>`; }).join('')}
@@ -575,7 +597,7 @@ function woDetail(w) {
       <div class="field" style="flex:0 1 96px"><label for="i-qty">จำนวน</label><input id="i-qty" name="qty" type="number" min="1" value="1" required></div>
       <button class="btn">เบิกเข้าใบงาน</button></form>` : ''}</section>`;
   // ค่าใช้จ่าย: เลข PR ค่าซ่อม และรายละเอียด (ช่างบันทึกได้ระหว่างงาน แอดมินแก้ได้ทุกเวลา)
-  const canCost = canAdmin() || (canTech() && approved && !done);
+  const canCost = !cancelled && (canAdmin() || (canTech() && approved && !done));
   const costBox = `<section class="box"><div class="bar"><h2>ค่าใช้จ่าย</h2>${w.cost ? `<span class="mono">${baht(w.cost)} บาท</span>` : ''}</div>
     ${canCost ? `<div class="pad" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:var(--space-sm)">
       <div class="field"><label for="c-pr">เลขที่ PR</label><input id="c-pr" data-cost="prNo" value="${esc(w.prNo || '')}" placeholder="เช่น PR-2611-0042"></div>
@@ -584,7 +606,9 @@ function woDetail(w) {
     </div><p class="hint u-pad-b">บันทึกอัตโนมัติเมื่อออกจากช่อง ค่าอะไหล่ในคลังไม่ต้องใส่ซ้ำ</p>`
     : `<dl class="kv pad"><dt>เลขที่ PR</dt><dd class="mono">${esc(w.prNo || '—')}</dd><dt>ค่าใช้จ่าย</dt><dd class="mono">${w.cost ? `${baht(w.cost)} บาท` : '—'}</dd><dt>รายละเอียด</dt><dd>${esc(w.costNote || '—')}</dd></dl>`}</section>`;
   let action = '';
-  if (!done && w.status === 'pending') {
+  if (cancelled) {
+    action = `<dl class="kv"><dt>ยกเลิกโดย</dt><dd>${esc(w.cancelledBy || '—')}</dd><dt>เวลา</dt><dd class="mono">${fmtDateTime(w.endAt)}</dd><dt>เหตุผล</dt><dd>${esc(w.cancelReason || '—')}</dd></dl>`;
+  } else if (!done && w.status === 'pending') {
     action = canAdmin()
       ? `<div class="actions"><button type="button" class="btn solid" data-act="approve">อนุมัติและมอบหมาย</button></div><p class="hint">เมื่ออนุมัติแล้ว ใบงานจะเข้าสู่คิวงานของช่าง</p>`
       : '<p class="hint">รอหัวหน้าแผนกซ่อมบำรุงอนุมัติ</p>';
@@ -595,16 +619,17 @@ function woDetail(w) {
       <div class="field"><label for="w-cause">รหัสสาเหตุ</label><select id="w-cause" data-close="cause"><option value="">เลือกรหัสสาเหตุ</option>${CAUSES.map(([k, l]) => `<option value="${k}" ${c.cause === k ? 'selected' : ''}>${k} · ${l}</option>`).join('')}</select></div>
       <div class="field"><label for="w-action">การแก้ไขที่ต้นเหตุ</label><textarea id="w-action" data-close="action" rows="3" placeholder="เช่น เพิ่มรายการเปลี่ยนไส้กรองใน checklist กะ A">${esc(c.action)}</textarea></div>
       <div class="actions">
-        <button type="button" class="btn" data-act="wo-status" data-id="doing" ${w.status === 'doing' ? 'disabled' : ''}>${w.status === 'parts' ? 'ดำเนินการซ่อมต่อ' : 'เริ่มซ่อม'}</button>
-        <button type="button" class="btn" data-act="wo-status" data-id="parts" ${w.status === 'parts' ? 'disabled' : ''}>รออะไหล่</button>
+        <button type="button" class="btn" data-act="wo-set" data-id="doing" ${w.status === 'doing' ? 'disabled' : ''}>${w.status === 'parts' ? 'ดำเนินการซ่อมต่อ' : 'เริ่มซ่อม'}</button>
+        <button type="button" class="btn" data-act="wo-set" data-id="parts" ${w.status === 'parts' ? 'disabled' : ''}>รออะไหล่</button>
         <button type="button" class="btn solid" data-act="wo-close" ${ready ? '' : 'disabled'}>ปิดงาน</button>
       </div>
       <p class="hint">${ready ? 'เมื่อปิดงาน ระบบจะบันทึกเวลาและเพิ่มลงในประวัติเครื่องจักร' : 'กรุณาเลือกรหัสสาเหตุและระบุการแก้ไขที่ต้นเหตุก่อนปิดงาน'}</p>`;
   } else if (done) {
     action = `<dl class="kv"><dt>รหัสสาเหตุ</dt><dd class="mono">${esc(w.cause || '—')}</dd><dt>การแก้ไข</dt><dd>${esc(w.action || '—')}</dd><dt>เวลาหยุดรวม</dt><dd class="mono">${hm(w.endAt - w.startAt)} ชม.</dd></dl>`;
   } else {
-    action = '<p class="hint">บัญชีนี้มีสิทธิ์ดูข้อมูลเท่านั้น</p>';
+    action = canCancel(w) ? '' : '<p class="hint">บัญชีนี้มีสิทธิ์ดูข้อมูลเท่านั้น</p>';
   }
+  action += cancelBox(w);
   return `<section class="stack" aria-label="รายละเอียดใบสั่งงาน">
     <div class="head" style="border:0;padding:0"><div><span class="doc"><span class="mono">${esc(w.id)}</span><span>${TYPE[w.type]}</span></span><h2 style="font-size:var(--text-xl);line-height:1.35">${esc(w.title)}</h2></div>
       ${lamp(w.status)}</div>
@@ -623,7 +648,7 @@ function woDetail(w) {
           ${w.note ? `<div class="pad" style="gap:var(--space-2xs)"><span class="hint">รายละเอียด</span><p class="u-pre">${esc(w.note)}</p></div>` : ''}
           ${w.photo ? `<div class="pad" style="gap:var(--space-2xs)"><span class="hint">ภาพถ่ายจากผู้แจ้ง</span><img src="${esc(w.photo)}" alt="ภาพอาการที่ผู้แจ้งถ่ายไว้" style="max-width:100%;border-radius:var(--radius-card);border:1px solid var(--line)"></div>` : ''}</section>
         ${(w.checks || []).length ? `<section class="box"><div class="bar"><h2>รายการตรวจ</h2><span class="mono dim">${w.checks.filter((c) => c.done).length} / ${w.checks.length}</span></div>
-          ${w.checks.map((c, i) => `<label class="list-row" style="grid-template-columns:22px minmax(0,1fr);align-items:center;cursor:${!done && canTech() && approved ? 'pointer' : 'default'}"><input type="checkbox" data-check="${i}" ${c.done ? 'checked' : ''} ${!done && canTech() && approved ? '' : 'disabled'} style="width:18px;height:18px;accent-color:var(--accent)"><span style="${c.done ? 'color:var(--muted);text-decoration:line-through' : ''}">${esc(c.text)}</span></label>`).join('')}
+          ${w.checks.map((c, i) => `<label class="list-row" style="grid-template-columns:22px minmax(0,1fr);align-items:center;cursor:${!closed && canTech() && approved ? 'pointer' : 'default'}"><input type="checkbox" data-check="${i}" ${c.done ? 'checked' : ''} ${!closed && canTech() && approved ? '' : 'disabled'} style="width:18px;height:18px;accent-color:var(--accent)"><span style="${c.done ? 'color:var(--muted);text-decoration:line-through' : ''}">${esc(c.text)}</span></label>`).join('')}
           ${!done && !approved ? '<p class="hint u-pad-b">บันทึกผลได้หลังหัวหน้าแผนกอนุมัติ</p>' : ''}</section>` : ''}
         <section class="box graphite revlog"><div class="bar"><h2>บันทึกการเปลี่ยนแปลง</h2></div>
           <table><thead><tr><th scope="col" style="width:48px">REV</th><th scope="col" style="width:140px">เวลา</th><th scope="col">รายการ</th></tr></thead>
@@ -631,7 +656,7 @@ function woDetail(w) {
         ${partsBox}
         ${costBox}
       </div>
-      <section class="box w2" style="gap:0;border-width:1.5px"><div class="bar"><h2>${done ? 'ผลการปิดงาน' : 'บันทึกผลและปิดงาน'}</h2></div><div class="pad">${action}</div></section>
+      <section class="box w2" style="gap:0;border-width:1.5px"><div class="bar"><h2>${cancelled ? 'ใบงานถูกยกเลิก' : done ? 'ผลการปิดงาน' : 'บันทึกผลและปิดงาน'}</h2></div><div class="pad">${action}</div></section>
     </div></section>`;
 }
 
@@ -641,10 +666,10 @@ function scopeList() {
 }
 
 function taskRow(w) {
-  const done = w.status === 'done';
+  const done = !isOpen(w);
   const [c, tb, tf] = TYPE_STYLE[w.type] || TYPE_STYLE.inspect;
   const [pl, pb, pf] = PRIO[priOf(w)];
-  const sub = `<span class="mono">${esc(w.id)}</span><span>${done ? 'ปิดแล้ว' : STATUS[w.status][0]}</span>`;
+  const sub = `<span class="mono">${esc(w.id)}</span><span>${w.status === 'done' ? 'ปิดแล้ว' : STATUS[w.status][0]}</span>`;
   return `<div class="trow task ${done ? 'done' : ''}" data-act="open-wo" data-id="${esc(w.id)}"${w.id === state.selectedWo ? ' aria-current="true"' : ''}>
     <span class="stripe" style="--c:${c}"></span>
     <span><button type="button" class="check ${done ? 'on' : ''}" data-act="open-wo" data-id="${esc(w.id)}" aria-label="เปิดใบงาน ${esc(w.id)}${done ? ' (ปิดแล้ว)' : ''}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button></span>
@@ -671,8 +696,8 @@ function quickAdd() {
 
 /* ---------- SH-02 ใบงาน: ตารางเต็มความกว้าง ตัวกรอง ค้นหา แถวขยายดูรายละเอียด แบ่งหน้า ---------- */
 const WO_PER_PAGE = 15;
-const WO_CHIP = { pending: 'pend', open: 'info', doing: 'ok', parts: 'wait', done: 'grey' };
-const WO_STATUS_FILTER = [['all', 'ทั้งหมด'], ['active', 'งานที่เปิดอยู่'], ['pending', 'รออนุมัติ'], ['open', 'รอเริ่มงาน'], ['doing', 'กำลังซ่อม'], ['parts', 'รออะไหล่'], ['done', 'ปิดงานแล้ว']];
+const WO_CHIP = { pending: 'pend', open: 'info', doing: 'ok', parts: 'wait', done: 'grey', cancelled: 'off' };
+const WO_STATUS_FILTER = [['all', 'ทั้งหมด'], ['active', 'งานที่เปิดอยู่'], ['pending', 'รออนุมัติ'], ['open', 'รอเริ่มงาน'], ['doing', 'กำลังซ่อม'], ['parts', 'รออะไหล่'], ['done', 'ปิดงานแล้ว'], ['cancelled', 'ยกเลิก']];
 const chevronSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 const statusChip = (s) => `<span class="schip s-${WO_CHIP[s] || 'grey'}">${esc(STATUS[s]?.[0] || s)}</span>`;
 
@@ -680,13 +705,13 @@ function woFiltered() {
   const t = state.woQ.trim().toLowerCase();
   const f = state.woStatus;
   return scopeList()
-    .filter((w) => (f === 'all' ? true : f === 'active' ? w.status !== 'done' : w.status === f))
+    .filter((w) => (f === 'all' ? true : f === 'active' ? isOpen(w) : w.status === f))
     .filter((w) => !t || `${w.id} ${w.title} ${w.asset} ${assetOf(w.asset)?.name || ''} ${w.tech || ''} ${w.requestedBy || ''}`.toLowerCase().includes(t))
-    .sort((a, b) => (a.status === 'done') - (b.status === 'done') || b.startAt - a.startAt);
+    .sort((a, b) => (!isOpen(a)) - (!isOpen(b)) || b.startAt - a.startAt);
 }
 
 function woRow(w) {
-  const done = w.status === 'done';
+  const done = !isOpen(w);
   const a = assetOf(w.asset);
   const ms = a ? machineState(a) : null;
   const p = priOf(w);
@@ -708,7 +733,8 @@ function woRow(w) {
     ['ผู้แจ้ง', w.requestedBy || '—'],
     ['ผู้อนุมัติ', w.approvedBy || '—'],
     ['กำหนดเสร็จ', w.dueDate ? fmtDateY(w.dueDate) : 'ไม่ได้กำหนด', late ? 'alarm' : ''],
-    [done ? 'ปิดงาน' : 'เวลาที่ผ่านไป', done ? (w.endAt ? fmtDateTime(w.endAt) : '—') : `${hm(Date.now() - w.startAt)} ชม.`]
+    [w.status === 'cancelled' ? 'ยกเลิกเมื่อ' : done ? 'ปิดงาน' : 'เวลาที่ผ่านไป', done ? (w.endAt ? fmtDateTime(w.endAt) : '—') : `${hm(Date.now() - w.startAt)} ชม.`],
+    ...(w.status === 'cancelled' ? [['เหตุผลที่ยกเลิก', `${w.cancelReason || '—'}${w.cancelledBy ? ` (${w.cancelledBy})` : ''}`]] : [])
   ].map(([k, v, c]) => `<div><dt>${k}</dt><dd class="${c || ''}">${esc(v)}</dd></div>`).join('');
   const rca = done && (w.cause || w.action) ? `<div class="wide"><dt>สาเหตุและการแก้ไข</dt><dd>${esc([w.cause, w.action].filter(Boolean).join('  '))}</dd></div>` : '';
   return `${main}<tr class="woexp" id="${rid}"><td></td><td colspan="7">
@@ -738,7 +764,7 @@ function woGroups() {
   const groups = [
     ['pending', 'รออนุมัติ', (w) => w.status === 'pending'],
     ['active', 'กำลังดำเนินการ', (w) => ['open', 'doing', 'parts'].includes(w.status)],
-    ['done', 'ปิดแล้ว', (w) => w.status === 'done']
+    ['done', 'ปิดแล้ว / ยกเลิก', (w) => !isOpen(w)]
   ];
   const body = groups.map(([k, label, test]) => {
     const items = list.filter(test);
@@ -760,14 +786,14 @@ function woGroups() {
 function viewWork() {
   const all = state.workOrders;
   const me = state.user.name;
-  const mineCount = all.filter((w) => (w.tech === me || w.requestedBy === me) && w.status !== 'done').length;
-  const scopeBtns = [['all', 'งานทั้งหมด', all.filter((w) => w.status !== 'done').length], ['mine', 'งานของฉัน', mineCount]]
+  const mineCount = all.filter((w) => (w.tech === me || w.requestedBy === me) && isOpen(w)).length;
+  const scopeBtns = [['all', 'งานทั้งหมด', all.filter((w) => isOpen(w)).length], ['mine', 'งานของฉัน', mineCount]]
     .map(([k, l, n]) => `<button type="button" data-act="scope" data-id="${k}" aria-pressed="${state.scope === k}">${l}<span class="mono">${n}</span></button>`).join('');
   const views = [['table', 'มุมมองตาราง', '<path d="M4 6h16M4 12h16M4 18h16"/>'], ['group', 'มุมมองแยกตามสถานะ', '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>']]
     .map(([k, l, d]) => `<button type="button" data-act="wo-view" data-id="${k}" aria-pressed="${state.woView === k}" aria-label="${l}" title="${l}">${icon(d)}</button>`).join('');
   const fLabel = WO_STATUS_FILTER.find(([k]) => k === state.woStatus)?.[1] || '';
   const pop = state.woFilter ? `<div class="wopop" role="group" aria-label="กรองตามสถานะ"><p class="hint">สถานะใบงาน</p>
-      ${WO_STATUS_FILTER.map(([k, l]) => `<button type="button" data-act="wo-status" data-id="${k}" aria-pressed="${state.woStatus === k}">${l}<span class="mono">${k === 'all' ? scopeList().length : k === 'active' ? scopeList().filter((w) => w.status !== 'done').length : scopeList().filter((w) => w.status === k).length}</span></button>`).join('')}</div>` : '';
+      ${WO_STATUS_FILTER.map(([k, l]) => `<button type="button" data-act="wo-status" data-id="${k}" aria-pressed="${state.woStatus === k}">${l}<span class="mono">${k === 'all' ? scopeList().length : k === 'active' ? scopeList().filter((w) => isOpen(w)).length : scopeList().filter((w) => w.status === k).length}</span></button>`).join('')}</div>` : '';
   const table = state.woView === 'table';
   return `<div class="wobar">
       <div class="seg-ctl wv" role="group" aria-label="รูปแบบการแสดงผล">${views}</div>
@@ -1194,7 +1220,7 @@ function viewReport() {
   const { rows, causes } = periodStats(from, now);
   const total = rows.reduce((s, r) => ({ fails: s.fails + r.fails, down: s.down + r.down }), { fails: 0, down: 0 });
   const span = (now - from) * (rows.length || 1);
-  const closed = state.workOrders.filter((w) => w.type === 'breakdown' && w.endAt && w.endAt >= from);
+  const closed = liveWO().filter((w) => w.type === 'breakdown' && w.endAt && w.endAt >= from);
   const mttr = closed.length ? closed.reduce((s, w) => s + w.endAt - w.startAt, 0) / closed.length : 0;
   const pmc = pmCompliance(from);
   const ranked = [...rows].sort((a, b) => b.down - a.down);
@@ -1233,11 +1259,11 @@ function costSection() {
   const now = new Date();
   const cols = TH_MON.map((label, mi) => {
     const pm = state.workOrders.filter((w) => w.type === 'pm' && w.status === 'done' && inMonth(w.endAt, mi)).reduce((t, w) => t + (Number(w.cost) || 0), 0);
-    const cm = state.workOrders.filter((w) => w.type !== 'pm' && inMonth(w.startAt, mi)).reduce((t, w) => t + (Number(w.cost) || 0), 0);
+    const cm = liveWO().filter((w) => w.type !== 'pm' && inMonth(w.startAt, mi)).reduce((t, w) => t + (Number(w.cost) || 0), 0);
     return { label, values: [pm, cm], on: y === now.getFullYear() && mi === now.getMonth() };
   });
   const total = cols.reduce((t, c) => t + c.values[0] + c.values[1], 0);
-  const top = state.workOrders.filter((w) => Number(w.cost) > 0 && new Date(w.type === 'pm' ? w.endAt || w.startAt : w.startAt).getFullYear() === y).sort((a, b) => b.cost - a.cost).slice(0, 5);
+  const top = liveWO().filter((w) => Number(w.cost) > 0 && new Date(w.type === 'pm' ? w.endAt || w.startAt : w.startAt).getFullYear() === y).sort((a, b) => b.cost - a.cost).slice(0, 5);
   return `<section class="box" id="cost"><div class="bar"><h2>ค่าใช้จ่ายซ่อมบำรุง ปี ${y + 543} <span class="dim u-w400">รวม ${baht(total)} บาท</span></h2>
       <span class="u-row"><button type="button" class="pbtn" data-act="cost-year" data-id="-1" aria-label="ปีก่อนหน้า">${icon('<path d="m15 6-6 6 6 6"/>')}</button><span class="mono">${y + 543}</span><button type="button" class="pbtn" data-act="cost-year" data-id="1" aria-label="ปีถัดไป" ${y >= now.getFullYear() ? 'disabled' : ''}>${icon('<path d="m9 6 6 6-6 6"/>')}</button></span></div>
     <div class="pad">${total ? mbars(cols, [{ name: 'PM (บาท)' }, { name: 'งานซ่อม (บาท)' }], `ค่าใช้จ่ายรายเดือน ปี ${y + 543}`, (v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : baht(v))) : '<p class="empty">ยังไม่มีใบงานที่บันทึกค่าใช้จ่ายในปีนี้ บันทึกได้ที่ส่วน "ค่าใช้จ่าย" ในใบงาน</p>'}
@@ -1618,7 +1644,7 @@ const actions = {
   filter: (id) => { state.filter = id; render(); },
   'open-wo': (id) => {
     const w = state.workOrders.find((x) => x.id === id);
-    if (state.selectedWo !== id) state.close = { cause: w?.cause || '', action: w?.action || '' };
+    if (state.selectedWo !== id) { state.close = { cause: w?.cause || '', action: w?.action || '' }; state.cancelWo = null; }
     if (state.page !== 'work') go('work');
     state.selectedWo = id;
     render();
@@ -1763,13 +1789,30 @@ const actions = {
     const me = state.user.name;
     run(() => state.backend.updateWorkOrder(w.id, { status: 'open', approvedBy: me, approvedAt: Date.now(), log: addLog(w, `${me} อนุมัติ`) }), 'อนุมัติแล้ว');
   },
-  'wo-status': (status) => {
+  'wo-set': (status) => {
     const w = state.workOrders.find((x) => x.id === state.selectedWo);
+    if (!w || !isOpen(w) || !['doing', 'parts'].includes(status)) return;
     const patch = { status };
     const tech = w.tech || state.user.name;
     if (!w.tech) patch.tech = tech;
     patch.log = addLog(w, status === 'parts' ? `${tech} เปลี่ยนสถานะเป็นรออะไหล่` : `${tech} ${w.status === 'parts' ? 'ดำเนินการซ่อมต่อ' : 'เริ่มซ่อม'}`);
     run(() => state.backend.updateWorkOrder(w.id, patch));
+  },
+  'wo-cancel-open': () => { state.cancelWo = { id: state.selectedWo, reason: '' }; render(); document.getElementById('w-cancel')?.focus(); },
+  'wo-cancel-close': () => { state.cancelWo = null; render(); document.querySelector('[data-act="wo-cancel-open"]')?.focus(); },
+  'wo-cancel-go': () => {
+    const w = state.workOrders.find((x) => x.id === state.selectedWo);
+    const reason = (state.cancelWo?.reason || '').trim();
+    if (!w || !reason || !canCancel(w)) return;
+    const me = state.user.name, now = Date.now();
+    const used = (w.partsUsed || []).filter((u) => u.qty > 0);
+    run(async () => {
+      // คืนอะไหล่ที่เบิกเข้าใบงานกลับเข้าคลัง (บันทึกในประวัติรับเข้า-เบิกออกพร้อมเลขที่ใบงาน)
+      for (const u of used) await state.backend.moveStock({ part: u.id, dir: 'in', qty: u.qty, ref: w.id, note: 'คืนจากใบงานที่ยกเลิก', by: me });
+      const text = `${me} ยกเลิกใบงาน: ${reason}${used.length ? ` (คืนอะไหล่ ${used.map((u) => `${u.id} x${u.qty}`).join(', ')})` : ''}`;
+      await state.backend.updateWorkOrder(w.id, { status: 'cancelled', endAt: now, cancelledBy: me, cancelReason: reason, log: addLog(w, text) });
+      state.cancelWo = null;
+    }, `ยกเลิก ${w.id} แล้ว`);
   },
   'wo-close': () => {
     const w = state.workOrders.find((x) => x.id === state.selectedWo);
@@ -1924,6 +1967,12 @@ app.addEventListener('input', (e) => {
     if (hint) { hint.textContent = ready ? (state.create.people.length ? `มอบหมาย ${state.create.people.length} คน` : 'ยังไม่ได้มอบหมาย งานจะเข้าสู่คิวงานรวม') : 'กรุณาระบุชื่องานและเลือกเครื่องจักรก่อนสร้างงาน'; hint.style.color = ready ? '' : 'var(--stop-fg)'; }
     return;
   }
+  if (e.target.hasAttribute('data-cancel') && state.cancelWo) {
+    state.cancelWo.reason = e.target.value;
+    const b = app.querySelector('[data-act="wo-cancel-go"]');
+    if (b) b.disabled = !e.target.value.trim();
+    return;
+  }
   const key = e.target.dataset.close;
   if (!key) return;
   state.close[key] = e.target.value;
@@ -1998,7 +2047,7 @@ app.addEventListener('submit', (e) => {
       if (!title) return;
       const me = state.user.name;
       const type = d.priority === 'stop' ? 'breakdown' : 'inspect';
-      const id = await state.backend.createWorkOrder({ asset: d.asset, title, type, priority: d.priority, requestedBy: me, status: 'pending', log: [{ at: Date.now(), text: `${me} ${type === 'breakdown' ? 'แจ้งซ่อม' : 'แจ้งตรวจสอบ'}` }] });
+      const id = await state.backend.createWorkOrder({ asset: d.asset, title, type, priority: d.priority, requestedBy: me, requestedUid: state.user.uid, status: 'pending', log: [{ at: Date.now(), text: `${me} ${type === 'breakdown' ? 'แจ้งซ่อม' : 'แจ้งตรวจสอบ'}` }] });
       state.selectedWo = id; state.filter = 'active'; state.close = { cause: '', action: '' };
       done(`เปิด ${id} แล้ว รออนุมัติ`);
     }),
@@ -2009,7 +2058,7 @@ app.addEventListener('submit', (e) => {
       const title = q.symptoms.join(', ') + (q.note.trim() ? ` · ${q.note.trim()}` : '');
       const type = q.stopped ? 'breakdown' : 'inspect';
       const id = await state.backend.createWorkOrder({
-        asset: q.asset, title, type, priority: q.stopped ? 'stop' : 'slow', requestedBy: me, status: 'pending',
+        asset: q.asset, title, type, priority: q.stopped ? 'stop' : 'slow', requestedBy: me, requestedUid: state.user.uid, status: 'pending',
         note: q.note.trim(), photo: q.photo || '',
         log: [{ at: Date.now(), text: `${me} แจ้งซ่อมด่วน${q.stopped ? ' เครื่องหยุด' : ''}${q.photo ? ' พร้อมรูป' : ''}` }]
       });
@@ -2024,7 +2073,7 @@ app.addEventListener('submit', (e) => {
       if (!title || !c.asset) return;
       const me = state.user.name;
       const id = await state.backend.createWorkOrder({
-        asset: c.asset, title, type: c.type, priority: c.prio, requestedBy: me, status: 'pending',
+        asset: c.asset, title, type: c.type, priority: c.prio, requestedBy: me, requestedUid: state.user.uid, status: 'pending',
         tech: c.people[0] || '', team: c.people, dueDate: c.due ? new Date(`${c.due}T00:00:00`).getTime() : null,
         checks: c.checks.map((x) => ({ text: x.text, done: false })), note: c.note.trim(),
         log: [{ at: Date.now(), text: `${me} สร้างงาน${c.people.length ? ` มอบหมาย ${c.people.join(', ')}` : ''}` }]
@@ -2038,7 +2087,7 @@ app.addEventListener('submit', (e) => {
       if (!title) return;
       const me = state.user.name;
       const type = d.priority === 'stop' ? 'breakdown' : 'inspect';
-      const id = await state.backend.createWorkOrder({ asset: d.asset, title, type, priority: d.priority, requestedBy: me, status: 'pending', log: [{ at: Date.now(), text: `${me} ${type === 'breakdown' ? 'แจ้งซ่อม' : 'แจ้งตรวจสอบ'}` }] });
+      const id = await state.backend.createWorkOrder({ asset: d.asset, title, type, priority: d.priority, requestedBy: me, requestedUid: state.user.uid, status: 'pending', log: [{ at: Date.now(), text: `${me} ${type === 'breakdown' ? 'แจ้งซ่อม' : 'แจ้งตรวจสอบ'}` }] });
       state.draft = { asset: d.asset, priority: d.priority };
       render();
       document.getElementById('qa-title')?.focus();
