@@ -32,6 +32,7 @@ jobs:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
           service_account: ${{ env.SERVICE_ACCOUNT }}
           token_format: access_token
+          create_credentials_file: false
       - name: Publish rules
         env:
           TOKEN: ${{ steps.auth.outputs.access_token }}
