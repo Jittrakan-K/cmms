@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611192209';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611192209';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611192213';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611192213';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -117,7 +117,7 @@ const logo = '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke
 
 /* ---------- ตัวเลข ---------- */
 // เวลาหยุดเครื่อง: ไม่นับใบที่ยกเลิก และใบย้อนหลังจาก Job Request (มีแต่วันที่ ไม่มีเวลาหยุดจริง)
-const timed = (w) => w.status !== 'cancelled' && !w.imported;
+const timed = (w) => w.status !== 'cancelled' && (!w.imported || w.hasTime);
 function mergedDown(assetId, from, to) {
   const spans = state.workOrders
     .filter((w) => w.asset === assetId && timed(w) && !['inspect', 'improve'].includes(w.type))
@@ -199,7 +199,7 @@ function normUse(v) {
 }
 function machineState(a) {
   // ใบงานย้อนหลังจาก Job Request ไม่ได้บอกว่าเครื่องหยุดหรือไม่ จึงไม่ใช้ตัดสินสถานะเครื่อง (ยังอยู่ในคิวงานตามปกติ)
-  const open = state.workOrders.filter((w) => w.asset === a.id && isOpen(w) && !w.imported);
+  const open = state.workOrders.filter((w) => w.asset === a.id && isOpen(w) && (!w.imported || w.hasTime));
   const brk = open.filter((w) => w.type === 'breakdown').sort((x, y) => x.startAt - y.startAt);
   const stop = brk.find((w) => w.status !== 'parts');
   if (stop) return { k: 'stop', w: stop, since: stop.startAt };
@@ -635,7 +635,7 @@ function woDetail(w) {
       </div>
       <p class="hint">${ready ? 'เมื่อปิดงาน ระบบจะบันทึกเวลาและเพิ่มลงในประวัติเครื่องจักร' : 'กรุณาเลือกรหัสสาเหตุและระบุการแก้ไขที่ต้นเหตุก่อนปิดงาน'}</p>`;
   } else if (done) {
-    action = `<dl class="kv"><dt>รหัสสาเหตุ</dt><dd class="mono">${esc(w.cause || '—')}</dd><dt>การแก้ไข</dt><dd>${esc(w.action || '—')}</dd>${w.imported ? '' : `<dt>เวลาหยุดรวม</dt><dd class="mono">${hm(w.endAt - w.startAt)} ชม.</dd>`}</dl>${w.imported ? '<p class="hint">ใบงานย้อนหลังจาก Job Request list ไม่มีข้อมูลเวลาหยุดเครื่อง จึงไม่นับใน Availability และ MTTR</p>' : ''}`;
+    action = `<dl class="kv"><dt>รหัสสาเหตุ</dt><dd class="mono">${esc(w.cause || '—')}</dd><dt>การแก้ไข</dt><dd>${esc(w.action || '—')}</dd>${w.imported && !w.hasTime ? '' : `<dt>เวลาหยุดรวม</dt><dd class="mono">${hm(w.endAt - w.startAt)} ชม.</dd>`}</dl>${w.imported && !w.hasTime ? '<p class="hint">ใบงานย้อนหลังจาก Job Request list ไม่มีข้อมูลเวลาหยุดเครื่อง จึงไม่นับใน Availability และ MTTR</p>' : ''}`;
   } else {
     action = canCancel(w) ? '' : '<p class="hint">บัญชีนี้มีสิทธิ์ดูข้อมูลเท่านั้น</p>';
   }
@@ -651,7 +651,7 @@ function woDetail(w) {
             <div><dt>เครื่อง</dt><dd>${a ? `<button type="button" class="link" data-act="open-asset" data-id="${esc(w.asset)}">${esc(w.asset)}</button> ${esc(a.name)}` : `${w.asset ? `<span class="mono">${esc(w.asset)}</span> ` : ''}${esc(w.assetName || (w.asset ? 'ไม่อยู่ในทะเบียนปัจจุบัน' : '—'))}`}</dd></div>
             <div><dt>ตำแหน่ง</dt><dd>${esc(a?.line || '—')}</dd></div>
             <div><dt>ระดับเครื่อง</dt><dd>${esc(a?.cls || '—')}</dd></div>
-            ${w.imported ? `<div><dt>ใช้เวลาดำเนินการ</dt><dd class="mono">${w.endAt ? `${Math.round((w.endAt - w.startAt) / DAY)} วัน` : `${Math.floor((now - w.startAt) / DAY)} วันแล้ว`}</dd></div>
+            ${w.imported && !w.hasTime ? `<div><dt>ใช้เวลาดำเนินการ</dt><dd class="mono">${w.endAt ? `${Math.round((w.endAt - w.startAt) / DAY)} วัน` : `${Math.floor((now - w.startAt) / DAY)} วันแล้ว`}</dd></div>
             <div><dt>ประเภทตาม Job Request</dt><dd>${esc(w.condition || '—')}</dd></div>${w.process ? `<div><dt>กระบวนการ</dt><dd>${esc(w.process)}</dd></div>` : ''}${w.section ? `<div><dt>แผนก</dt><dd>${esc(w.section)}</dd></div>` : ''}`
               : `<div><dt>เครื่องหยุด</dt><dd class="mono">${w.type === 'inspect' || w.type === 'improve' ? 'ไม่หยุด' : `${hm((w.endAt ?? now) - w.startAt)} ชม.`}</dd></div>`}
             ${w.dueDate ? `<div><dt>กำหนดเสร็จ</dt><dd class="mono ${!done && w.dueDate < startOfToday() ? 'alarm' : ''}">${fmtDateY(w.dueDate)}</dd></div>` : ''}
@@ -1073,7 +1073,7 @@ function viewAssets(m) {
       </section>
       <section class="box w3 u-gap0"><div class="bar"><h2>ประวัติงาน</h2></div>
         ${hist.length ? `<div class="scroll"><table style="min-width:520px"><thead><tr><th scope="col">วันที่</th><th scope="col">งาน</th><th scope="col">สาเหตุ</th><th scope="col" class="num">หยุด (ชม.)</th></tr></thead><tbody>
-          ${hist.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono u-nowrap">${fmtDate(w.startAt)}</td><td>${esc(w.title)}<span class="sub"><span class="mono">${esc(w.id)}</span><span>${STATUS[w.status][0]}</span></span></td><td class="mono">${esc(w.cause || '—')}</td><td class="mono num">${['inspect', 'improve'].includes(w.type) || w.imported ? '—' : hours((w.endAt ?? m.now) - w.startAt)}</td></tr>`).join('')}
+          ${hist.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono u-nowrap">${fmtDate(w.startAt)}</td><td>${esc(w.title)}<span class="sub"><span class="mono">${esc(w.id)}</span><span>${STATUS[w.status][0]}</span></span></td><td class="mono">${esc(w.cause || '—')}</td><td class="mono num">${['inspect', 'improve'].includes(w.type) || (w.imported && !w.hasTime) ? '—' : hours((w.endAt ?? m.now) - w.startAt)}</td></tr>`).join('')}
         </tbody></table></div>` : '<p class="empty">ยังไม่มีงาน</p>'}</section></div>${tpmBox(a)}`;
   }
   return `${form}${state.assets.length ? filterBar : ''}<section class="box" aria-label="ทะเบียนเครื่องจักร">${rows ? `<div class="scroll"><table style="min-width:760px"><thead><tr><th scope="col">รหัส</th><th scope="col">ชื่อเครื่อง</th><th scope="col">ตำแหน่ง</th><th scope="col">หมวด</th><th scope="col">ระดับ</th><th scope="col" class="num">หยุด 7 วัน</th><th scope="col">สถานะ</th></tr></thead><tbody>${rows}</tbody></table></div>${pager}` : `<p class="empty">${state.assets.length ? 'ไม่พบเครื่องที่ตรงกับเงื่อนไข' : 'ยังไม่มีเครื่องจักร'}</p>`}</section>${detail}`;
@@ -1309,7 +1309,7 @@ const IMPORT_COLS = {
   assets: ['id', 'name', 'line', 'cls', 'category', 'use', 'maker', 'model', 'year', 'wi', 'serial', 'asset_no', 'installed', 'area', 'owner', 'doc_url'],
   parts: ['id', 'name', 'unit', 'bin', 'qty', 'min', 'max', 'price'],
   pmPlans: ['id', 'asset', 'task', 'interval_days', 'due_date', 'source'],
-  workOrders: ['ref', 'section', 'request_date', 'complete_date', 'condition', 'type', 'status', 'machine_code', 'machine_name', 'process', 'detail', 'action', 'action_by', 'cost', 'note'],
+  workOrders: ['ref', 'section', 'request_date', 'complete_date', 'condition', 'type', 'status', 'machine_code', 'machine_name', 'process', 'detail', 'action', 'action_by', 'cost', 'note', 'start_time', 'end_time', 'team', 'priority'],
   checklists: ['wi', 'machine_type', 'kind', 'part', 'check', 'freq_days', 'standard']
 };
 const IMPORT_SAMPLE = {
@@ -1368,25 +1368,34 @@ function importJobs(rows) {
   if (!head.includes('ref') || !head.includes('request_date')) throw new Error(`หัวตารางต้องมีคอลัมน์ ${IMPORT_COLS.workOrders.join(', ')}`);
   const have = new Set(state.workOrders.map((w) => w.id));
   const out = []; const errors = []; let skipped = 0;
-  const day = (t) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t); return m ? new Date(+m[1], +m[2] - 1, +m[3], 8).getTime() : null; };
+  const day = (t, hm) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+    if (!m) return null;
+    const h = /^(\d{1,2}):(\d{2})$/.exec(hm || '');
+    return new Date(+m[1], +m[2] - 1, +m[3], h ? +h[1] : 8, h ? +h[2] : 0).getTime();
+  };
+  const PRI = { urgent: 'stop', high: 'stop', 'สูง': 'stop', normal: 'slow', medium: 'slow', 'กลาง': 'slow', easy: 'plan', low: 'plan', 'ต่ำ': 'plan' };
   rows.slice(1).forEach((r, i) => {
     const id = col(r, 'ref').toUpperCase().replace(/\s+/g, '');
     if (!/^[A-Z0-9-]+$/.test(id)) { errors.push(`แถว ${i + 2}: เลขที่ "${id}" ใช้ได้แค่ A-Z 0-9 -`); return; }
     if (have.has(id)) { skipped++; return; }
-    const startAt = day(col(r, 'request_date'));
+    // มีเวลาเริ่ม-เสร็จจริง (เช่น รายงานการเข้าซ่อมบำรุง) จะนับใน MTTR และเวลาหยุดได้
+    const hasTime = /^\d{1,2}:\d{2}$/.test(col(r, 'start_time')) && /^\d{1,2}:\d{2}$/.test(col(r, 'end_time'));
+    const startAt = day(col(r, 'request_date'), hasTime ? col(r, 'start_time') : '');
     if (!startAt) { errors.push(`แถว ${i + 2}: วันที่แจ้ง "${col(r, 'request_date')}" ต้องเป็น ปปปป-ดด-วว`); return; }
-    const endDay = day(col(r, 'complete_date'));
+    const endDay = day(col(r, 'complete_date') || (hasTime ? col(r, 'request_date') : ''), hasTime ? col(r, 'end_time') : '');
     const status = ['open', 'doing', 'parts', 'done', 'cancelled'].includes(col(r, 'status')) ? col(r, 'status') : (endDay ? 'done' : 'open');
     const detail = col(r, 'detail') || col(r, 'condition') || 'งานจาก Job Request';
     const title = detail.length > 140 ? `${detail.slice(0, 137)}...` : detail;
     const tech = col(r, 'action_by');
+    const team = [tech, ...col(r, 'team').split(/[;,]/)].map((x) => x.trim()).filter((x, k, a) => x && a.indexOf(x) === k);
     const asset = col(r, 'machine_code').toUpperCase();
     const closed = status === 'done' || status === 'cancelled';
     out.push({
-      id, imported: true, refNo: id, section: col(r, 'section'), condition: col(r, 'condition'), process: col(r, 'process'),
+      id, imported: true, hasTime, refNo: id, section: col(r, 'section'), condition: col(r, 'condition'), process: col(r, 'process'),
       asset, assetName: col(r, 'machine_name'), type: WO_TYPES.includes(col(r, 'type')) ? col(r, 'type') : 'improve', title, note: detail.length > 140 ? detail : '',
-      priority: '', status, startAt, endAt: closed ? Math.max(startAt, endDay ?? startAt) : null,
-      tech, team: tech ? [tech] : [], requestedBy: '', requestedUid: '', approvedBy: 'Job Request', approvedAt: startAt, dueDate: null, checks: [], photo: '',
+      priority: PRI[col(r, 'priority').toLowerCase()] || '', status, startAt, endAt: closed ? Math.max(startAt, endDay ?? startAt) : null,
+      tech, team, requestedBy: '', requestedUid: '', approvedBy: 'Job Request', approvedAt: startAt, dueDate: null, checks: [], photo: '',
       cause: '', action: col(r, 'action'), partsUsed: [], cost: Number(col(r, 'cost')) || 0,
       ...(status === 'cancelled' ? { cancelledBy: 'Job Request', cancelReason: col(r, 'note') || 'ยกเลิกตามใบ Job Request' } : {}),
       log: [{ at: startAt, text: `นำเข้าจาก Job Request list (${col(r, 'section') || 'ไม่ระบุแผนก'})` }]
