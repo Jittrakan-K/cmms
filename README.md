@@ -90,14 +90,26 @@ ES modules ไม่ทำงานจาก `file://` ต้องเปิด�
 ลืมรหัสผ่าน: แอดมินกด "รีเซ็ตรหัสผ่าน" ที่แถวของพนักงานในหน้าตั้งค่า ระบบให้รหัสชั่วคราวใหม่ และบัญชีเดิมใช้ไม่ได้ทันที (เบื้องหลังคือสร้างบัญชีล็อกอินใหม่ให้รหัสพนักงานเดิม จึงเห็นบัญชีเก่าค้างใน Firebase console › Authentication ลบทิ้งได้ถ้าต้องการ) ถ้าแอดมินคนเดียวลืมรหัสผ่านเอง ให้เพิ่มแอดมินสำรองไว้อีกคนตั้งแต่แรก
 
 ## เผยแพร่ firestore.rules อัตโนมัติ
-`.github/workflows/deploy-rules.yml` เผยแพร่กฎขึ้น Firebase ทุกครั้งที่ `firestore.rules` บน `main` เปลี่ยน (หรือกด Run workflow เองที่แท็บ Actions) ถ้ากฎเขียนผิด Firebase จะไม่รับและ workflow แสดงเป็นสีแดง กฎเดิมยังใช้ต่อ ตั้งค่าครั้งเดียวดังนี้
-1. เปิด https://console.cloud.google.com/iam-admin/serviceaccounts?project=cmmsepic › Create service account ตั้งชื่อ เช่น `github-rules-deploy`
-2. ขั้น Grant access เลือก role **Firebase Rules Admin** (สิทธิ์แก้กฎอย่างเดียว อ่านหรือแก้ข้อมูลในฐานข้อมูลไม่ได้) › Done
-3. เปิด service account ที่สร้าง › แท็บ Keys › Add key › Create new key › JSON จะได้ไฟล์ .json
-4. GitHub repository › Settings › Secrets and variables › Actions › New repository secret ชื่อ `FIREBASE_RULES_KEY` วางเนื้อหาไฟล์ .json ทั้งไฟล์ › Add secret แล้วลบไฟล์ .json ในเครื่องทิ้ง ห้ามนำไฟล์นี้ขึ้น repository
-5. แท็บ Actions › Deploy Firestore rules › Run workflow เพื่อเผยแพร่ครั้งแรก
+`.github/workflows/deploy-rules.yml` เผยแพร่กฎขึ้น Firebase ทุกครั้งที่ `firestore.rules` บน `main` เปลี่ยน (หรือกด Run workflow เองที่แท็บ Actions) ถ้ากฎเขียนผิด Firebase จะไม่รับและ workflow แสดงเป็นสีแดง กฎเดิมยังใช้ต่อ
 
-ถ้าองค์กรปิดการสร้างคีย์ (มีข้อความ "Service account key creation is disabled") ให้ผู้ดูแล Google Cloud ของบริษัทอนุญาต หรือวางกฎเองใน Firebase console ตามเดิม
+ใช้ Workload Identity Federation: GitHub ยืนยันตัวกับ Google โดยตรง ไม่มีไฟล์กุญแจ จึงใช้ได้แม้บริษัทปิดการสร้าง service account key และอนุญาตเฉพาะ repository `Jittrakan-K/cmms` service account มีแค่ role Firebase Rules Admin (แก้กฎได้อย่างเดียว อ่านหรือแก้ข้อมูลไม่ได้)
+
+ตั้งค่าครั้งเดียว: เปิด https://console.cloud.google.com/?project=cmmsepic กดไอคอน Cloud Shell (>_) มุมขวาบน แล้ววางคำสั่งนี้ทั้งชุด
+
+```bash
+PROJECT=cmmsepic; REPO=Jittrakan-K/cmms; SA=github-rules-deploy@$PROJECT.iam.gserviceaccount.com
+gcloud config set project $PROJECT
+gcloud services enable iamcredentials.googleapis.com sts.googleapis.com firebaserules.googleapis.com
+gcloud iam service-accounts describe $SA >/dev/null 2>&1 || gcloud iam service-accounts create github-rules-deploy --display-name="GitHub rules deploy"
+gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:$SA" --role="roles/firebaserules.admin" --condition=None
+gcloud iam workload-identity-pools describe github --location=global >/dev/null 2>&1 || gcloud iam workload-identity-pools create github --location=global --display-name="GitHub"
+gcloud iam workload-identity-pools providers describe cmms --location=global --workload-identity-pool=github >/dev/null 2>&1 || gcloud iam workload-identity-pools providers create-oidc cmms --location=global --workload-identity-pool=github --display-name="cmms repo" --issuer-uri="https://token.actions.githubusercontent.com" --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" --attribute-condition="assertion.repository=='$REPO'"
+PN=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
+gcloud iam service-accounts add-iam-policy-binding $SA --role=roles/iam.workloadIdentityUser --member="principalSet://iam.googleapis.com/projects/$PN/locations/global/workloadIdentityPools/github/attribute.repository/$REPO"
+echo "เสร็จแล้ว project number = $PN"
+```
+
+ถ้าบรรทัดสุดท้ายแสดง project number ไม่ใช่ `607234875826` ให้แก้ค่า `WIF_PROVIDER` ใน workflow ให้ตรง จากนั้นแท็บ Actions › Deploy Firestore rules › Run workflow เพื่อเผยแพร่ครั้งแรก
 
 ## อัปเดตเว็บ
 ก่อน commit ทุกครั้งให้รัน `python bump-version.py` เพื่อเปลี่ยนเลขเวอร์ชันท้ายไฟล์ CSS/JS เบราว์เซอร์จะโหลดไฟล์ใหม่ทันทีโดยไม่ต้องล้างแคช
