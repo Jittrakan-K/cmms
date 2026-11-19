@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611191754';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611191754';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -739,7 +739,7 @@ function woRow(w) {
   const rca = done && (w.cause || w.action) ? `<div class="wide"><dt>สาเหตุและการแก้ไข</dt><dd>${esc([w.cause, w.action].filter(Boolean).join('  '))}</dd></div>` : '';
   return `${main}<tr class="woexp" id="${rid}"><td></td><td colspan="7">
     <div class="band"><dl>${facts}${w.note ? `<div class="wide"><dt>รายละเอียด</dt><dd class="u-pre">${esc(w.note)}</dd></div>` : ''}${rca}</dl>
-      <button type="button" class="btn small" data-act="open-wo" data-id="${esc(w.id)}">เปิดใบงาน</button></div>
+      <span class="bandbtns"><button type="button" class="btn small" data-act="open-wo" data-id="${esc(w.id)}">เปิดใบงาน</button>${canCancel(w) ? `<button type="button" class="btn small danger" data-act="wo-cancel-row" data-id="${esc(w.id)}">ยกเลิกใบงาน</button>` : ''}</span></div>
   </td></tr>`;
 }
 
@@ -1649,6 +1649,14 @@ const actions = {
     state.selectedWo = id;
     render();
     document.querySelector('.drawer .iconbtn')?.focus();
+  },
+  // ยกเลิกจากแถวในตาราง: เปิดใบงานพร้อมช่องใส่เหตุผล
+  'wo-cancel-row': (id) => {
+    actions['open-wo'](id);
+    state.cancelWo = { id, reason: '' };
+    render();
+    const t = document.getElementById('w-cancel');
+    t?.scrollIntoView({ block: 'center' }); t?.focus();
   },
   'close-drawer': () => { const id = state.selectedWo; state.selectedWo = null; render(); document.querySelector(`.trow [data-id="${CSS.escape(id || '')}"].check`)?.focus(); },
   scope: (id) => { state.scope = id; render(); },

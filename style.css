@@ -1117,3 +1117,4 @@ html.tv .shell { background: none; }
 .btn.danger.solid, .cancelbox .btn.danger { background: var(--stop-fg); border-color: var(--stop-fg); color: var(--card); }
 .cancelbox .btn.danger:hover:not(:disabled) { background: var(--stop-fg); filter: brightness(1.08); }
 .cancelbox .btn.danger:disabled { opacity: .45; }
+.bandbtns { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
