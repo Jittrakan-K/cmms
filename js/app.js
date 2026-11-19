@@ -285,8 +285,28 @@ function viewBoard(m) {
     const inLine = ms.filter((x) => (x.a.line || 'ไม่ระบุไลน์') === ln);
     const shown = big ? inLine.filter(needsCare) : inLine;
     const ok = inLine.filter((x) => x.k === 'run' || x.k === 'idle').length;
-    return `<div class="mline"><h3>${esc(ln)} <span class="dim u-w400">${inLine.length} เครื่อง${big ? ` ปกติ ${ok}` : ''}</span></h3>${shown.length ? `<div class="mgrid">${shown.map(tile).join('')}</div>` : big ? '<p class="hint">ทุกเครื่องในไลน์นี้ทำงานปกติ</p>' : ''}</div>`;
+    // แผนผัง: ช่องละเครื่อง สีตามสถานะ เรียงเครื่องที่ต้องดูแลขึ้นก่อน
+    const order = ['stop', 'wait', 'pm', 'late', 'idle', 'run', 'off'];
+    const map = big ? `<div class="pmap" role="group" aria-label="แผนผังเครื่อง ${esc(ln)}">${[...inLine].sort((x, y) => order.indexOf(x.k) - order.indexOf(y.k) || String(x.a.name).localeCompare(String(y.a.name))).map((x) => `<button type="button" class="pm-cell k-${x.k}" data-act="open-asset" data-id="${esc(x.a.id)}" title="${esc(`${x.a.id} ${x.a.name} ${MSTATE[x.k][0]}`)}" aria-label="${esc(`${x.a.id} ${MSTATE[x.k][0]}`)}"></button>`).join('')}</div>` : '';
+    return `<div class="mline"><h3>${esc(ln)} <span class="dim u-w400">${inLine.length} เครื่อง${big ? ` ปกติ ${ok}` : ''}</span></h3>${map}${shown.length ? `<div class="mgrid">${shown.map(tile).join('')}</div>` : ''}</div>`;
   };
+  // แนวโน้มงานซ่อมรายเดือนปีนี้ และเวลาหยุดตามแบบเครื่อง 90 วัน
+  const yNow = new Date().getFullYear();
+  const woCols = TH_MON.map((label, mi) => {
+    const inM = state.workOrders.filter((w) => { const d = new Date(w.startAt); return d.getFullYear() === yNow && d.getMonth() === mi; });
+    return { label, values: [inM.filter((w) => w.type === 'breakdown').length, inM.filter((w) => w.type !== 'breakdown' && w.type !== 'pm').length, inM.filter((w) => w.type === 'pm').length], on: mi === new Date().getMonth() };
+  }).slice(0, new Date().getMonth() + 1);
+  const byType = new Map();
+  state.workOrders.filter((w) => w.type === 'breakdown' && w.startAt >= now - 90 * DAY).forEach((w) => {
+    const nm = assetOf(w.asset)?.name || w.asset;
+    byType.set(nm, (byType.get(nm) || 0) + ((w.endAt ?? now) - w.startAt));
+  });
+  const topType = [...byType].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const maxT = Math.max(1, ...topType.map((x) => x[1]));
+  const trends = `<div class="dash-trend">
+      <section class="box"><div class="bar"><h2>ใบงานรายเดือน ปี ${yNow + 543}</h2></div><div class="pad">${state.workOrders.length ? mbars(woCols, [{ name: 'เครื่องเสีย', cls: 'mb-bad' }, { name: 'ตรวจ/ปรับปรุง' }, { name: 'PM', cls: 'mb-s2' }], `จำนวนใบงานรายเดือน ปี ${yNow + 543}`) : '<p class="empty">ยังไม่มีใบงาน</p>'}</div></section>
+      <section class="box"><div class="bar"><h2>เวลาหยุดตามแบบเครื่อง 90 วัน</h2></div>${topType.length ? `<ul class="hb">${topType.map(([nm, ms]) => `<li><span class="t" title="${esc(nm)}">${esc(nm)}</span><span class="hb-bar"><span style="width:${((100 * ms) / maxT).toFixed(1)}%"></span></span><span class="mono">${hours(ms)} ชม.</span></li>`).join('')}</ul>` : '<p class="empty">ไม่มีเครื่องเสียใน 90 วัน</p>'}</section>
+    </div>`;
   const useCount = Object.keys(USE).map((k) => ({ k: `use-${k}`, label: `${USE[k][0]} (${USE[k][1]})`, n: state.assets.filter((a) => useOf(a) === k).length }));
   const headline = stopN
     ? `<span class="alarm">เครื่องหยุดเสีย ${stopN} เครื่อง</span> จาก ${activeN} เครื่องที่ใช้งาน`
@@ -301,7 +321,7 @@ function viewBoard(m) {
       <section class="box dash-machines">
         <div class="bar"><h2>เครื่องจักร</h2>
           <ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => countM(k) || !['idle', 'off'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
-        ${state.assets.length > 48 ? `<p class="hint u-pad-sm">${big ? 'แสดงเฉพาะเครื่องที่หยุด รออะไหล่ ทำ PM หรือ PM เลยกำหนด' : 'แสดงทุกเครื่อง'} <button type="button" class="link" data-act="board-all">${big ? 'แสดงทุกเครื่อง' : 'แสดงเฉพาะเครื่องที่ต้องดูแล'}</button></p>` : ''}
+        ${state.assets.length > 48 ? `<p class="hint u-pad-sm">${big ? 'แผนผัง: หนึ่งช่องคือหนึ่งเครื่อง สีตามสถานะ กดที่ช่องเพื่อเปิดเครื่อง ด้านล่างแผนผังคือเครื่องที่ต้องดูแล' : 'แสดงทุกเครื่องเป็นการ์ด'} <button type="button" class="link" data-act="board-all">${big ? 'แสดงทุกเครื่องเป็นการ์ด' : 'กลับไปแบบแผนผัง'}</button></p>` : ''}
         ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
       </section>
 
@@ -316,6 +336,7 @@ function viewBoard(m) {
         </div>
         ${overdue.length ? `<p class="notice err u-mbox">ใบงานเลยวันกำหนดเสร็จ ${overdue.length} ใบ: ${overdue.slice(0, 4).map((w) => esc(w.id)).join(', ')}</p>` : ''}
       </section>
+      ${trends}
       </div>
 
       <div class="dash-side">

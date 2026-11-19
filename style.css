@@ -971,3 +971,21 @@ html.tv .shell { background: none; }
 @media (max-width: 40rem) { .cal-head, .cal-grid { padding: 0 var(--space-xs); gap: 2px; } .cal-day { min-height: 56px; padding: 3px; } .cal-c { min-width: 16px; height: 16px; font-size: 10px; padding: 0 3px; } }
 .pmday .alist { padding: 0 var(--space-md) var(--space-sm); margin: 0; }
 .mkey i.cal-c.late { background: var(--stop); } .mkey i.cal-c.due { background: var(--info-fg); } .mkey i.cal-c.fin { background: var(--ok); }
+/* แผนผังเครื่องบนแดชบอร์ด: ช่องละเครื่อง */
+.pmap { display: flex; flex-wrap: wrap; gap: 3px; margin: var(--space-2xs) 0 var(--space-sm); }
+.pm-cell { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 3px; background: var(--ok); opacity: .45; cursor: pointer; }
+.pm-cell:hover { opacity: 1; outline: 2px solid var(--ink); outline-offset: 1px; }
+.pm-cell.k-stop { background: var(--stop); opacity: 1; }
+.pm-cell.k-wait { background: var(--wait); opacity: 1; }
+.pm-cell.k-pm { background: var(--accent); opacity: 1; }
+.pm-cell.k-late { background: var(--late); opacity: .85; }
+.pm-cell.k-idle { background: var(--idle); opacity: 1; }
+.pm-cell.k-off { background: var(--off); opacity: 1; }
+.mb-bad { background: var(--stop); }
+.mkey i.mb-bad { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.dash-trend { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: var(--space-md); }
+.hb { list-style: none; margin: 0; padding: 0 var(--space-md) var(--space-md); display: flex; flex-direction: column; gap: var(--space-xs); }
+.hb li { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(60px, 1fr) auto; align-items: center; gap: var(--space-sm); font-size: var(--text-sm); }
+.hb .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hb-bar { height: 10px; background: var(--color-paper-2); border-radius: 3px; overflow: hidden; }
+.hb-bar span { display: block; height: 100%; background: var(--stop); border-radius: 3px; }
