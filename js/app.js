@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611192250';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611192250';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611192259';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611192259';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -35,6 +35,7 @@ const FILTERS = {
 const PAGES = {
   board: ['SH-09', 'แดชบอร์ด', 'แดชบอร์ดสถานะ'],
   overview: ['SH-01', 'ภาพรวม', 'ภาพรวมโรงงาน'],
+  plant: ['SH-10', 'แผนผังโรงงาน', 'แผนผังโรงงาน'],
   quick: ['SH-00', 'แจ้งซ่อมด่วน', 'แจ้งซ่อมด่วน'],
   work: ['SH-02', 'งานซ่อม', 'งานซ่อม'],
   assets: ['SH-03', 'เครื่องจักร', 'ทะเบียนเครื่องจักร'],
@@ -50,7 +51,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [], checklists: [], stockMoves: [], stock: null, tpm: {}, tpmSel: {}, tpmNg: null, af: { q: '', line: '', use: '', page: 0 }, boardAll: false, costYear: new Date().getFullYear(), pmYear: new Date().getFullYear(), pmView: 'list', pmMonth: null, pmDay: null,
-  page: 'board', pg: {}, ver: 0, fitRows: {}, tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
+  page: 'board', pg: {}, ver: 0, fitRows: {}, maps: [], mapLine: loadPref('cmms.mapLine'), mapEdit: false, mapSel: null, mapQ: '', mapLabels: false, mapBusy: false, tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, cancelWo: null, hideCancelled: loadHideCancelled(), toast: '', canSeed: false, unsubs: []
 };
 
@@ -79,6 +80,7 @@ const ini = (name) => { if (!name) return '—'; const first = (w) => [...(w || 
 const avatar = (name, sm = true) => `<span class="avatar ${sm ? 'sm' : ''}" aria-hidden="true">${esc(ini(name))}</span>`;
 const relDate = (t) => { const d0 = startOfToday(); if (t >= d0) return 'วันนี้'; if (t >= d0 - DAY) return 'เมื่อวาน'; return fmtDate(t); };
 const NAV_ICON = {
+  plant: '<path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20z"/><path d="M9 4v13.5M15 6.5V20"/>',
   quick: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   overview: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
   board: '<rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 17v4M7 13V9M11 13V7M15 13v-3"/>',
@@ -254,6 +256,150 @@ function mbars(cols, series, label, fmtV = (v) => String(v)) {
 const baht = (v) => Math.round(v).toLocaleString('th-TH');
 const ago = (t) => { const ms = Date.now() - t; return ms < DAY ? `${hm(ms)} ชม.` : `${Math.floor(ms / DAY)} วัน`; };
 
+// ---------- แผนผังโรงงาน: รูปแผนผังของแต่ละโรงงาน + จุดตำแหน่งเครื่อง ----------
+const lineOf = (a) => a.line || 'ไม่ระบุไลน์';
+const plantLines = () => {
+  const n = new Map();
+  state.assets.forEach((a) => n.set(lineOf(a), (n.get(lineOf(a)) || 0) + 1));
+  return [...n].sort((x, y) => y[1] - x[1]).map(([l]) => l);
+};
+// รหัสเอกสารรูปแผนผัง: ตัวอักษรอังกฤษจากชื่อโรงงาน + แฮชกันชื่อซ้ำ
+function mapDocId(line) {
+  let h = 0; for (const ch of String(line)) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  const slug = String(line).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  return `map-${slug ? `${slug}-` : ''}${h.toString(36)}`;
+}
+const mapOf = (line) => state.maps.find((m) => m.line === line);
+const placed = (a) => typeof a.mapX === 'number' && typeof a.mapY === 'number';
+function curPlant() {
+  const ls = plantLines();
+  if (!ls.includes(state.mapLine)) state.mapLine = ls.find((l) => mapOf(l)) || ls[0] || '';
+  return state.mapLine;
+}
+function plantTabs(cur, act = 'map-line') {
+  const ls = plantLines();
+  if (ls.length < 2) return '';
+  return `<div class="chips ptabs" role="group" aria-label="เลือกโรงงาน">${ls.map((l) => {
+    const n = state.assets.filter((a) => lineOf(a) === l);
+    const bad = n.filter((a) => ['stop', 'wait'].includes(machineState(a).k)).length;
+    return `<button type="button" data-act="${act}" data-id="${esc(l)}" aria-pressed="${l === cur}">${esc(l)} <span class="mono dim">${n.length}</span>${bad ? ` <span class="pt-bad mono" title="หยุดเสีย/รออะไหล่">${bad}</span>` : ''}</button>`;
+  }).join('')}</div>`;
+}
+// โซนอัตโนมัติเมื่อยังไม่มีรูปแผนผัง: ตามกระบวนการ ถ้าไม่ระบุใช้ชื่อเครื่อง
+const zoneOf = (a) => (String(a.area || '').split('/')[0].trim() || String(a.name || 'ไม่ระบุ')).toUpperCase().replace(/\s+/g, ' ');
+const MAP_ORDER = ['stop', 'wait', 'pm', 'late', 'idle', 'run', 'off'];
+function plantMap(line, edit = false) {
+  const list = state.assets.filter((a) => lineOf(a) === line).map((a) => ({ a, k: machineState(a).k }));
+  const mp = mapOf(line);
+  const cell = (x) => `<button type="button" class="pm-cell k-${x.k}${edit && state.mapSel === x.a.id ? ' sel' : ''}" data-act="${edit ? 'map-pick' : 'open-asset'}" data-id="${esc(x.a.id)}" title="${esc(`${x.a.id} ${x.a.name} ${MSTATE[x.k][0]}`)}" aria-label="${esc(`${x.a.id} ${MSTATE[x.k][0]}`)}"></button>`;
+  if (!mp) {
+    const zones = new Map();
+    list.forEach((x) => { const z = zoneOf(x.a); if (!zones.has(z)) zones.set(z, []); zones.get(z).push(x); });
+    const zs = [...zones].sort((p, q) => q[1].length - p[1].length);
+    return `<div class="zmap" role="group" aria-label="ผังโซน ${esc(line)}">${zs.map(([z, xs]) => {
+      const bad = xs.filter((x) => !['run', 'idle', 'off'].includes(x.k)).length;
+      return `<div class="zone${bad ? ' zbad' : ''}" style="flex-grow:${Math.min(xs.length, 40)}"><h4 title="${esc(z)}"><span class="zn">${esc(z)}</span><span class="mono">${xs.length}</span></h4><div class="zdots">${[...xs].sort((p, q) => MAP_ORDER.indexOf(p.k) - MAP_ORDER.indexOf(q.k) || p.a.id.localeCompare(q.a.id)).map(cell).join('')}</div></div>`;
+    }).join('')}</div>`;
+  }
+  const on = list.filter((x) => placed(x.a));
+  const pin = (x) => {
+    const sel = edit && state.mapSel === x.a.id;
+    const label = sel || state.mapLabels || !['run', 'idle', 'off'].includes(x.k);
+    return `<button type="button" class="pin k-${x.k}${sel ? ' sel' : ''}" style="left:${(x.a.mapX * 100).toFixed(2)}%;top:${(x.a.mapY * 100).toFixed(2)}%" data-act="${edit ? 'map-pick' : 'open-asset'}" data-id="${esc(x.a.id)}" title="${esc(`${x.a.id} ${x.a.name} — ${MSTATE[x.k][0]}`)}" aria-label="${esc(`${x.a.id} ${x.a.name} ${MSTATE[x.k][0]}`)}">${label ? `<span class="pin-l">${esc(x.a.id)}</span>` : ''}</button>`;
+  };
+  // เครื่องที่ต้องดูแลวาดทีหลังสุดให้อยู่บนสุด
+  const pins = [...on].sort((p, q) => MAP_ORDER.indexOf(q.k) - MAP_ORDER.indexOf(p.k)).map(pin).join('');
+  return `<div class="fmapwrap"><div class="fmap${edit ? ' editing' : ''}" style="--ar:${mp.w || 4}/${mp.h || 3}" data-line="${esc(line)}">
+      <img src="${mp.img}" alt="แผนผัง ${esc(line)}" draggable="false"><div class="fmap-pins">${pins}</div></div></div>`;
+}
+function looseList(line, edit = false) {
+  if (!mapOf(line)) return '';
+  const loose = state.assets.filter((a) => lineOf(a) === line && !placed(a)).map((a) => ({ a, k: machineState(a).k }));
+  if (!loose.length) return '';
+  return `<div class="loose"><p class="hint">ยังไม่ได้วางบนแผนผัง ${loose.length} เครื่อง${canAdmin() && !edit ? ' กด "จัดตำแหน่งเครื่อง" เพื่อวางจุด' : ''}</p>
+    <div class="pmap">${loose.sort((p, q) => MAP_ORDER.indexOf(p.k) - MAP_ORDER.indexOf(q.k)).map((x) => `<button type="button" class="pm-cell k-${x.k}${edit && state.mapSel === x.a.id ? ' sel' : ''}" data-act="${edit ? 'map-pick' : 'open-asset'}" data-id="${esc(x.a.id)}" title="${esc(`${x.a.id} ${x.a.name} ${MSTATE[x.k][0]}`)}" aria-label="${esc(x.a.id)}"></button>`).join('')}</div></div>`;
+}
+function mapLegend(line) {
+  const list = state.assets.filter((a) => lineOf(a) === line).map((a) => machineState(a).k);
+  return `<ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => list.includes(k) || ['stop', 'wait', 'run'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${list.filter((x) => x === k).length}</b></li>`).join('')}</ul>`;
+}
+
+function viewPlant() {
+  const line = curPlant();
+  if (!line) return '<p class="empty">ยังไม่มีเครื่องจักร นำเข้าทะเบียนเครื่องที่หน้าตั้งค่าก่อน</p>';
+  const mp = mapOf(line);
+  const edit = state.mapEdit && canAdmin() && !!mp;
+  const list = state.assets.filter((a) => lineOf(a) === line);
+  const nOn = list.filter(placed).length;
+  const tools = canAdmin() ? `<div class="u-row u-wrap">
+      <label class="btn">${mp ? 'เปลี่ยนรูปแผนผัง' : 'อัปโหลดรูปแผนผัง'}<input type="file" id="map-file" accept="image/png,image/jpeg,image/webp,application/pdf" class="sr"></label>
+      ${mp ? `<button type="button" class="btn ${edit ? 'solid' : ''}" data-act="map-edit">${edit ? 'เสร็จสิ้น' : 'จัดตำแหน่งเครื่อง'}</button>` : ''}
+      ${mp && !edit ? `<button type="button" class="btn" data-act="map-export">ส่งออกตำแหน่ง CSV</button><button type="button" class="btn danger" data-act="map-del">ลบรูปแผนผัง</button>` : ''}</div>` : '';
+  const head = `<div class="u-spread">${plantTabs(line)}${tools}</div>`;
+  const status = mp
+    ? `<p class="hint">${esc(line)}: วางบนแผนผังแล้ว ${nOn} จาก ${list.length} เครื่อง สีของจุดตามสถานะเครื่อง กดที่จุดเพื่อเปิดดูเครื่อง <button type="button" class="link" data-act="map-labels">${state.mapLabels ? 'ซ่อนรหัสเครื่องที่ปกติ' : 'แสดงรหัสทุกเครื่อง'}</button></p>`
+    : `<p class="hint">${esc(line)} ยังไม่มีรูปแผนผัง ระบบจัดเครื่องเป็นโซนตามกระบวนการ (ถ้าไม่ระบุกระบวนการใช้ชื่อเครื่อง)${canAdmin() ? ' อัปโหลดรูปแผนผังจริง (JPG, PNG หรือ PDF หน้าแรก) เพื่อวางจุดตามตำแหน่งจริงของเครื่อง' : ''}</p>`;
+  if (state.mapBusy) return `${head}<section class="box"><p class="empty">กำลังเตรียมรูปแผนผัง…</p></section>`;
+  if (!edit) {
+    return `${head}
+      <section class="box pg-plant"><div class="bar"><h2>แผนผัง ${esc(line)}</h2>${mapLegend(line)}</div>
+        <div class="pad">${status}${plantMap(line)}${looseList(line)}</div></section>`;
+  }
+  // โหมดจัดตำแหน่ง: แผนผังซ้าย รายชื่อเครื่องขวา
+  const q = (state.mapQ || '').trim().toLowerCase();
+  const rows = list.filter((a) => !q || `${a.id} ${a.name} ${a.area || ''}`.toLowerCase().includes(q))
+    .sort((a, b) => Number(placed(a)) - Number(placed(b)) || a.id.localeCompare(b.id));
+  const sel = assetOf(state.mapSel);
+  return `${head}
+    <div class="mapedit">
+      <section class="box"><div class="bar"><h2>จัดตำแหน่งเครื่อง ${esc(line)}</h2><span class="dim">วางแล้ว ${nOn}/${list.length}</span></div>
+        <div class="pad"><p class="hint">${sel ? `คลิกบนแผนผังตรงตำแหน่งของ <b class="mono">${esc(sel.id)}</b> ${esc(sel.name)}${placed(sel) ? ' (ลากจุดเพื่อย้ายได้)' : ''}` : 'เลือกเครื่องจากรายการทางขวา แล้วคลิกบนแผนผังตรงตำแหน่งเครื่อง ลากจุดเพื่อย้าย'}</p>${plantMap(line, true)}</div></section>
+      <section class="box mapside"><div class="bar"><h2>เครื่องใน ${esc(line)}</h2></div>
+        <div class="pad">
+          <div class="wosearch"><span class="sicon">${icon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}</span><label for="map-q" class="sr">ค้นหาเครื่อง</label><input id="map-q" type="search" placeholder="ค้นหารหัส ชื่อ กระบวนการ" value="${esc(state.mapQ || '')}" autocomplete="off"></div>
+          ${sel && placed(sel) ? `<button type="button" class="btn small" data-act="map-unplace" data-id="${esc(sel.id)}">เอา ${esc(sel.id)} ออกจากแผนผัง</button>` : ''}
+          <ul class="mlist">${rows.slice(0, 400).map((a) => `<li><button type="button" class="${state.mapSel === a.id ? 'sel' : ''}" data-act="map-pick" data-id="${esc(a.id)}"><span class="pm-dot k-${machineState(a).k}" aria-hidden="true"></span><span class="mono">${esc(a.id)}</span><span class="dim ml-n">${esc(a.name)}</span>${placed(a) ? '<span class="ok-t" aria-label="วางแล้ว">✓</span>' : ''}</button></li>`).join('')}</ul>
+        </div></section>
+    </div>`;
+}
+
+// แปลงไฟล์รูปหรือ PDF เป็นภาพ WebP ขนาดไม่เกิน ~1 MB เพื่อเก็บในเอกสาร Firestore ได้
+async function floorImage(file) {
+  let src;
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    const pdfjs = await import('../vendor/pdfjs/pdf.min.js');
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdfjs/pdf.worker.min.js', import.meta.url).href;
+    const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+    const page = await pdf.getPage(1);
+    const v0 = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: Math.min(4, 3000 / Math.max(v0.width, v0.height)) });
+    src = Object.assign(document.createElement('canvas'), { width: Math.round(viewport.width), height: Math.round(viewport.height) });
+    const ctx = src.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, src.width, src.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+  } else {
+    if (!/^image\/(png|jpeg|webp|gif|bmp)$/.test(file.type)) throw new Error('รองรับไฟล์ JPG, PNG, WebP หรือ PDF');
+    const url = URL.createObjectURL(file);
+    try {
+      src = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('อ่านไฟล์ภาพไม่ได้')); im.src = url; });
+    } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  }
+  const W0 = src.width || src.naturalWidth, H0 = src.height || src.naturalHeight;
+  let side = Math.min(2400, Math.max(W0, H0));
+  for (let i = 0; i < 8; i++) {
+    const k = side / Math.max(W0, H0);
+    const c = Object.assign(document.createElement('canvas'), { width: Math.round(W0 * k), height: Math.round(H0 * k) });
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(src, 0, 0, c.width, c.height);
+    for (const qv of [0.82, 0.7, 0.55]) {
+      let img = c.toDataURL('image/webp', qv);
+      if (!img.startsWith('data:image/webp')) img = c.toDataURL('image/jpeg', qv);
+      if (img.length < 1000000) return { img, w: c.width, h: c.height };
+    }
+    side = Math.round(side * 0.8);
+  }
+  throw new Error('รูปแผนผังใหญ่เกินไป ลองลดขนาดหรือครอปรูปก่อนอัปโหลด');
+}
+
+
 function viewBoard(m) {
   const t0 = startOfToday();
   const now = Date.now();
@@ -325,6 +471,10 @@ function viewBoard(m) {
     return `<div class="mline" data-flow><h3>${esc(ln)} <span class="dim u-w400">${inLine.length} เครื่อง${big ? ` ปกติ ${ok}` : ''}</span></h3>${map}${shown.length ? `<div class="mgrid" data-flow>${shown.map(tile).join('')}</div>` : ''}</div>`;
   };
 
+  // ทะเบียนใหญ่หรือมีรูปแผนผัง: แสดงแผนผังทีละโรงงาน เครื่องที่ต้องดูแลเป็นการ์ดด้านล่าง
+  const useMap = !state.boardAll && (big || state.maps.length > 0);
+  const plant = useMap ? curPlant() : '';
+  const careHere = useMap ? ms.filter((x) => lineOf(x.a) === plant && needsCare(x)) : [];
   const useCount = Object.keys(USE).map((k) => ({ k: `use-${k}`, label: `${USE[k][0]} (${USE[k][1]})`, n: state.assets.filter((a) => useOf(a) === k).length }));
   const headline = stopN
     ? `<span class="alarm">เครื่องหยุดเสีย ${stopN} เครื่อง</span> จาก ${activeN} เครื่องที่ใช้งาน`
@@ -397,8 +547,10 @@ function viewBoard(m) {
     <section class="box dash-machines" data-flow>
       <div class="bar"><h2>แผนผังเครื่องจักร</h2>
         <ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => countM(k) || !['idle', 'off'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
-      ${state.assets.length > 48 ? `<p class="hint u-pad-sm">${big ? 'หนึ่งช่องคือหนึ่งเครื่อง สีตามสถานะ กดที่ช่องเพื่อเปิดเครื่อง เครื่องที่ต้องดูแลแสดงเป็นการ์ดใต้แผนผัง' : 'แสดงทุกเครื่องเป็นการ์ด'} <button type="button" class="link" data-act="board-all">${big ? 'แสดงทุกเครื่องเป็นการ์ด' : 'กลับไปแบบแผนผัง'}</button></p>` : ''}
-      ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
+      ${useMap ? `<div class="pad"><div class="u-spread">${plantTabs(plant)}<span class="u-row"><button type="button" class="link" data-act="nav" data-id="plant">เปิดหน้าแผนผังโรงงาน</button><button type="button" class="link" data-act="board-all">แสดงทุกเครื่องเป็นการ์ด</button></span></div>${plantMap(plant)}${looseList(plant)}</div>
+        ${careHere.length ? `<div class="pad" data-flow><h3>ต้องดูแลใน ${esc(plant)} ${careHere.length} เครื่อง</h3><div class="mgrid" data-flow>${careHere.map(tile).join('')}</div></div>` : ''}`
+    : `${state.assets.length > 48 || state.maps.length ? `<p class="hint u-pad-sm">แสดงทุกเครื่องเป็นการ์ด <button type="button" class="link" data-act="board-all">กลับไปแบบแผนผัง</button></p>` : ''}
+      ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}`}
     </section>
 
     <div class="bgrid g3b">
@@ -699,6 +851,8 @@ function woDetail(w) {
 }
 
 // ซ่อนใบงานที่ยกเลิก (ค่าเริ่มต้น) จำไว้ในเบราว์เซอร์ ถ้าเลือกตัวกรองสถานะ "ยกเลิก" จะแสดงเสมอ
+function loadPref(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } }
+function savePref(k, v) { try { localStorage.setItem(k, v); } catch { /* ไม่มีที่เก็บก็ใช้ค่าในหน่วยความจำ */ } }
 function loadHideCancelled() { try { return localStorage.getItem('cmms.hideCancelled') !== 'off'; } catch { return true; } }
 const cancelShown = (w) => w.status !== 'cancelled' || !state.hideCancelled || state.woStatus === 'cancelled';
 
@@ -1337,7 +1491,7 @@ const ROLE_LABEL = { admin: 'แอดมิน', tech: 'ช่างซ่อ�
 const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], document: ['Document', 'operator'], asst_manager: ['ASST. Manager', 'admin'], advisor: ['Advisor', 'admin'], admin_web: ['Admin Website', 'admin'] };
 const userLabel = (u) => (u.role === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[u.position]?.[0] || ROLE_LABEL[u.role] || 'ยังไม่มีสิทธิ์');
 const IMPORT_COLS = {
-  assets: ['id', 'name', 'line', 'cls', 'category', 'use', 'maker', 'model', 'year', 'wi', 'serial', 'asset_no', 'installed', 'area', 'owner', 'doc_url'],
+  assets: ['id', 'name', 'line', 'cls', 'category', 'use', 'maker', 'model', 'year', 'wi', 'serial', 'asset_no', 'installed', 'area', 'owner', 'doc_url', 'map_x', 'map_y'],
   parts: ['id', 'name', 'unit', 'bin', 'qty', 'min', 'max', 'price'],
   pmPlans: ['id', 'asset', 'task', 'interval_days', 'due_date', 'source'],
   workOrders: ['ref', 'section', 'request_date', 'complete_date', 'condition', 'type', 'status', 'machine_code', 'machine_name', 'process', 'detail', 'action', 'action_by', 'cost', 'note', 'start_time', 'end_time', 'team', 'priority'],
@@ -1496,6 +1650,12 @@ function importRows(coll, text) {
       Object.entries(ASSET_KEY).forEach(([from, to]) => { if (from in o) { o[to] = o[from]; delete o[from]; } });
       if (o.docUrl && !/^https:\/\//.test(o.docUrl)) delete o.docUrl;
       if (o.installed && !/^\d{4}-\d{2}-\d{2}$/.test(o.installed)) delete o.installed;
+      // ตำแหน่งบนแผนผังเป็นเปอร์เซ็นต์ของความกว้าง/สูงรูป (0–100)
+      if ('map_x' in o || 'map_y' in o) {
+        const x = Number(o.map_x), y = Number(o.map_y);
+        if (o.map_x !== undefined && o.map_y !== undefined && x >= 0 && x <= 100 && y >= 0 && y <= 100) { o.mapX = Math.round(x * 100) / 10000; o.mapY = Math.round(y * 100) / 10000; }
+        delete o.map_x; delete o.map_y;
+      }
     }
     out.push(o);
   });
@@ -1642,7 +1802,7 @@ function render() {
   const m = metrics();
   const counts = { work: m.open.length, assets: state.assets.length, pm: m.pmSoon.length, parts: m.low.length, gauges: m.gaugeAlert.length || '' };
   const nav = Object.entries(PAGES).map(([k, [, label]]) => `<button type="button" data-act="nav" data-id="${k}" ${state.page === k ? 'aria-current="page"' : ''}>${icon(NAV_ICON[k])}<span>${label}</span><span class="n">${counts[k] ?? ''}</span></button>`).join('');
-  const views = { quick: viewQuick, overview: viewOverview, board: viewBoard, work: viewWork, assets: viewAssets, pm: viewPm, parts: viewParts, gauges: viewGauges, report: viewReport, server: viewServer };
+  const views = { quick: viewQuick, overview: viewOverview, plant: viewPlant, board: viewBoard, work: viewWork, assets: viewAssets, pm: viewPm, parts: viewParts, gauges: viewGauges, report: viewReport, server: viewServer };
   const noRole = !state.user.role;
   const [, , full] = PAGES[state.page];
   const add = canAdmin() && ADD_LABEL[state.page] ? `<button type="button" class="btn" data-act="add" data-id="${state.page}">${ADD_LABEL[state.page]}</button>` : '';
@@ -1840,6 +2000,8 @@ function listen() {
     console.error(err); state.loadError = explain(err); refresh();
   }));
   state.unsubs.push(usersUnsub);
+  // รูปแผนผังโรงงานเป็นส่วนเสริม อ่านไม่ได้ (ยังไม่ได้เผยแพร่กฎใหม่) ก็ใช้งานส่วนอื่นต่อได้
+  state.unsubs.push(state.backend.subscribe('maps', (rows) => { state.maps = rows; state.ver++; refresh(); }, (err) => { console.warn('อ่านแผนผังโรงงานไม่ได้', err); state.maps = []; refresh(); }));
 }
 
 function go(page) {
@@ -2075,6 +2237,22 @@ const actions = {
   'stock-open': (v) => { const [id, dir] = v.split(':'); state.stock = { id, dir }; render(); window.scrollTo(0, 0); document.getElementById('s-qty')?.focus(); },
   'stock-close': () => { state.stock = null; render(); },
   part: (id, el) => run(() => state.backend.adjustPart(id, Number(el.dataset.delta))),
+  'map-line': (id) => { state.mapLine = id; state.mapSel = null; state.mapQ = ''; savePref('cmms.mapLine', id); render(); },
+  'map-edit': () => { state.mapEdit = !state.mapEdit; state.mapSel = null; state.mapQ = ''; render(); },
+  'map-pick': (id) => { if (mapDragged) return; state.mapSel = state.mapSel === id ? null : id; render(); },
+  'map-labels': () => { state.mapLabels = !state.mapLabels; render(); },
+  'map-unplace': (id) => { const a = assetOf(id); if (!a) return; Object.assign(a, { mapX: null, mapY: null }); state.ver++; run(() => state.backend.update('assets', id, { mapX: null, mapY: null }), `เอา ${id} ออกจากแผนผังแล้ว`); render(); },
+  'map-export': () => {
+    const rows = [...state.assets].sort((a, b) => lineOf(a).localeCompare(lineOf(b)) || a.id.localeCompare(b.id))
+      .map((a) => [a.id, a.name, a.line || '', placed(a) ? (a.mapX * 100).toFixed(2) : '', placed(a) ? (a.mapY * 100).toFixed(2) : '']);
+    download(`cmms-map-positions-${isoDate(Date.now())}.csv`, csv([['id', 'name', 'line', 'map_x', 'map_y'], ...rows]));
+  },
+  'map-del': (id, el) => {
+    const mp = mapOf(state.mapLine); if (!mp) return;
+    if (!el.dataset.confirm) { el.dataset.confirm = '1'; el.textContent = 'กดอีกครั้งเพื่อลบรูปแผนผัง'; return; }
+    state.mapEdit = false;
+    run(() => state.backend.remove('maps', mp.id), 'ลบรูปแผนผังแล้ว ตำแหน่งเครื่องยังเก็บไว้ อัปโหลดรูปใหม่ขนาดสัดส่วนเดิมจะใช้ตำแหน่งเดิมได้');
+  },
   del: (id, el) => {
     if (el.dataset.confirm) return run(() => state.backend.remove(el.dataset.coll, id), 'ลบแล้ว');
     el.dataset.confirm = '1';
@@ -2118,6 +2296,10 @@ const actions = {
 };
 
 app.addEventListener('click', (e) => {
+  // แผนผังโรงงาน: คลิกบนรูปเพื่อวางเครื่องที่เลือก
+  if (mapDragged && e.target.closest('.fmap')) return;
+  const fm = e.target.closest('.fmap.editing');
+  if (fm && !e.target.closest('.pin')) { mapPlace(fm, e); return; }
   const pg = e.target.closest('[data-pg]');
   if (pg && !pg.disabled) { fitGoto(Number(pg.dataset.pg)); return; }
   const el = e.target.closest('[data-act]');
@@ -2126,6 +2308,51 @@ app.addEventListener('click', (e) => {
   if (state.woFilter && !e.target.closest('.wofilter')) { state.woFilter = false; if (!el) { render(); return; } }
   if (!el || el.disabled) return;
   actions[el.dataset.act]?.(el.dataset.id, el);
+});
+
+// ลากจุดเพื่อย้ายตำแหน่ง (โหมดจัดตำแหน่ง)
+let mapDrag = null, mapDragged = false;
+const mapXY = (fm, e) => { const r = fm.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
+function saveSpot(id, x, y) {
+  const a = assetOf(id); if (!a) return;
+  const mapX = Math.round(x * 10000) / 10000, mapY = Math.round(y * 10000) / 10000;
+  Object.assign(a, { mapX, mapY }); state.ver++;
+  run(() => state.backend.update('assets', id, { mapX, mapY }));
+}
+function mapPlace(fm, e) {
+  if (!state.mapSel) { toast('เลือกเครื่องจากรายการทางขวาก่อน แล้วคลิกบนแผนผัง'); return; }
+  const wasLoose = !placed(assetOf(state.mapSel) || {});
+  const [x, y] = mapXY(fm, e);
+  saveSpot(state.mapSel, x, y);
+  // วางเครื่องใหม่แล้วเลือกเครื่องถัดไปที่ยังไม่ได้วางให้เลย จะได้คลิกต่อได้ทันที
+  if (wasLoose) {
+    const q = (state.mapQ || '').trim().toLowerCase();
+    const next = state.assets.filter((a) => lineOf(a) === state.mapLine && !placed(a) && (!q || `${a.id} ${a.name} ${a.area || ''}`.toLowerCase().includes(q))).sort((a, b) => a.id.localeCompare(b.id))[0];
+    state.mapSel = next ? next.id : null;
+  }
+  render();
+}
+app.addEventListener('pointerdown', (e) => {
+  const p = e.target.closest('.fmap.editing .pin');
+  if (!p || e.button !== 0) return;
+  mapDrag = { id: p.dataset.id, x0: e.clientX, y0: e.clientY, moved: false };
+  p.setPointerCapture?.(e.pointerId);
+});
+app.addEventListener('pointermove', (e) => {
+  if (!mapDrag) return;
+  if (!mapDrag.moved && Math.hypot(e.clientX - mapDrag.x0, e.clientY - mapDrag.y0) < 4) return;
+  mapDrag.moved = true;
+  const fm = app.querySelector('.fmap.editing'); const p = fm?.querySelector(`.pin[data-id="${CSS.escape(mapDrag.id)}"]`);
+  if (!fm || !p) return;
+  const [x, y] = mapXY(fm, e); p.style.left = `${x * 100}%`; p.style.top = `${y * 100}%`; p.classList.add('drag');
+});
+app.addEventListener('pointerup', (e) => {
+  if (!mapDrag) return;
+  const d = mapDrag; mapDrag = null;
+  if (!d.moved) return;
+  mapDragged = true; setTimeout(() => { mapDragged = false; }, 0);
+  const fm = app.querySelector('.fmap.editing'); if (!fm) return;
+  const [x, y] = mapXY(fm, e); state.mapSel = d.id; saveSpot(d.id, x, y); render();
 });
 
 // ค้นหา: อัปเดตเฉพาะกล่องผลลัพธ์ ไม่วาดทั้งหน้าใหม่ เคอร์เซอร์จะได้ไม่หลุด
@@ -2203,6 +2430,12 @@ app.addEventListener('input', (e) => {
     searchTimer = setTimeout(() => { const el0 = document.getElementById('af-q'); const pos = el0?.selectionStart ?? state.af.q.length; render(); const el = document.getElementById('af-q'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 200);
     return;
   }
+  if (e.target.id === 'map-q') {
+    state.mapQ = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { const pos = document.getElementById('map-q')?.selectionStart ?? state.mapQ.length; render(); const el = document.getElementById('map-q'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 200);
+    return;
+  }
   if (e.target.id === 'wo-q') {
     state.woQ = e.target.value; state.woPage = 0; state.pg.work = 0;
     clearTimeout(searchTimer);
@@ -2267,6 +2500,15 @@ app.addEventListener('change', (e) => {
     const v = e.target.value;
     const patch = v === 'disabled' ? { role: 'disabled' } : { role: POSITIONS[v][1], position: v };
     run(() => state.backend.updateUser(uid, patch), `เปลี่ยนตำแหน่งเป็น ${v === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[v][0]} แล้ว`);
+    return;
+  }
+  if (e.target.id === 'map-file' && e.target.files?.[0]) {
+    const file = e.target.files[0]; const line = state.mapLine;
+    state.mapBusy = true; render();
+    floorImage(file)
+      .then(({ img, w, h }) => run(() => state.backend.put('maps', mapDocId(line), { line, img, w, h, updatedAt: Date.now(), by: state.user?.name || '' }), `บันทึกรูปแผนผัง ${line} แล้ว`))
+      .catch((err) => { console.error(err); toast(err.message || 'อ่านไฟล์แผนผังไม่ได้'); })
+      .finally(() => { state.mapBusy = false; render(); });
     return;
   }
   if (e.target.id === 'qr-file' && e.target.files?.[0]) {

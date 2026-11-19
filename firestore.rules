@@ -114,6 +114,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // รูปแผนผังโรงงาน (ภาพย่อเก็บในเอกสาร) แอดมินอัปโหลด ทุกคนดูได้
+    match /maps/{id} {
+      allow read: if isMember();
+      allow delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.line is string
+        && request.resource.data.img is string
+        && request.resource.data.img.size() < 1040000;
+    }
+
     match /workOrders/{id} {
       allow read: if isMember();
       allow create: if isMember()

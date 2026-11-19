@@ -1,7 +1,7 @@
 // ชั้นเชื่อมต่อข้อมูล: หน้าเว็บคุยกับไฟล์นี้เท่านั้น
 // ถ้าวันหน้าจะย้ายไป Supabase หรือ PocketBase ให้เขียนคลาสใหม่ที่มีเมธอดชุดเดียวกัน
 // แล้วแก้ createBackend() จุดเดียว ไม่ต้องแตะ app.js
-import { firebaseConfig as fileConfig } from './firebase-config.js?v=202611192250';
+import { firebaseConfig as fileConfig } from './firebase-config.js?v=202611192259';
 
 const SDK = 'https://www.gstatic.com/firebasejs/13.1.0';
 const CONFIG_KEY = 'cmms.firebaseConfig';
@@ -172,6 +172,7 @@ class LocalBackend {
 
   constructor() {
     this.db = this.load();
+    this.db.maps ||= [];
   }
 
   load() {
@@ -321,7 +322,7 @@ class LocalBackend {
   }
 
   reset() {
-    this.db = sampleData();
+    this.db = { ...sampleData(), maps: this.db.maps || [] };
     this.commit(...COLLECTIONS);
   }
 }
