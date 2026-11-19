@@ -125,6 +125,30 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ใบตรวจ TPM ตามเลขที่ WI: ทุกคนอ่านได้ แอดมินนำเข้าและแก้ไข
+    match /checklists/{id} {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+
+    // ผลตรวจ TPM: ผู้ใช้งานทุกตำแหน่งบันทึกได้ แก้ไขหรือลบได้เฉพาะแอดมิน
+    match /inspections/{id} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.resource.data.by is string
+        && request.resource.data.results is list
+        && request.resource.data.results.size() <= 100;
+      allow update, delete: if isAdmin();
+    }
+
+    // วันที่ตรวจล่าสุดของแต่ละจุดในเครื่อง (สรุปจาก inspections)
+    match /tpmState/{asset} {
+      allow read: if isMember();
+      allow create, update: if isMember()
+        && request.resource.data.keys().hasOnly(['last', 'lastAt', 'lastBy', 'ng']);
+      allow delete: if isAdmin();
+    }
+
     match /pmPlans/{id} {
       allow read: if isMember();
       allow update: if isTech() && changedOnly(['dueDate', 'lastDone']);

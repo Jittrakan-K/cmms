@@ -906,3 +906,25 @@ html.tv .shell { background: none; }
 .andon[data-s=pm] { background: var(--pm); }
 .andon[data-s=late] { background: var(--late); }
 .andon[data-s=run] { background: var(--ok); }
+/* ใบตรวจ TPM ในหน้าเครื่อง */
+.tpm-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.tpm-head { text-align: left; }
+.tpm-head p { flex: 1 1 280px; margin: 0; color: var(--ink-2); }
+.tpm-g { padding: 0 var(--space-md) var(--space-sm); }
+.tpm-g h3 { margin: var(--space-sm) 0 var(--space-2xs); font-size: var(--text-sm); font-weight: 600; color: var(--muted); }
+.tpm-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-rule); border-radius: var(--radius-input); }
+.tpm-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-sm); padding: var(--space-xs) var(--space-sm); border-top: 1px solid var(--color-rule); }
+.tpm-row:first-child { border-top: 0; }
+.tpm-row.due { background: var(--color-accent-wash); }
+.tpm-n { color: var(--muted); text-align: right; }
+.tpm-t { display: flex; flex-direction: column; gap: var(--space-3xs); min-width: 0; }
+.tpm-t b { font-weight: 500; }
+.tpm-t span { color: var(--muted); font-size: var(--text-xs); }
+.tpm-s { font-size: var(--text-xs); white-space: nowrap; }
+.tpm-due { color: var(--color-accent-light); font-weight: 600; }
+.tpm-ok { display: inline-flex; gap: var(--space-3xs); }
+.tpm-b { min-height: 32px; padding: 0 var(--space-sm); border: 1px solid var(--color-key-edge); border-radius: var(--radius-input); background: var(--card); color: var(--ink-2); font: inherit; font-size: var(--text-sm); }
+.tpm-b:hover { border-color: var(--color-edge-hover); color: var(--ink); }
+.tpm-b[aria-pressed=true] { background: var(--ok-bg); border-color: var(--ok); color: var(--ok-fg); font-weight: 600; }
+.tpm-b.ng[aria-pressed=true] { background: var(--stop-bg); border-color: var(--stop); color: var(--stop-fg); }
+@media (max-width: 40rem) { .tpm-row { grid-template-columns: 24px minmax(0, 1fr); } .tpm-s, .tpm-ok { grid-column: 2; } }

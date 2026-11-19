@@ -47,7 +47,24 @@ export function sampleData(now = Date.now()) {
       ['AOI-206', 'เครื่องตรวจด้วยภาพ', 'ไลน์ SMT 2', 'B'],
       ['CMP-901', 'ปั๊มลม', 'ห้องสาธารณูปโภค', 'A'],
       ['N2G-902', 'เครื่องผลิตไนโตรเจน', 'ห้องสาธารณูปโภค', 'B']
-    ].map(([id, name, line, cls]) => ({ id, name, line, cls, maker: '', model: '', year: '' })),
+    ].map(([id, name, line, cls]) => ({ id, name, line, cls, maker: '', model: '', year: '', wi: { MNT: 'WI-DEMO-MNT', RFL: 'WI-DEMO-RFL' }[id.slice(0, 3)] || '' })),
+    // ใบตรวจ TPM ตามแบบเครื่อง (เลขที่ WI) ความถี่เป็นจำนวนวัน
+    checklists: [
+      ['WI-DEMO-MNT', 'เครื่องติดตั้งชิ้นส่วน (ตัวอย่าง)', [
+        ['ทำความสะอาด', 'หัวดูดและกล้องจับชิ้นงาน', 'มีฝุ่นหรือคราบกาว', 1, 'ต้องสะอาด ไม่มีคราบ'],
+        ['จุดตรวจเช็ค', 'แรงดันลมเข้าเครื่อง', 'อ่านค่าที่เกจ', 1, '0.5 ± 0.05 MPa'],
+        ['จุดตรวจเช็ค', 'ฟีดเดอร์', 'ล็อกไม่แน่น หรือมีเสียงผิดปกติ', 1, 'ล็อกแน่น ไม่มีเสียงผิดปกติ'],
+        ['จุดตรวจเช็ค', 'ไส้กรองหัวดูด', 'อุดตัน สีคล้ำ', 7, 'ไม่อุดตัน'],
+        ['จุดตรวจเช็คน้ำมันหล่อลื่น', 'รางเลื่อนแกน X/Y', 'จาระบีแห้ง', 30, 'มีจาระบีเคลือบทั่วราง'],
+        ['จุดตรวจเช็ค', 'สายพานแกน Y', 'ความตึงและการสึกหรอ', 90, 'ไม่หย่อน ไม่มีรอยแตก']
+      ]],
+      ['WI-DEMO-RFL', 'เตาอบรีโฟลว์ (ตัวอย่าง)', [
+        ['จุดตรวจเช็ค', 'อุณหภูมิแต่ละโซน', 'เทียบกับโปรไฟล์', 1, 'ไม่เกิน ± 5 °C จากค่าตั้ง'],
+        ['จุดตรวจเช็ค', 'โซ่ลำเลียง', 'เสียงผิดปกติ สะดุด', 1, 'เดินเรียบ ไม่มีเสียงผิดปกติ'],
+        ['ทำความสะอาด', 'ช่องดูดไอฟลักซ์', 'มีคราบฟลักซ์สะสม', 7, 'ไม่มีคราบอุดตัน'],
+        ['จุดตรวจเช็คน้ำมันหล่อลื่น', 'โซ่ลำเลียง', 'โซ่แห้ง', 30, 'มีน้ำมันเคลือบทั่ว']
+      ]]
+    ].map(([id, name, items]) => ({ id, name, items: items.map(([kind, part, check, freq, std]) => ({ kind, part, check, freq, std })) })),
     workOrders: [
       {
         id: workOrderId(52, now), asset: 'MNT-103', type: 'breakdown',
@@ -127,6 +144,8 @@ export function sampleData(now = Date.now()) {
       id, name, range, location, intervalDays, status, dueDate: due(d), lastCal: due(d) - intervalDays * DAY,
       note: status === 'hold' ? 'ค่าคลาดเกินเกณฑ์ตอนตรวจเทียบกับเกจมาตรฐาน รอส่งสอบเทียบ' : ''
     })),
+    tpmState: {},
+    inspections: [],
     seq: 52
   };
 }
@@ -157,7 +176,17 @@ class LocalBackend {
   load() {
     try {
       const saved = JSON.parse(localStorage.getItem(DEMO_KEY));
-      if (saved) return saved;
+      if (saved) {
+        // ข้อมูลตัวอย่างที่บันทึกไว้ก่อนมีใบตรวจ TPM: เติมส่วนที่ขาด
+        if (!saved.checklists) {
+          const fresh = sampleData();
+          saved.checklists = fresh.checklists;
+          saved.assets = saved.assets.map((x) => ({ ...x, wi: x.wi ?? fresh.assets.find((f) => f.id === x.id)?.wi ?? '' }));
+        }
+        saved.tpmState ||= {};
+        saved.inspections ||= [];
+        return saved;
+      }
     } catch { /* เปิดใหม่จากข้อมูลตัวอย่าง */ }
     return sampleData();
   }
@@ -265,13 +294,26 @@ class LocalBackend {
   async isEmpty() { return false; }
   async seed() {}
 
+  // ผลตรวจ TPM: tpmState เก็บวันที่ตรวจล่าสุดของแต่ละจุด inspections เป็นประวัติ
+  async getTpmState(asset) {
+    return structuredClone((this.db.tpmState || {})[asset] || { last: {} });
+  }
+
+  async recordInspection(rec) {
+    this.db.inspections = [...(this.db.inspections || []), { ...rec, id: `insp-${Date.now()}` }];
+    const cur = (this.db.tpmState ||= {})[rec.asset] || { last: {} };
+    rec.results.forEach((r) => { cur.last[r.i] = rec.at; });
+    this.db.tpmState[rec.asset] = { ...cur, lastAt: rec.at, lastBy: rec.by, ng: rec.results.filter((r) => !r.ok).length };
+    this.commit();
+  }
+
   reset() {
     this.db = sampleData();
     this.commit(...COLLECTIONS);
   }
 }
 
-export const COLLECTIONS = ['assets', 'workOrders', 'pmPlans', 'parts', 'gauges'];
+export const COLLECTIONS = ['assets', 'workOrders', 'pmPlans', 'parts', 'gauges', 'checklists'];
 
 function mergeParts(list = [], id, qty) {
   const found = list.find((x) => x.id === id);
@@ -622,6 +664,23 @@ class FirebaseBackend {
       tx.update(planRef, { dueDate: startOfToday() + p.intervalDays * DAY, lastDone: Date.now() });
       tx.set(doc(this.db, 'workOrders', woId), { ...rest, createdAt: serverTimestamp() });
     });
+  }
+
+  async getTpmState(asset) {
+    const { doc, getDoc } = this.fs;
+    const snap = await getDoc(doc(this.db, 'tpmState', asset));
+    return snap.exists() ? { last: {}, ...snap.data() } : { last: {} };
+  }
+
+  // บันทึกประวัติและวันที่ตรวจล่าสุดของแต่ละจุดพร้อมกัน
+  async recordInspection(rec) {
+    const { doc, collection, writeBatch } = this.fs;
+    const batch = writeBatch(this.db);
+    batch.set(doc(collection(this.db, 'inspections')), rec);
+    const last = {};
+    rec.results.forEach((r) => { last[r.i] = rec.at; });
+    batch.set(doc(this.db, 'tpmState', rec.asset), { last, lastAt: rec.at, lastBy: rec.by, ng: rec.results.filter((r) => !r.ok).length }, { merge: true });
+    await batch.commit();
   }
 
   async isEmpty() {

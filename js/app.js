@@ -40,7 +40,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
-  assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [],
+  assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [], checklists: [], tpm: {}, tpmSel: {}, tpmNg: null,
   page: 'board', tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
@@ -812,7 +812,7 @@ function fieldsForm(kind, title, fields) {
 }
 
 const FIELDS = {
-  assets: [['id', 'รหัสเครื่อง เช่น MNT-103', 'text', 'required pattern="[A-Za-z0-9\\-]+"'], ['name', 'ชื่อเครื่อง', 'text', 'required'], ['line', 'ตำแหน่ง'], ['cls', 'ระดับความสำคัญ', 'cls'], ['maker', 'ผู้ผลิต'], ['model', 'รุ่น'], ['year', 'ปีที่ติดตั้ง']],
+  assets: [['id', 'รหัสเครื่อง เช่น MNT-103', 'text', 'required pattern="[A-Za-z0-9\\-]+"'], ['name', 'ชื่อเครื่อง', 'text', 'required'], ['line', 'ตำแหน่ง'], ['cls', 'ระดับความสำคัญ', 'cls'], ['maker', 'ผู้ผลิต'], ['model', 'รุ่น'], ['year', 'ปีที่ติดตั้ง'], ['wi', 'เลขที่ใบตรวจ TPM (WI)']],
   pmPlans: [['asset', 'เครื่องจักร', 'asset'], ['task', 'งานที่ต้องทำ', 'text', 'required'], ['intervalDays', 'ทำทุกกี่วัน', 'number', 'required min="1"'], ['first', 'ครบกำหนด', 'date', 'required']],
   parts: [['id', 'รหัส', 'text', 'required pattern="[A-Za-z0-9.\\-]+"'], ['name', 'รายการ', 'text', 'required'], ['bin', 'ที่เก็บ'], ['qty', 'คงเหลือ', 'number', 'required min="0"'], ['min', 'จุดสั่งซื้อ (Min)', 'number', 'required min="0"'], ['max', 'สต็อกสูงสุด (Max)', 'number', 'min="0"']],
   gauges: [['id', 'รหัส เช่น GAU-008', 'text', 'required pattern="[A-Za-z0-9.\\-]+"'], ['name', 'ชื่อเครื่องมือ', 'text', 'required'], ['range', 'ช่วงการวัด'], ['location', 'ที่ตั้ง / เครื่องที่ใช้'], ['intervalDays', 'รอบสอบเทียบ (วัน)', 'number', 'required min="1"'], ['first', 'ครบกำหนดสอบเทียบ', 'date', 'required']]
@@ -824,6 +824,58 @@ function recordForm(coll) {
   if (state.form !== coll && !editing) return '';
   const fields = FIELDS[coll].filter(([name]) => !(editing && name === 'id') && !(editing && coll === 'parts' && name === 'qty'));
   return fieldsForm(editing ? `edit-${coll}` : coll, `${editing ? 'แก้ไข' : 'เพิ่ม'}${COLL_LABEL[coll]}${editing && state.draft.id ? ` ${state.draft.id}` : ''}`, fields);
+}
+
+/* ---------- ใบตรวจ TPM ของเครื่อง ---------- */
+const FREQ_TH = { 1: 'ทุกวัน', 7: 'ทุกสัปดาห์', 14: 'ทุก 2 สัปดาห์', 30: 'ทุกเดือน', 60: 'ทุก 2 เดือน', 90: 'ทุก 3 เดือน', 180: 'ทุก 6 เดือน', 360: 'ทุกปี', 365: 'ทุกปี', 720: 'ทุก 2 ปี' };
+const freqLabel = (f) => FREQ_TH[f] || `ทุก ${f} วัน`;
+const canInspect = () => ['admin', 'tech', 'operator'].includes(state.user?.role);
+const checklistOf = (a) => (a?.wi ? state.checklists.find((c) => c.id === a.wi) : null);
+// จุดตรวจถึงรอบเมื่อยังไม่เคยตรวจ หรือผ่านมาครบจำนวนวันของรอบแล้ว
+const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const tpmDue = (last, freq, t0 = startOfToday()) => !last || t0 - startOfDay(last) >= freq * DAY;
+
+function loadTpm(id) {
+  if (state.tpm[id]?.status === 'loading') return;
+  state.tpm[id] = { status: 'loading', data: state.tpm[id]?.data || { last: {} } };
+  state.backend.getTpmState(id)
+    .then((data) => { state.tpm[id] = { status: 'ok', data }; refresh(); })
+    .catch((err) => { console.warn('อ่านผลตรวจ TPM ไม่ได้', err); state.tpm[id] = { status: 'error', data: { last: {} } }; refresh(); });
+}
+
+function tpmBox(a) {
+  if (!a) return '';
+  const cl = checklistOf(a);
+  if (!cl) {
+    if (!a.wi) return '';
+    return `<section class="box" aria-label="ใบตรวจ TPM"><div class="bar"><h2>ใบตรวจ TPM</h2><span class="mono dim">${esc(a.wi)}</span></div><p class="empty">ยังไม่มีใบตรวจเลขที่นี้ในระบบ ${canAdmin() ? 'นำเข้าได้ที่หน้าตั้งค่า' : 'กรุณาแจ้งแอดมิน'}</p></section>`;
+  }
+  if (!state.tpm[a.id]) setTimeout(() => loadTpm(a.id));
+  const st = state.tpm[a.id] || { status: 'loading', data: { last: {} } };
+  const last = st.data.last || {};
+  const sel = state.tpmSel[a.id] || {};
+  const t0 = startOfToday();
+  const items = cl.items.map((it, i) => ({ ...it, i, due: tpmDue(last[i], it.freq, t0) }));
+  const dueN = items.filter((x) => x.due).length;
+  const picked = Object.keys(sel).length;
+  const can = canInspect();
+  const groups = [...new Set(items.map((x) => x.freq))].sort((x, y) => x - y);
+  const row = (x) => `<li class="tpm-row${x.due ? ' due' : ''}">
+      <span class="tpm-n mono">${x.i + 1}</span>
+      <span class="tpm-t"><b>${esc(x.part)}</b>${x.check ? `<span>ตรวจ: ${esc(x.check)}</span>` : ''}${x.std ? `<span>เกณฑ์: ${esc(x.std)}</span>` : ''}</span>
+      <span class="tpm-s">${x.due ? '<span class="tpm-due">ถึงรอบตรวจ</span>' : `<span class="dim">ตรวจล่าสุด <span class="mono">${fmtDate(last[x.i])}</span></span>`}</span>
+      ${can ? `<span class="tpm-ok" role="group" aria-label="ผลตรวจจุดที่ ${x.i + 1}"><button type="button" class="tpm-b" data-act="tpm-mark" data-id="${x.i}:ok" aria-pressed="${sel[x.i] === 'ok'}">ผ่าน</button><button type="button" class="tpm-b ng" data-act="tpm-mark" data-id="${x.i}:ng" aria-pressed="${sel[x.i] === 'ng'}">ไม่ผ่าน</button></span>` : ''}
+    </li>`;
+  const ng = state.tpmNg && state.tpmNg.asset === a.id ? state.tpmNg : null;
+  return `<section class="box tpm" aria-label="ใบตรวจ TPM" id="tpm">
+    <div class="bar"><h2>ใบตรวจ TPM</h2><span class="dim"><span class="mono">${esc(cl.id)}</span> ${esc(cl.name || '')}</span></div>
+    <div class="pad tpm-head">
+      <p>${st.status === 'loading' ? 'กำลังโหลดผลตรวจล่าสุด' : st.status === 'error' ? 'อ่านผลตรวจล่าสุดไม่ได้ กรุณาแจ้งแอดมินให้เผยแพร่กฎความปลอดภัยชุดใหม่' : `ถึงรอบตรวจ <b class="mono">${dueN}</b> จาก <span class="mono">${items.length}</span> จุด${st.data.lastAt ? ` ตรวจล่าสุด ${fmtDate(st.data.lastAt)} โดย ${esc(st.data.lastBy || '—')}` : ' ยังไม่เคยบันทึกผลตรวจ'}`}</p>
+      ${can ? `<div class="actions"><button type="button" class="btn small" data-act="tpm-all-ok" data-id="${esc(a.id)}" ${dueN ? '' : 'disabled'}>ผ่านทุกจุดที่ถึงรอบ</button><button type="button" class="btn solid small" data-act="tpm-save" data-id="${esc(a.id)}" ${picked ? '' : 'disabled'}>บันทึกผลตรวจ${picked ? ` ${picked} จุด` : ''}</button></div>` : ''}
+    </div>
+    ${ng ? `<div class="notice err u-mbox"><b>ไม่ผ่าน ${ng.items.length} จุด:</b> ${ng.items.map((x) => esc(x.part)).join(', ')}<div class="actions"><button type="button" class="btn small solid" data-act="tpm-report" data-id="${esc(a.id)}">แจ้งซ่อมจากจุดที่ไม่ผ่าน</button><button type="button" class="btn small" data-act="tpm-ng-close">ปิด</button></div></div>` : ''}
+    ${groups.map((f) => `<div class="tpm-g"><h3>${freqLabel(f)}</h3><ol class="tpm-list">${items.filter((x) => x.freq === f).map(row).join('')}</ol></div>`).join('')}
+  </section>`;
 }
 
 function viewAssets(m) {
@@ -858,7 +910,7 @@ function viewAssets(m) {
       <section class="box w3 u-gap0"><div class="bar"><h2>ประวัติงาน</h2></div>
         ${hist.length ? `<div class="scroll"><table style="min-width:520px"><thead><tr><th scope="col">วันที่</th><th scope="col">งาน</th><th scope="col">สาเหตุ</th><th scope="col" class="num">หยุด (ชม.)</th></tr></thead><tbody>
           ${hist.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono u-nowrap">${fmtDate(w.startAt)}</td><td>${esc(w.title)}<span class="sub"><span class="mono">${esc(w.id)}</span><span>${STATUS[w.status][0]}</span></span></td><td class="mono">${esc(w.cause || '—')}</td><td class="mono num">${['inspect', 'improve'].includes(w.type) ? '—' : hours((w.endAt ?? m.now) - w.startAt)}</td></tr>`).join('')}
-        </tbody></table></div>` : '<p class="empty">ยังไม่มีงาน</p>'}</section></div>`;
+        </tbody></table></div>` : '<p class="empty">ยังไม่มีงาน</p>'}</section></div>${tpmBox(a)}`;
   }
   return `${form}<section class="box" aria-label="ทะเบียนเครื่องจักร">${rows ? `<div class="scroll"><table style="min-width:640px"><thead><tr><th scope="col">รหัส</th><th scope="col">ชื่อเครื่อง</th><th scope="col">ตำแหน่ง</th><th scope="col">ระดับ</th><th scope="col" class="num">หยุด 7 วัน</th><th scope="col">สถานะ</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีเครื่องจักร</p>'}</section>${detail}`;
 }
@@ -968,12 +1020,14 @@ const ROLE_LABEL = { admin: 'แอดมิน', tech: 'ช่างซ่อ�
 const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], document: ['Document', 'operator'], asst_manager: ['ASST. Manager', 'admin'], advisor: ['Advisor', 'admin'], admin_web: ['Admin Website', 'admin'] };
 const userLabel = (u) => (u.role === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[u.position]?.[0] || ROLE_LABEL[u.role] || 'ยังไม่มีสิทธิ์');
 const IMPORT_COLS = {
-  assets: ['id', 'name', 'line', 'cls', 'maker', 'model', 'year'],
-  parts: ['id', 'name', 'bin', 'qty', 'min', 'max']
+  assets: ['id', 'name', 'line', 'cls', 'maker', 'model', 'year', 'wi'],
+  parts: ['id', 'name', 'bin', 'qty', 'min', 'max'],
+  checklists: ['wi', 'machine_type', 'kind', 'part', 'check', 'freq_days', 'standard']
 };
 const IMPORT_SAMPLE = {
   assets: [['MNT-103', 'เครื่องติดตั้งชิ้นส่วนความเร็วสูง', 'ไลน์ SMT 1', 'A', '', '', '2562']],
-  parts: [['NZL-1005', 'หัวดูด ขนาด 1005', 'A-02', '2', '6', '12']]
+  parts: [['NZL-1005', 'หัวดูด ขนาด 1005', 'A-02', '2', '6', '12']],
+  checklists: [['WI-TPM-FR-001', 'BIAXIAL POLISHING MACHINE', 'จุดตรวจเช็ค', 'Motor', 'มีเสียงผิดปกติ สั่นสะเทือน', '30', 'ต้องไม่มีเสียงผิดปกติ ไม่สั่นสะเทือน']]
 };
 
 // อ่าน CSV รองรับเครื่องหมายคำพูด และ BOM จาก Excel (บันทึกแบบ CSV UTF-8)
@@ -995,9 +1049,30 @@ function parseCsv(text) {
   return rows.filter((r) => r.some((c) => c.trim()));
 }
 
+// ใบตรวจ TPM: หนึ่งแถวต่อหนึ่งจุดตรวจ รวมเป็นใบตามเลขที่ WI
+function importChecklists(rows) {
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const col = (r, k) => (r[head.indexOf(k)] ?? '').trim();
+  if (!head.includes('wi') || !head.includes('part')) throw new Error(`หัวตารางต้องมีคอลัมน์ ${IMPORT_COLS.checklists.join(', ')}`);
+  const map = new Map(); const errors = [];
+  rows.slice(1).forEach((r, i) => {
+    const wi = col(r, 'wi').toUpperCase();
+    const freq = Math.round(Number(col(r, 'freq_days')));
+    if (!/^[A-Z0-9._-]+$/.test(wi)) { errors.push(`แถว ${i + 2}: เลขที่ WI "${wi}" ใช้ได้แค่ A-Z 0-9 . _ -`); return; }
+    if (!col(r, 'part')) { errors.push(`แถว ${i + 2}: ไม่มีจุดตรวจ`); return; }
+    if (!(freq >= 1)) { errors.push(`แถว ${i + 2}: ความถี่ต้องเป็นจำนวนวันตั้งแต่ 1`); return; }
+    const c = map.get(wi) || { id: wi, name: col(r, 'machine_type'), items: [] };
+    c.items.push({ kind: col(r, 'kind'), part: col(r, 'part'), check: col(r, 'check'), freq, std: col(r, 'standard') });
+    map.set(wi, c);
+  });
+  const out = [...map.values()];
+  return { coll: 'checklists', rows: out, errors, points: out.reduce((n, c) => n + c.items.length, 0) };
+}
+
 function importRows(coll, text) {
   const rows = parseCsv(text);
   if (rows.length < 2) throw new Error('ไฟล์ต้องมีหัวตารางและข้อมูลอย่างน้อย 1 แถว');
+  if (coll === 'checklists') return importChecklists(rows);
   const head = rows[0].map((h) => h.trim().toLowerCase());
   if (!head.includes('id') || !head.includes('name')) throw new Error(`หัวตารางต้องมีคอลัมน์ ${IMPORT_COLS[coll].join(', ')}`);
   const out = []; const errors = [];
@@ -1008,6 +1083,7 @@ function importRows(coll, text) {
     if (!/^[A-Z0-9.\-]+$/.test(o.id)) { errors.push(`แถว ${i + 2}: รหัส "${o.id}" ใช้ได้แค่ A-Z 0-9 . -`); return; }
     if (!o.name) { errors.push(`แถว ${i + 2}: ไม่มีชื่อ`); return; }
     if (coll === 'assets') o.cls = ['A', 'B', 'C'].includes((o.cls || '').toUpperCase()) ? o.cls.toUpperCase() : 'B';
+    if (coll === 'assets' && 'wi' in o) o.wi = o.wi.toUpperCase();
     if (coll === 'parts') ['qty', 'min', 'max'].forEach((k) => { o[k] = Math.max(0, Number(o[k]) || 0); });
     out.push(o);
   });
@@ -1057,12 +1133,13 @@ function viewServer() {
   const p = state.importPreview;
   const importBox = `<section class="box w3"><div class="bar"><h2>นำเข้าข้อมูลจาก Excel</h2></div><div class="pad">
     <p class="dim">บันทึกไฟล์ Excel เป็น "CSV UTF-8" ใช้หัวตารางตามไฟล์ตัวอย่าง หากรหัสซ้ำ ระบบจะปรับปรุงข้อมูลเดิม</p>
-    <div class="actions"><button type="button" class="btn small" data-act="tpl" data-id="assets">ไฟล์ตัวอย่าง เครื่องจักร</button><button type="button" class="btn small" data-act="tpl" data-id="parts">ไฟล์ตัวอย่าง อะไหล่</button></div>
+    <div class="actions"><button type="button" class="btn small" data-act="tpl" data-id="assets">ไฟล์ตัวอย่าง เครื่องจักร</button><button type="button" class="btn small" data-act="tpl" data-id="parts">ไฟล์ตัวอย่าง อะไหล่</button><button type="button" class="btn small" data-act="tpl" data-id="checklists">ไฟล์ตัวอย่าง ใบตรวจ TPM</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:var(--space-sm)">
       <div class="field"><label for="imp-assets">นำเข้าเครื่องจักร</label><input id="imp-assets" type="file" accept=".csv,text/csv" data-import="assets"></div>
       <div class="field"><label for="imp-parts">นำเข้าอะไหล่</label><input id="imp-parts" type="file" accept=".csv,text/csv" data-import="parts"></div>
+      <div class="field"><label for="imp-tpm">นำเข้าใบตรวจ TPM</label><input id="imp-tpm" type="file" accept=".csv,text/csv" data-import="checklists"></div>
     </div>
-    ${p ? `<div class="notice ${p.errors.length && !p.rows.length ? 'err' : ''}"><b>${p.coll === 'assets' ? 'เครื่องจักร' : 'อะไหล่'} ${p.rows.length} รายการพร้อมนำเข้า</b>${p.rows.length ? `: ${p.rows.slice(0, 3).map((r) => esc(r.id)).join(', ')}${p.rows.length > 3 ? ' …' : ''}` : ''}
+    ${p ? `<div class="notice ${p.errors.length && !p.rows.length ? 'err' : ''}"><b>${{ assets: 'เครื่องจักร', parts: 'อะไหล่', checklists: 'ใบตรวจ TPM' }[p.coll]} ${p.rows.length} ${p.coll === 'checklists' ? `ใบ (${p.points} จุดตรวจ)` : 'รายการ'} พร้อมนำเข้า</b>${p.rows.length ? `: ${p.rows.slice(0, 3).map((r) => esc(r.id)).join(', ')}${p.rows.length > 3 ? ' …' : ''}` : ''}
       ${p.errors.length ? `<ul style="margin:var(--space-2xs) 0 0;padding-left:var(--space-md)">${p.errors.slice(0, 5).map((e) => `<li>${esc(e)}</li>`).join('')}${p.errors.length > 5 ? `<li>และอีก ${p.errors.length - 5} แถว</li>` : ''}</ul>` : ''}</div>
       <div class="actions"><button type="button" class="btn solid" data-act="import-go" ${p.rows.length ? '' : 'disabled'}>นำเข้า ${p.rows.length} รายการ</button><button type="button" class="btn" data-act="import-cancel">ยกเลิก</button></div>` : ''}
   </div></section>`;
@@ -1236,7 +1313,11 @@ function listen() {
     state.loadError = '';
     state.lastSync = Date.now();
     refresh();
-  }, (err) => { console.error(err); state.loadError = explain(err); refresh(); }));
+  }, (err) => {
+    // ใบตรวจ TPM เป็นส่วนเสริม อ่านไม่ได้ (เช่น ยังไม่ได้เผยแพร่กฎใหม่) ก็ใช้งานส่วนอื่นต่อได้
+    if (c === 'checklists') { console.warn('อ่านใบตรวจ TPM ไม่ได้', err); state.checklists = []; refresh(); return; }
+    console.error(err); state.loadError = explain(err); refresh();
+  }));
   state.unsubs.push(usersUnsub);
 }
 
@@ -1289,6 +1370,48 @@ const actions = {
   'wo-page': (id) => { state.woPage = Math.max(0, state.woPage + (id === 'next' ? 1 : -1)); render(); document.querySelector('.wot')?.scrollIntoView({ block: 'nearest' }); },
   'quick-open': () => { state.quick = true; state.collapsed.pending = false; state.draft = { asset: state.assets[0]?.id, priority: 'stop' }; render(); document.getElementById('qa-title')?.focus(); },
   'quick-cancel': () => { state.quick = false; state.draft = {}; render(); },
+  'tpm-mark': (v) => {
+    const [i, r] = v.split(':');
+    const id = state.selectedAsset || state.assets[0]?.id;
+    const sel = (state.tpmSel[id] ||= {});
+    if (sel[i] === r) delete sel[i]; else sel[i] = r;
+    render();
+  },
+  'tpm-all-ok': (id) => {
+    const a = assetOf(id); const cl = checklistOf(a); if (!cl) return;
+    const last = state.tpm[id]?.data?.last || {};
+    const sel = (state.tpmSel[id] ||= {});
+    cl.items.forEach((it, i) => { if (tpmDue(last[i], it.freq) && !sel[i]) sel[i] = 'ok'; });
+    render();
+  },
+  'tpm-save': (id) => {
+    const a = assetOf(id); const cl = checklistOf(a); const sel = state.tpmSel[id] || {};
+    if (!cl || !Object.keys(sel).length) return;
+    const at = Date.now();
+    const results = Object.entries(sel).map(([i, r]) => ({ i: Number(i), part: cl.items[i]?.part || '', ok: r === 'ok' }));
+    const ng = results.filter((r) => !r.ok);
+    run(async () => {
+      await state.backend.recordInspection({ asset: id, wi: cl.id, at, by: state.user.name, byUid: state.user.uid || '', results });
+      state.tpmSel[id] = {};
+      state.tpmNg = ng.length ? { asset: id, items: ng } : null;
+      const cur = state.tpm[id]?.data || { last: {} };
+      results.forEach((r) => { cur.last[r.i] = at; });
+      state.tpm[id] = { status: 'ok', data: { ...cur, lastAt: at, lastBy: state.user.name } };
+      render();
+    }, `บันทึกผลตรวจ ${results.length} จุดแล้ว${ng.length ? ` ไม่ผ่าน ${ng.length} จุด` : ''}`);
+  },
+  'tpm-ng-close': () => { state.tpmNg = null; render(); },
+  'tpm-report': (id) => {
+    const ng = state.tpmNg; if (!ng) return;
+    if (state.page !== 'work') go('work');
+    state.selectedWo = null;
+    state.panel = true;
+    const list = ng.items.map((x) => x.part);
+    state.create = { title: `ผลตรวจ TPM ไม่ผ่าน: ${list.slice(0, 3).join(', ')}${list.length > 3 ? ` และอีก ${list.length - 3} จุด` : ''}`, type: 'inspect', asset: id, due: '', prio: 'slow', people: [state.user.name], checks: list.map((t) => ({ text: `ตรวจและแก้ไข: ${t}`, done: false })), newCheck: '', note: `พบจากการตรวจ TPM วันที่ ${fmtDate(Date.now())}` };
+    state.tpmNg = null;
+    render();
+    document.getElementById('cp-title')?.focus();
+  },
   'open-asset': (id) => { state.selectedAsset = id; if (state.page !== 'assets') go('assets'); else render(); window.scrollTo(0, 0); },
   report: () => {
     if (state.page !== 'work') go('work');
