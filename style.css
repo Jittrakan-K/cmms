@@ -928,3 +928,46 @@ html.tv .shell { background: none; }
 .tpm-b[aria-pressed=true] { background: var(--ok-bg); border-color: var(--ok); color: var(--ok-fg); font-weight: 600; }
 .tpm-b.ng[aria-pressed=true] { background: var(--stop-bg); border-color: var(--stop); color: var(--stop-fg); }
 @media (max-width: 40rem) { .tpm-row { grid-template-columns: 24px minmax(0, 1fr); } .tpm-s, .tpm-ok { grid-column: 2; } }
+/* สถานะการใช้งานเครื่อง */
+:root { --idle: #8fa3c7; --off: #c3c7d4; }
+.andon[data-s=idle] { background: var(--idle); }
+.andon[data-s=off] { background: var(--off); }
+.m-idle, .m-use-standby { background: var(--idle); }
+.m-off, .m-use-unused { background: var(--off); }
+.m-use-inuse { background: var(--ok); }
+.m-use-cancelled { background: var(--ink-2); }
+.use { display: inline-flex; align-items: center; min-height: 24px; padding: 0 var(--space-xs); border-radius: 999px; font-size: var(--text-xs); background: var(--color-paper-2); color: var(--ink-2); }
+.use-standby { background: var(--info-bg); color: var(--info-fg); }
+.fsel { height: 36px; padding: 0 var(--space-lg) 0 var(--space-sm); border: 1px solid var(--field-edge); border-radius: var(--radius-input); background-color: var(--card); color: var(--ink); font: inherit; font-size: var(--text-sm); max-width: 100%; }
+/* กราฟแท่งรายเดือน */
+.mb { display: flex; flex-direction: column; gap: var(--space-xs); }
+.mb-plot { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--space-xs); height: 180px; align-items: end; border-bottom: 1px solid var(--color-rule); padding-top: 18px; }
+.mb-col { height: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 3px; }
+.mb-bar { position: relative; flex: 0 1 18px; min-height: 0; border-radius: 3px 3px 0 0; }
+.mb-bar b { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); padding-bottom: 2px; font-size: 10px; font-weight: 500; color: var(--ink-2); font-family: var(--font-outlier); white-space: nowrap; }
+.mb-s0 { background: var(--color-accent); }
+.mb-s1 { background: var(--color-orange); }
+.mb-s2 { background: var(--ok); }
+.mkey i.mb-s0, .mkey i.mb-s1, .mkey i.mb-s2 { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.mb-x { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--space-xs); font-size: var(--text-xs); color: var(--muted); text-align: center; }
+.mb-x .on { color: var(--color-accent-light); font-weight: 600; }
+@media (max-width: 40rem) { .mb-bar b { display: none; } .mb-x span:nth-child(even) { visibility: hidden; } }
+/* ปฏิทิน PM */
+.cal-head, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-3xs); padding: 0 var(--space-md); }
+.cal-head span { padding: var(--space-2xs) 0; font-size: var(--text-xs); color: var(--muted); text-align: center; }
+.cal-grid { padding-bottom: var(--space-sm); }
+.cal-day { min-height: 76px; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2xs); padding: var(--space-2xs) var(--space-xs); border: 1px solid var(--color-rule); border-radius: var(--radius-input); background: var(--card); color: var(--ink); font: inherit; text-align: left; }
+.cal-day:hover { border-color: var(--color-edge-hover); }
+.cal-day.out { background: var(--color-paper); color: var(--muted); }
+.cal-day.today { border-color: var(--accent); }
+.cal-day.sel { background: var(--color-accent-wash); border-color: var(--accent); }
+.cal-n { font-size: var(--text-sm); }
+.cal-chips { display: flex; flex-wrap: wrap; gap: 3px; }
+.cal-c { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; padding: 0 5px; border-radius: 999px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cal-c.late { background: var(--stop-bg); color: var(--stop-fg); }
+.cal-c.due { background: var(--info-bg); color: var(--info-fg); }
+.cal-c.fin { background: var(--ok-bg); color: var(--ok-fg); }
+.mkey i.cal-c { min-width: 12px; width: 12px; height: 12px; padding: 0; }
+@media (max-width: 40rem) { .cal-head, .cal-grid { padding: 0 var(--space-xs); gap: 2px; } .cal-day { min-height: 56px; padding: 3px; } .cal-c { min-width: 16px; height: 16px; font-size: 10px; padding: 0 3px; } }
+.pmday .alist { padding: 0 var(--space-md) var(--space-sm); margin: 0; }
+.mkey i.cal-c.late { background: var(--stop); } .mkey i.cal-c.due { background: var(--info-fg); } .mkey i.cal-c.fin { background: var(--ok); }

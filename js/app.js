@@ -40,7 +40,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
-  assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [], checklists: [], tpm: {}, tpmSel: {}, tpmNg: null,
+  assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [], checklists: [], stockMoves: [], stock: null, tpm: {}, tpmSel: {}, tpmNg: null, af: { q: '', line: '', use: '', page: 0 }, boardAll: false, costYear: new Date().getFullYear(), pmYear: new Date().getFullYear(), pmView: 'list', pmMonth: null, pmDay: null,
   page: 'board', tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, toast: '', canSeed: false, unsubs: []
 };
@@ -176,8 +176,16 @@ function metrics() {
 // ลายเซ็น: ไฟ andon 3 ชั้นแบบบนตัวเครื่อง ไฟที่ติดบอกสถานะเครื่อง (แดง หยุด / เหลือง รอ / เขียว เดิน)
 const andon = (k) => `<span class="andon" data-s="${k}" aria-hidden="true"><i></i><i></i><i></i></span>`;
 const MSTATE = {
-  stop: ['หยุดเสีย', 'stop'], wait: ['รออะไหล่', 'wait'], pm: ['กำลังทำ PM', 'pm'], late: ['PM เลยกำหนด', 'late'], run: ['เดินเครื่อง', 'run']
+  stop: ['หยุดเสีย', 'stop'], wait: ['รออะไหล่', 'wait'], pm: ['กำลังทำ PM', 'pm'], late: ['PM เลยกำหนด', 'late'], run: ['เดินเครื่อง', 'run'], idle: ['สำรอง', 'idle'], off: ['ไม่ได้ใช้งาน', 'off']
 };
+// สถานะการใช้งานของเครื่อง (ตั้งโดยแอดมิน) แยกจากสถานะงานซ่อม
+const USE = { inuse: ['ใช้งาน', 'In Use'], standby: ['สำรอง', 'Standby'], unused: ['หยุดใช้งาน', 'Unused'], cancelled: ['ยกเลิก', 'Cancelled'] };
+const useOf = (a) => (USE[a?.use] ? a.use : 'inuse');
+const inService = (a) => !['unused', 'cancelled'].includes(useOf(a));
+function normUse(v) {
+  const t = String(v || '').trim().toLowerCase().replace(/[\s_-]/g, '');
+  return Object.keys(USE).find((k) => k === t || USE[k][1].toLowerCase().replace(/\s/g, '') === t || USE[k][0] === String(v || '').trim()) || 'inuse';
+}
 function machineState(a) {
   const open = state.workOrders.filter((w) => w.asset === a.id && w.status !== 'done');
   const brk = open.filter((w) => w.type === 'breakdown').sort((x, y) => x.startAt - y.startAt);
@@ -187,8 +195,10 @@ function machineState(a) {
   if (wait) return { k: 'wait', w: wait, since: wait.startAt };
   const pm = open.find((w) => w.type === 'pm' && w.status === 'doing');
   if (pm) return { k: 'pm', w: pm, since: pm.startAt };
+  if (!inService(a)) return { k: 'off' };
   const late = state.pmPlans.find((p) => p.asset === a.id && p.dueDate < startOfToday());
   if (late) return { k: 'late', plan: late, since: late.dueDate };
+  if (useOf(a) === 'standby') return { k: 'idle' };
   return { k: 'run' };
 }
 // แถบสัดส่วน: ช่องละสถานะ กว้างตามจำนวน
@@ -197,6 +207,17 @@ const meter = (parts, label) => {
   return `<div class="meter" role="img" aria-label="${esc(label)}">${parts.filter((x) => x.n).map((x) => `<span class="m-${x.k}" style="flex:${x.n}"></span>`).join('')}</div>
     <ul class="mkey">${parts.map((x) => `<li><i class="m-${x.k}" aria-hidden="true"></i>${esc(x.label)}<b class="mono">${x.n}</b></li>`).join('')}</ul>`;
 };
+// กราฟแท่งรายเดือน: หลายชุดข้อมูลวางคู่กันในแต่ละเดือน ตัวเลขพิมพ์ไว้บนแท่ง
+const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+function mbars(cols, series, label, fmtV = (v) => String(v)) {
+  const max = Math.max(1, ...cols.flatMap((c) => c.values));
+  return `<div class="mb" style="--n:${cols.length}" role="img" aria-label="${esc(label)}">
+    <div class="mb-plot">${cols.map((c) => `<div class="mb-col${c.on ? ' on' : ''}" title="${esc(`${c.label}: ${series.map((sr, i) => `${sr.name} ${fmtV(c.values[i])}`).join(', ')}`)}">${c.values.map((v, i) => `<span class="mb-bar ${series[i].cls || `mb-s${i}`}" style="height:${((100 * v) / max).toFixed(1)}%">${v ? `<b>${fmtV(v)}</b>` : ''}</span>`).join('')}</div>`).join('')}</div>
+    <div class="mb-x">${cols.map((c) => `<span class="${c.on ? 'on' : ''}">${esc(c.label)}</span>`).join('')}</div>
+    <ul class="mkey inline">${series.map((sr, i) => `<li><i class="${sr.cls || `mb-s${i}`}" aria-hidden="true"></i>${esc(sr.name)}<b class="mono">${fmtV(cols.reduce((t, c) => t + c.values[i], 0))}</b></li>`).join('')}</ul>
+  </div>`;
+}
+const baht = (v) => Math.round(v).toLocaleString('th-TH');
 const ago = (t) => { const ms = Date.now() - t; return ms < DAY ? `${hm(ms)} ชม.` : `${Math.floor(ms / DAY)} วัน`; };
 
 function viewBoard(m) {
@@ -256,8 +277,19 @@ function viewBoard(m) {
   }).sort((a, b) => b.holding.length - a.holding.length);
 
   const stopN = countM('stop');
+  const activeN = state.assets.filter(inService).length;
+  // เครื่องเยอะ (เช่น ทะเบียนทั้งโรงงาน) แสดงเฉพาะเครื่องที่ต้องดูแล ส่วนที่ปกติสรุปเป็นตัวเลขต่อไลน์
+  const big = state.assets.length > 48 && !state.boardAll;
+  const needsCare = (x) => !['run', 'idle', 'off'].includes(x.k);
+  const lineBlock = (ln) => {
+    const inLine = ms.filter((x) => (x.a.line || 'ไม่ระบุไลน์') === ln);
+    const shown = big ? inLine.filter(needsCare) : inLine;
+    const ok = inLine.filter((x) => x.k === 'run' || x.k === 'idle').length;
+    return `<div class="mline"><h3>${esc(ln)} <span class="dim u-w400">${inLine.length} เครื่อง${big ? ` ปกติ ${ok}` : ''}</span></h3>${shown.length ? `<div class="mgrid">${shown.map(tile).join('')}</div>` : big ? '<p class="hint">ทุกเครื่องในไลน์นี้ทำงานปกติ</p>' : ''}</div>`;
+  };
+  const useCount = Object.keys(USE).map((k) => ({ k: `use-${k}`, label: `${USE[k][0]} (${USE[k][1]})`, n: state.assets.filter((a) => useOf(a) === k).length }));
   const headline = stopN
-    ? `<span class="alarm">เครื่องหยุดเสีย ${stopN} เครื่อง</span> จาก ${state.assets.length} เครื่อง`
+    ? `<span class="alarm">เครื่องหยุดเสีย ${stopN} เครื่อง</span> จาก ${activeN} เครื่องที่ใช้งาน`
     : countM('wait') ? `<span class="warnt">รออะไหล่ ${countM('wait')} เครื่อง</span> เครื่องที่เหลือทำงานปกติ` : 'เครื่องจักรทุกเครื่องทำงานปกติ';
   const seeAll = (page, label) => `<button type="button" class="link" data-act="nav" data-id="${page}">${label}</button>`;
 
@@ -268,8 +300,9 @@ function viewBoard(m) {
       <div class="dash-main">
       <section class="box dash-machines">
         <div class="bar"><h2>เครื่องจักร</h2>
-          <ul class="mkey inline">${Object.entries(MSTATE).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
-        ${lines.map((ln) => `<div class="mline"><h3>${esc(ln)}</h3><div class="mgrid">${ms.filter((x) => (x.a.line || 'ไม่ระบุไลน์') === ln).map(tile).join('')}</div></div>`).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
+          <ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => countM(k) || !['idle', 'off'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
+        ${state.assets.length > 48 ? `<p class="hint u-pad-sm">${big ? 'แสดงเฉพาะเครื่องที่หยุด รออะไหล่ ทำ PM หรือ PM เลยกำหนด' : 'แสดงทุกเครื่อง'} <button type="button" class="link" data-act="board-all">${big ? 'แสดงทุกเครื่อง' : 'แสดงเฉพาะเครื่องที่ต้องดูแล'}</button></p>` : ''}
+        ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}
       </section>
 
       <section class="box dash-flow">
@@ -291,6 +324,10 @@ function viewBoard(m) {
           <dl class="trio"><div><dt>เลยกำหนด</dt><dd class="${pmLate.length ? 'alarm' : ''}">${pmLate.length}</dd></div><div><dt>ครบวันนี้</dt><dd>${pmToday.length}</dd></div><div><dt>ใน 7 วัน</dt><dd>${pmWeek.length}</dd></div></dl>
           <div class="pad goal"><p class="kpi">อัตราทำ PM ทันกำหนด (30 วัน) <b class="mono">${comp.pct.toFixed(0)}%</b></p><div class="prog" role="img" aria-label="ทำ PM ทันกำหนด ${comp.pct.toFixed(0)} เปอร์เซ็นต์"><span style="width:${Math.min(100, comp.pct)}%"></span></div></div>
           <ul class="alist">${[...pmLate, ...pmToday, ...pmWeek].slice(0, 5).map((p) => `<li><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}</span><span class="u-nowrap ${p.dueDate < t0 ? 'alarm' : 'dim'}">${p.dueDate < t0 ? `เลย ${Math.ceil((t0 - p.dueDate) / DAY)} วัน` : relDate(p.dueDate) === 'วันนี้' ? 'วันนี้' : fmtDate(p.dueDate)}</span></li>`).join('') || '<li class="dim">ไม่มีแผน PM ภายใน 7 วัน</li>'}</ul>
+        </section>
+        <section class="box">
+          <div class="bar"><h2>สถานะการใช้งานเครื่อง <span class="dim u-w400">${state.assets.length} เครื่อง</span></h2>${seeAll('assets', 'ดูทะเบียน')}</div>
+          <div class="pad">${meter(useCount, 'สัดส่วนเครื่องตามสถานะการใช้งาน')}</div>
         </section>
         <section class="box">
           <div class="bar"><h2>อะไหล่ที่ต้องสั่ง <span class="dim u-w400">${reorder.length} จาก ${state.parts.length}</span></h2>${seeAll('parts', 'ดูคลังอะไหล่')}</div>
@@ -493,6 +530,15 @@ function woDetail(w) {
       <div class="field" style="flex:1 1 220px;min-width:0"><label for="i-part">อะไหล่</label><select id="i-part" name="part" required class="u-fill">${state.parts.map((p) => `<option value="${esc(p.id)}" ${p.qty ? '' : 'disabled'}>${esc(p.id)} ${esc(p.name)} (คงเหลือ ${p.qty})</option>`).join('')}</select></div>
       <div class="field" style="flex:0 1 96px"><label for="i-qty">จำนวน</label><input id="i-qty" name="qty" type="number" min="1" value="1" required></div>
       <button class="btn">เบิกเข้าใบงาน</button></form>` : ''}</section>`;
+  // ค่าใช้จ่าย: เลข PR ค่าซ่อม และรายละเอียด (ช่างบันทึกได้ระหว่างงาน แอดมินแก้ได้ทุกเวลา)
+  const canCost = canAdmin() || (canTech() && approved && !done);
+  const costBox = `<section class="box"><div class="bar"><h2>ค่าใช้จ่าย</h2>${w.cost ? `<span class="mono">${baht(w.cost)} บาท</span>` : ''}</div>
+    ${canCost ? `<div class="pad" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:var(--space-sm)">
+      <div class="field"><label for="c-pr">เลขที่ PR</label><input id="c-pr" data-cost="prNo" value="${esc(w.prNo || '')}" placeholder="เช่น PR-2611-0042"></div>
+      <div class="field"><label for="c-cost">ค่าใช้จ่าย (บาท)</label><input id="c-cost" data-cost="cost" type="number" min="0" step="0.01" inputmode="decimal" value="${w.cost ?? ''}"></div>
+      <div class="field" style="grid-column:1/-1"><label for="c-note">รายละเอียดค่าใช้จ่าย</label><input id="c-note" data-cost="costNote" value="${esc(w.costNote || '')}" placeholder="เช่น ลูกปืน 2 ตัว ค่าแรงผู้รับเหมา"></div>
+    </div><p class="hint u-pad-b">บันทึกอัตโนมัติเมื่อออกจากช่อง ค่าอะไหล่ในคลังไม่ต้องใส่ซ้ำ</p>`
+    : `<dl class="kv pad"><dt>เลขที่ PR</dt><dd class="mono">${esc(w.prNo || '—')}</dd><dt>ค่าใช้จ่าย</dt><dd class="mono">${w.cost ? `${baht(w.cost)} บาท` : '—'}</dd><dt>รายละเอียด</dt><dd>${esc(w.costNote || '—')}</dd></dl>`}</section>`;
   let action = '';
   if (!done && w.status === 'pending') {
     action = canAdmin()
@@ -539,6 +585,7 @@ function woDetail(w) {
           <table><thead><tr><th scope="col" style="width:48px">REV</th><th scope="col" style="width:140px">เวลา</th><th scope="col">รายการ</th></tr></thead>
           <tbody>${log.map((l) => `<tr><td class="mono">${l.rev}</td><td class="mono u-nowrap">${fmtDateTime(l.at)}</td><td>${esc(l.text)}</td></tr>`).join('')}</tbody></table></section>
         ${partsBox}
+        ${costBox}
       </div>
       <section class="box w2" style="gap:0;border-width:1.5px"><div class="bar"><h2>${done ? 'ผลการปิดงาน' : 'บันทึกผลและปิดงาน'}</h2></div><div class="pad">${action}</div></section>
     </div></section>`;
@@ -802,6 +849,8 @@ function fieldsForm(kind, title, fields) {
   const html = fields.map(([name, label, type = 'text', extra = '']) => `<div class="field"><label for="f-${name}">${label}</label>${
     type === 'asset'
       ? `<select id="f-${name}" name="${name}" required>${state.assets.map((a) => `<option value="${esc(a.id)}" ${d[name] === a.id ? 'selected' : ''}>${esc(a.id)} ${esc(a.name)}</option>`).join('')}</select>`
+      : type === 'use'
+        ? `<select id="f-${name}" name="${name}">${Object.entries(USE).map(([k, [th, en]]) => `<option value="${k}" ${(d[name] || 'inuse') === k ? 'selected' : ''}>${th} (${en})</option>`).join('')}</select>`
       : type === 'cls'
         ? `<select id="f-${name}" name="${name}">${['A', 'B', 'C'].map((c) => `<option ${(d[name] || 'B') === c ? 'selected' : ''}>${c}</option>`).join('')}</select>`
         : `<input id="f-${name}" name="${name}" type="${type}" value="${esc(d[name])}" ${extra}>`
@@ -812,9 +861,9 @@ function fieldsForm(kind, title, fields) {
 }
 
 const FIELDS = {
-  assets: [['id', 'รหัสเครื่อง เช่น MNT-103', 'text', 'required pattern="[A-Za-z0-9\\-]+"'], ['name', 'ชื่อเครื่อง', 'text', 'required'], ['line', 'ตำแหน่ง'], ['cls', 'ระดับความสำคัญ', 'cls'], ['maker', 'ผู้ผลิต'], ['model', 'รุ่น'], ['year', 'ปีที่ติดตั้ง'], ['wi', 'เลขที่ใบตรวจ TPM (WI)']],
+  assets: [['id', 'รหัสเครื่อง เช่น MNT-103', 'text', 'required pattern="[A-Za-z0-9\\-]+"'], ['name', 'ชื่อเครื่อง', 'text', 'required'], ['line', 'ตำแหน่ง'], ['cls', 'ระดับความสำคัญ', 'cls'], ['category', 'หมวดเครื่อง เช่น Machine Ferrule'], ['use', 'สถานะการใช้งาน', 'use'], ['maker', 'ผู้ผลิต'], ['model', 'รุ่น'], ['year', 'ปีที่ติดตั้ง'], ['wi', 'เลขที่ใบตรวจ TPM (WI)']],
   pmPlans: [['asset', 'เครื่องจักร', 'asset'], ['task', 'งานที่ต้องทำ', 'text', 'required'], ['intervalDays', 'ทำทุกกี่วัน', 'number', 'required min="1"'], ['first', 'ครบกำหนด', 'date', 'required']],
-  parts: [['id', 'รหัส', 'text', 'required pattern="[A-Za-z0-9.\\-]+"'], ['name', 'รายการ', 'text', 'required'], ['bin', 'ที่เก็บ'], ['qty', 'คงเหลือ', 'number', 'required min="0"'], ['min', 'จุดสั่งซื้อ (Min)', 'number', 'required min="0"'], ['max', 'สต็อกสูงสุด (Max)', 'number', 'min="0"']],
+  parts: [['id', 'รหัส', 'text', 'required pattern="[A-Za-z0-9.\\-]+"'], ['name', 'รายการ', 'text', 'required'], ['unit', 'หน่วยนับ เช่น ชิ้น ml'], ['bin', 'ที่เก็บ'], ['qty', 'คงเหลือ', 'number', 'required min="0"'], ['min', 'จุดสั่งซื้อ (Min)', 'number', 'required min="0"'], ['max', 'สต็อกสูงสุด (Max)', 'number', 'min="0"']],
   gauges: [['id', 'รหัส เช่น GAU-008', 'text', 'required pattern="[A-Za-z0-9.\\-]+"'], ['name', 'ชื่อเครื่องมือ', 'text', 'required'], ['range', 'ช่วงการวัด'], ['location', 'ที่ตั้ง / เครื่องที่ใช้'], ['intervalDays', 'รอบสอบเทียบ (วัน)', 'number', 'required min="1"'], ['first', 'ครบกำหนดสอบเทียบ', 'date', 'required']]
 };
 const COLL_LABEL = { assets: 'เครื่องจักร', pmPlans: 'แผน PM', parts: 'อะไหล่', gauges: 'เครื่องมือวัด' };
@@ -886,14 +935,33 @@ function viewAssets(m) {
     if (!wo) return ['run', 'เดินเครื่อง'];
     return wo.status === 'parts' ? ['parts', 'รออะไหล่'] : ['doing', 'หยุดเสีย'];
   };
-  const rows = state.assets.map((x) => {
+  // ค้นหา กรองตามตำแหน่งและสถานะการใช้งาน แบ่งหน้าละ 30 เครื่อง
+  const f = state.af;
+  const q = f.q.trim().toLowerCase();
+  const lines = [...new Set(state.assets.map((x) => x.line || ''))].filter(Boolean).sort();
+  const list = state.assets.filter((x) => (!f.line || x.line === f.line) && (!f.use || useOf(x) === f.use)
+    && (!q || `${x.id} ${x.name} ${x.model || ''} ${x.maker || ''} ${x.category || ''}`.toLowerCase().includes(q)));
+  const per = 30;
+  const pages = Math.max(1, Math.ceil(list.length / per));
+  f.page = Math.min(f.page, pages - 1);
+  const rows = list.slice(f.page * per, f.page * per + per).map((x) => {
     const [s, label] = stateOf(x.id);
+    const u = useOf(x);
     return `<tr class="pick" data-act="open-asset" data-id="${esc(x.id)}"${x.id === a?.id ? ' aria-current="true"' : ''}>
       <td><span class="u-row">${andon(machineState(x).k)}<button type="button" class="link tagl" data-act="open-asset" data-id="${esc(x.id)}">${esc(x.id)}</button></span></td><td>${esc(x.name)}</td>
-      <td class="dim">${esc(x.line)}</td><td class="mono">${esc(x.cls || '—')}</td>
+      <td class="dim">${esc(x.line)}</td><td class="dim">${esc(x.category || '—')}</td><td class="mono">${esc(x.cls || '—')}</td>
       <td class="mono num">${hours(mergedDown(x.id, m.from, m.now))}</td>
-      <td>${s === 'run' ? '<span class="lamp" style="--c:var(--run)">เดินเครื่อง</span>' : lamp(s, label)}</td></tr>`;
+      <td>${u !== 'inuse' && s === 'run' ? `<span class="use use-${u}">${USE[u][0]}</span>` : s === 'run' ? '<span class="lamp" style="--c:var(--run)">เดินเครื่อง</span>' : lamp(s, label)}</td></tr>`;
   }).join('');
+  const filterBar = `<div class="wobar">
+      <div class="wosearch"><span class="sicon">${icon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}</span><label for="af-q" class="sr">ค้นหาเครื่อง</label><input id="af-q" type="search" autocomplete="off" placeholder="ค้นหารหัส ชื่อ รุ่น หรือผู้ผลิต" value="${esc(f.q)}"></div>
+      <label for="af-line" class="sr">ตำแหน่ง</label><select id="af-line" class="fsel" data-af="line"><option value="">ทุกตำแหน่ง</option>${lines.map((l) => `<option ${f.line === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      <label for="af-use" class="sr">สถานะการใช้งาน</label><select id="af-use" class="fsel" data-af="use"><option value="">ทุกสถานะการใช้งาน</option>${Object.entries(USE).map(([k, [th, en]]) => `<option value="${k}" ${f.use === k ? 'selected' : ''}>${th} (${en})</option>`).join('')}</select>
+      <span class="dim u-small">${list.length} จาก ${state.assets.length} เครื่อง</span>
+    </div>`;
+  const pager = pages > 1 ? `<nav class="pager" aria-label="เลขหน้าเครื่องจักร"><span class="mono">${f.page * per + 1}–${Math.min(list.length, f.page * per + per)} จาก ${list.length}</span>
+      <button type="button" class="pbtn" data-act="af-page" data-id="-1" ${f.page === 0 ? 'disabled' : ''} aria-label="หน้าก่อนหน้า">${icon('<path d="m15 6-6 6 6 6"/>')}</button>
+      <button type="button" class="pbtn" data-act="af-page" data-id="1" ${f.page >= pages - 1 ? 'disabled' : ''} aria-label="หน้าถัดไป">${icon('<path d="m9 6 6 6-6 6"/>')}</button></nav>` : '';
   let detail = '';
   if (a) {
     const hist = state.workOrders.filter((w) => w.asset === a.id).slice(0, 8);
@@ -901,7 +969,7 @@ function viewAssets(m) {
     const t0 = startOfToday();
     detail = `<div class="split">
       <section class="box w2"><div class="bar"><h2 style="display:flex;gap:var(--space-sm);align-items:baseline"><span class="mono">${esc(a.id)}</span>${esc(a.name)}</h2><span class="actions">${editBtn('assets', a.id)}${delBtn('assets', a.id, 'ลบเครื่องนี้')}</span></div>
-        <dl class="facts"><div><dt>ตำแหน่ง</dt><dd>${esc(a.line || '—')}</dd></div><div><dt>ระดับความสำคัญ</dt><dd>${esc(a.cls || '—')}</dd></div>
+        <dl class="facts"><div><dt>ตำแหน่ง</dt><dd>${esc(a.line || '—')}</dd></div><div><dt>หมวดเครื่อง</dt><dd>${esc(a.category || '—')}</dd></div><div><dt>สถานะการใช้งาน</dt><dd>${USE[useOf(a)][0]} (${USE[useOf(a)][1]})</dd></div><div><dt>ระดับความสำคัญ</dt><dd>${esc(a.cls || '—')}</dd></div>
           <div><dt>ผู้ผลิต</dt><dd>${esc(a.maker || '—')}</dd></div><div><dt>รุ่น</dt><dd class="mono">${esc(a.model || '—')}</dd></div>
           <div><dt>ปีที่ติดตั้ง</dt><dd class="mono">${esc(a.year || '—')}</dd></div><div><dt>หยุด 7 วัน</dt><dd class="mono">${hours(mergedDown(a.id, m.from, m.now))} ชม.</dd></div></dl>
         <div class="bar" style="border-top:1px solid var(--ink)"><h2>แผน PM ของเครื่องนี้</h2></div>
@@ -912,7 +980,7 @@ function viewAssets(m) {
           ${hist.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono u-nowrap">${fmtDate(w.startAt)}</td><td>${esc(w.title)}<span class="sub"><span class="mono">${esc(w.id)}</span><span>${STATUS[w.status][0]}</span></span></td><td class="mono">${esc(w.cause || '—')}</td><td class="mono num">${['inspect', 'improve'].includes(w.type) ? '—' : hours((w.endAt ?? m.now) - w.startAt)}</td></tr>`).join('')}
         </tbody></table></div>` : '<p class="empty">ยังไม่มีงาน</p>'}</section></div>${tpmBox(a)}`;
   }
-  return `${form}<section class="box" aria-label="ทะเบียนเครื่องจักร">${rows ? `<div class="scroll"><table style="min-width:640px"><thead><tr><th scope="col">รหัส</th><th scope="col">ชื่อเครื่อง</th><th scope="col">ตำแหน่ง</th><th scope="col">ระดับ</th><th scope="col" class="num">หยุด 7 วัน</th><th scope="col">สถานะ</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีเครื่องจักร</p>'}</section>${detail}`;
+  return `${form}${state.assets.length ? filterBar : ''}<section class="box" aria-label="ทะเบียนเครื่องจักร">${rows ? `<div class="scroll"><table style="min-width:760px"><thead><tr><th scope="col">รหัส</th><th scope="col">ชื่อเครื่อง</th><th scope="col">ตำแหน่ง</th><th scope="col">หมวด</th><th scope="col">ระดับ</th><th scope="col" class="num">หยุด 7 วัน</th><th scope="col">สถานะ</th></tr></thead><tbody>${rows}</tbody></table></div>${pager}` : `<p class="empty">${state.assets.length ? 'ไม่พบเครื่องที่ตรงกับเงื่อนไข' : 'ยังไม่มีเครื่องจักร'}</p>`}</section>${detail}`;
 }
 
 /* ---------- SH-04 แผน PM ---------- */
@@ -925,6 +993,35 @@ function viewPm() {
     <div class="stat"><span class="label">เลยกำหนดตอนนี้</span><span class="fig ${c.late ? 'alarm' : ''}">${c.late}<small> งาน</small></span><span class="cap">นับรวมเป็นงานไม่ทันกำหนด</span></div>
     <div class="stat"><span class="label">แผน PM ทั้งหมด</span><span class="fig">${state.pmPlans.length}<small> แผน</small></span><span class="cap">ครอบคลุม ${new Set(state.pmPlans.map((p) => p.asset)).size} จาก ${state.assets.length} เครื่อง</span></div>
   </section>`;
+  // ภาพรวมทั้งปี: แผนเทียบทำจริงรายเดือน
+  const y = state.pmYear;
+  const nowD = new Date();
+  const pmDone = state.workOrders.filter((w) => w.type === 'pm' && w.status === 'done' && w.endAt);
+  const cols = TH_MON.map((label, mi) => {
+    const from = new Date(y, mi, 1).getTime(); const to = new Date(y, mi + 1, 1).getTime();
+    const done = pmDone.filter((w) => w.endAt >= from && w.endAt < to).length;
+    const due = state.pmPlans.reduce((n, p) => n + pmOccur(p, from, to).length, 0);
+    return { label, values: [done + due, done], on: y === nowD.getFullYear() && mi === nowD.getMonth() };
+  });
+  // สถานะตามกำหนดและรอบความถี่
+  const dueParts = [
+    { k: 'stop', label: 'เลยกำหนด', n: state.pmPlans.filter((p) => p.dueDate < t0).length },
+    { k: 'wait', label: 'ภายใน 7 วัน', n: state.pmPlans.filter((p) => p.dueDate >= t0 && p.dueDate <= t0 + 7 * DAY).length },
+    { k: 'pm', label: 'ภายใน 30 วัน', n: state.pmPlans.filter((p) => p.dueDate > t0 + 7 * DAY && p.dueDate <= t0 + 30 * DAY).length },
+    { k: 'run', label: 'มากกว่า 30 วัน', n: state.pmPlans.filter((p) => p.dueDate > t0 + 30 * DAY).length }
+  ];
+  const fq = new Map();
+  state.pmPlans.forEach((p) => fq.set(p.intervalDays, (fq.get(p.intervalDays) || 0) + 1));
+  const fqParts = [...fq].sort((a, b) => a[0] - b[0]).map(([d, n], i) => ({ k: ['ink', 'pm', 'late', 'wait', 'run', 'stop'][i % 6], label: freqLabel(d), n }));
+  const overview = state.pmPlans.length ? `<div class="split">
+      <section class="box w3"><div class="bar"><h2>แผนเทียบทำจริง ปี ${y + 543}</h2>
+        <span class="u-row"><button type="button" class="pbtn" data-act="pm-year" data-id="-1" aria-label="ปีก่อนหน้า">${icon('<path d="m15 6-6 6 6 6"/>')}</button><span class="mono">${y + 543}</span><button type="button" class="pbtn" data-act="pm-year" data-id="1" aria-label="ปีถัดไป">${icon('<path d="m9 6 6 6-6 6"/>')}</button></span></div>
+        <div class="pad">${mbars(cols, [{ name: 'ตามแผน' }, { name: 'ทำแล้ว', cls: 'mb-s2' }], `จำนวน PM ตามแผนและที่ทำแล้วรายเดือน ปี ${y + 543}`)}<p class="hint">เดือนที่ผ่านมานับงานที่ทำแล้วรวมกับงานที่ยังค้าง เดือนถัดไปคำนวณจากรอบของแต่ละแผน</p></div></section>
+      <section class="box w2"><div class="bar"><h2>ตามกำหนด</h2></div><div class="pad">${meter(dueParts, 'แผน PM ตามระยะเวลาถึงกำหนด')}</div>
+        <div class="bar" style="border-top:1px solid var(--line)"><h2>ตามรอบความถี่</h2></div><div class="pad">${meter(fqParts, 'แผน PM ตามรอบความถี่')}</div></section>
+    </div>` : '';
+  const viewChips = `<div class="chips" role="group" aria-label="มุมมองแผน PM"><button type="button" data-act="pm-view" data-id="list" aria-pressed="${state.pmView === 'list'}">รายการ</button><button type="button" data-act="pm-view" data-id="cal" aria-pressed="${state.pmView === 'cal'}">ปฏิทิน</button></div>`;
+  if (state.pmView === 'cal') return `${form}${summary}${overview}${viewChips}${pmCalendar()}`;
   const groups = [['เลยกำหนด', (d) => d < t0, true], ['ภายใน 7 วัน', (d) => d >= t0 && d <= t0 + 7 * DAY], ['ถัดไป', (d) => d > t0 + 7 * DAY]];
   const html = groups.map(([label, test, late]) => {
     const items = state.pmPlans.filter((p) => test(p.dueDate)).sort((a, b) => a.dueDate - b.dueDate);
@@ -935,21 +1032,90 @@ function viewPm() {
         <td class="num"><span class="actions u-end">${canTech() ? `<button type="button" class="btn small" data-act="pm-done" data-id="${esc(p.id)}">บันทึกผลการดำเนินการ</button>` : ''}${editBtn('pmPlans', p.id)}${delBtn('pmPlans', p.id)}</span></td></tr>`).join('')}
       </tbody></table></div></section>`;
   }).join('');
-  return `${form}${summary}${html || '<section class="box"><p class="empty">ยังไม่มีแผน PM</p></section>'}`;
+  return `${form}${summary}${overview}${state.pmPlans.length ? viewChips : ''}${html || '<section class="box"><p class="empty">ยังไม่มีแผน PM</p></section>'}`;
+}
+
+// วันครบกำหนดของแผนในช่วงเวลา นับจากวันครบกำหนดปัจจุบันไปตามรอบ
+function pmOccur(p, from, to) {
+  const step = Math.max(1, p.intervalDays) * DAY;
+  const t0 = startOfToday();
+  const out = [];
+  let d = p.dueDate;
+  // แผนที่เลยกำหนด นับครั้งเดียวที่วันครบกำหนดเดิม รอบถัดไปนับจากวันนี้
+  if (d < t0) { if (d >= from && d < to) out.push(d); d = t0 + step; }
+  if (d < from) d += Math.ceil((from - d) / step) * step;
+  for (; d < to; d += step) out.push(d);
+  return out;
+}
+
+// ปฏิทิน PM รายเดือน: เลยกำหนด (แดง) ครบกำหนด (คราม) ทำแล้ว (เขียว)
+function pmCalendar() {
+  const t0 = startOfToday();
+  const base = state.pmMonth ?? new Date(new Date(t0).getFullYear(), new Date(t0).getMonth(), 1).getTime();
+  const b = new Date(base);
+  const first = new Date(b.getFullYear(), b.getMonth(), 1);
+  const startCell = new Date(first); startCell.setDate(1 - first.getDay());
+  const monthEnd = new Date(b.getFullYear(), b.getMonth() + 1, 1).getTime();
+  const done = state.workOrders.filter((w) => w.type === 'pm' && w.status === 'done' && w.endAt);
+  const cells = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(startCell); d.setDate(startCell.getDate() + i);
+    const ds = d.getTime(); const de = ds + DAY;
+    if (i >= 35 && ds >= monthEnd) break;
+    const occ = state.pmPlans.filter((p) => pmOccur(p, ds, de).length);
+    const late = occ.filter((p) => p.dueDate < t0 && p.dueDate >= ds && p.dueDate < de).length;
+    const upcoming = ds >= t0 ? occ.length : 0;
+    const fin = done.filter((w) => w.endAt >= ds && w.endAt < de).length;
+    cells.push({ ds, inM: d.getMonth() === b.getMonth(), late, upcoming, fin, today: ds === t0 });
+  }
+  const sel = state.pmDay;
+  const dayList = sel != null ? (() => {
+    const plans = state.pmPlans.filter((p) => pmOccur(p, sel, sel + DAY).length);
+    const fins = done.filter((w) => w.endAt >= sel && w.endAt < sel + DAY);
+    return `<section class="box pmday"><div class="bar"><h2>${fmtDateY(sel)}</h2><button type="button" class="link" data-act="pm-day" data-id="">ปิด</button></div>
+      ${plans.length ? `<ul class="alist">${plans.map((p) => `<li><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)} <span class="dim">${freqLabel(p.intervalDays)}</span></span><span class="u-row">${p.dueDate < t0 ? `<span class="alarm u-nowrap">เลย ${Math.ceil((t0 - p.dueDate) / DAY)} วัน</span>` : ''}${canTech() && p.dueDate <= sel + DAY - 1 && sel <= t0 ? `<button type="button" class="btn small" data-act="pm-done" data-id="${esc(p.id)}">บันทึกผล</button>` : ''}</span></li>`).join('')}</ul>` : ''}
+      ${fins.length ? `<p class="hint u-pad-sm">ทำแล้ว ${fins.length} งาน</p><ul class="alist">${fins.map((w) => `<li><span class="tag">${esc(w.asset)}</span><span class="t"><button type="button" class="link" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.id)}</button> ${esc(w.title)}</span><span class="dim u-nowrap">${esc(w.tech || '')}</span></li>`).join('')}</ul>` : ''}
+      ${!plans.length && !fins.length ? '<p class="empty">ไม่มีงาน PM ในวันนี้</p>' : ''}</section>`;
+  })() : '';
+  return `<section class="box pmcal" aria-label="ปฏิทิน PM"><div class="bar"><h2>${TH_MON[b.getMonth()]} ${b.getFullYear() + 543}</h2>
+      <span class="u-row"><button type="button" class="pbtn" data-act="pm-month" data-id="-1" aria-label="เดือนก่อนหน้า">${icon('<path d="m15 6-6 6 6 6"/>')}</button><button type="button" class="btn small" data-act="pm-month" data-id="0">เดือนนี้</button><button type="button" class="pbtn" data-act="pm-month" data-id="1" aria-label="เดือนถัดไป">${icon('<path d="m9 6 6 6-6 6"/>')}</button></span></div>
+    <div class="cal-head">${['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d) => `<span>${d}</span>`).join('')}</div>
+    <div class="cal-grid">${cells.map((c) => `<button type="button" class="cal-day${c.inM ? '' : ' out'}${c.today ? ' today' : ''}${sel === c.ds ? ' sel' : ''}" data-act="pm-day" data-id="${c.ds}" aria-label="${esc(`${fmtDateY(c.ds)} เลยกำหนด ${c.late} ครบกำหนด ${c.upcoming} ทำแล้ว ${c.fin}`)}">
+        <span class="cal-n mono">${new Date(c.ds).getDate()}</span>
+        <span class="cal-chips">${c.late ? `<span class="cal-c late">${c.late}</span>` : ''}${c.upcoming ? `<span class="cal-c due">${c.upcoming}</span>` : ''}${c.fin ? `<span class="cal-c fin">${c.fin}</span>` : ''}</span></button>`).join('')}</div>
+    <ul class="mkey inline u-pad-sm"><li><i class="cal-c late" aria-hidden="true"></i>เลยกำหนด</li><li><i class="cal-c due" aria-hidden="true"></i>ครบกำหนด</li><li><i class="cal-c fin" aria-hidden="true"></i>ทำแล้ว</li></ul>
+  </section>${dayList}`;
 }
 
 /* ---------- SH-05 อะไหล่ ---------- */
 function viewParts() {
   const form = recordForm('parts');
   const toOrder = (p) => (p.qty <= p.min ? Math.max((p.max || p.min * 2 || 1) - p.qty, 1) : 0);
-  const rows = [...state.parts].sort((a, b) => a.qty / (a.min || 1) - b.qty / (b.min || 1)).map((p) => `<tr>
+  const u = (p) => (p?.unit ? ` ${esc(p.unit)}` : '');
+  const can = canTech();
+  const st = state.stock;
+  const rows = [...state.parts].sort((a, b) => a.qty / (a.min || 1) - b.qty / (b.min || 1)).map((p) => `<tr${st?.id === p.id ? ' aria-current="true"' : ''}>
     <td class="mono u-nowrap">${esc(p.id)}</td><td>${esc(p.name)}</td><td class="mono">${esc(p.bin)}</td>
-    <td class="mono num ${p.qty === 0 ? 'alarm' : ''}">${p.qty} / ${p.min}</td><td class="mono num">${p.max || '—'}</td>
+    <td class="mono num ${p.qty === 0 ? 'alarm' : ''}">${p.qty}${u(p)} / ${p.min}</td><td class="mono num">${p.max || '—'}</td>
+    <td>${p.qty <= 0 ? '<span class="schip s-wait">หมดสต็อก</span>' : p.qty <= p.min ? '<span class="schip s-wait">ถึงจุดสั่งซื้อ</span>' : '<span class="schip s-ok">ปกติ</span>'}</td>
     <td class="mono num">${toOrder(p) ? `<b>${toOrder(p)}</b>` : '<span class="dim">—</span>'}</td>
-    <td class="num"><span class="actions u-end">${canTech() ? `<button type="button" class="btn small" data-act="part" data-id="${esc(p.id)}" data-delta="1">รับเข้าสต็อก 1</button>` : ''}${editBtn('parts', p.id)}${delBtn('parts', p.id)}</span></td></tr>`).join('');
+    <td class="num"><span class="actions u-end">${can ? `<button type="button" class="btn small" data-act="stock-open" data-id="${esc(p.id)}:in">รับเข้า</button><button type="button" class="btn small" data-act="stock-open" data-id="${esc(p.id)}:out" ${p.qty ? '' : 'disabled'}>เบิกออก</button>` : ''}${editBtn('parts', p.id)}${delBtn('parts', p.id)}</span></td></tr>`).join('');
   const orders = state.parts.filter(toOrder);
-  return `${form}<section class="box" aria-label="คลังอะไหล่">${rows ? `<div class="scroll"><table style="min-width:860px"><thead><tr><th scope="col">รหัส</th><th scope="col">รายการ</th><th scope="col">ที่เก็บ</th><th scope="col" class="num">คงเหลือ / Min</th><th scope="col" class="num">Max</th><th scope="col" class="num">จำนวนที่ควรสั่ง</th><th scope="col"><span class="sr">คำสั่ง</span></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
-    <div class="actions"><button type="button" class="btn" data-act="export-order" ${orders.length ? '' : 'disabled'}>ส่งออกรายการสั่งซื้อ ${orders.length} รายการ (CSV)</button><span class="hint">การเบิกอะไหล่ต้องทำผ่านใบสั่งงาน เพื่อให้ตรวจสอบได้ว่าใช้กับเครื่องจักรใด</span></div>`;
+  const sp = st ? partOf(st.id) : null;
+  const stockForm = sp ? `<form class="box" data-form="stock" aria-label="${st.dir === 'in' ? 'รับเข้าสต็อก' : 'เบิกออกจากสต็อก'}"><div class="bar"><h2>${st.dir === 'in' ? 'รับเข้าสต็อก' : 'เบิกออกจากสต็อก'} <span class="mono">${esc(sp.id)}</span> <span class="dim u-w400">${esc(sp.name)} คงเหลือ ${sp.qty}${u(sp)}</span></h2></div>
+    <div class="pad"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:var(--space-sm) var(--space-md)">
+      <div class="field"><label for="s-qty">จำนวน${u(sp)}</label><input id="s-qty" name="qty" type="number" min="1" ${st.dir === 'out' ? `max="${sp.qty}"` : ''} value="1" required></div>
+      <div class="field"><label for="s-ref">เลขที่อ้างอิง</label><input id="s-ref" name="ref" required placeholder="${st.dir === 'in' ? 'เช่น เลขที่ PO หรือใบรับของ' : 'เช่น เลขที่ใบงาน หรือใบเบิก'}"></div>
+      <div class="field" style="grid-column:1/-1"><label for="s-note">หมายเหตุ</label><input id="s-note" name="note"></div>
+    </div><div class="actions"><button class="btn solid">${st.dir === 'in' ? 'รับเข้า' : 'เบิกออก'}</button><button type="button" class="btn" data-act="stock-close">ยกเลิก</button></div></div></form>` : '';
+  const moves = state.stockMoves.slice(0, 20);
+  const history = `<section class="box" aria-label="ประวัติการรับเข้าและเบิกออก"><div class="bar"><h2>การรับเข้าและเบิกออกล่าสุด</h2></div>
+    ${moves.length ? `<div class="scroll"><table style="min-width:760px"><thead><tr><th scope="col">วันเวลา</th><th scope="col">อะไหล่</th><th scope="col">รายการ</th><th scope="col" class="num">จำนวน</th><th scope="col" class="num">คงเหลือหลังทำรายการ</th><th scope="col">เลขที่อ้างอิง</th><th scope="col">หมายเหตุ</th><th scope="col">ผู้ทำรายการ</th></tr></thead><tbody>
+      ${moves.map((m) => `<tr><td class="mono u-nowrap">${fmtDateTime(m.at)}</td><td class="mono">${esc(m.part)}</td><td>${m.dir === 'in' ? '<span class="schip s-ok">รับเข้า</span>' : '<span class="schip s-info">เบิกออก</span>'}</td><td class="mono num">${m.dir === 'in' ? '+' : '−'}${m.qty}</td><td class="mono num">${m.after ?? '—'}</td><td class="mono">${esc(m.ref || '—')}</td><td>${esc(m.note || '')}</td><td>${esc(m.by || '')}</td></tr>`).join('')}
+    </tbody></table></div>` : '<p class="empty">ยังไม่มีการรับเข้าหรือเบิกออก</p>'}</section>`;
+  return `${form}${stockForm}<section class="box" aria-label="คลังอะไหล่">${rows ? `<div class="scroll"><table style="min-width:960px"><thead><tr><th scope="col">รหัส</th><th scope="col">รายการ</th><th scope="col">ที่เก็บ</th><th scope="col" class="num">คงเหลือ / Min</th><th scope="col" class="num">Max</th><th scope="col">สถานะ</th><th scope="col" class="num">ควรสั่ง</th><th scope="col"><span class="sr">คำสั่ง</span></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
+    <div class="actions"><button type="button" class="btn" data-act="export-order" ${orders.length ? '' : 'disabled'}>ส่งออกรายการสั่งซื้อ ${orders.length} รายการ (CSV)</button><span class="hint">อะไหล่ที่ใช้ซ่อมเครื่อง ควรเบิกผ่านใบงาน เพื่อให้รู้ว่าใช้กับเครื่องใด ส่วนการเบิกอื่นใส่เลขที่อ้างอิงทุกครั้ง</span></div>
+    ${history}`;
 }
 
 /* ---------- SH-06 เครื่องมือวัด ---------- */
@@ -1011,7 +1177,28 @@ function viewReport() {
           ${causes.map(([k, nn]) => { cum += nn; return `<tr><td class="mono">${esc(k)}</td><td>${esc((CAUSES.find(([c]) => c === k) || [, k])[1])}</td><td class="mono num">${nn}</td><td class="mono num">${((100 * cum) / causeTotal).toFixed(0)}%</td></tr>`; }).join('')}
         </tbody></table>` : '<p class="empty">ยังไม่มีงานซ่อมที่ปิดพร้อมรหัสสาเหตุในช่วงนี้</p>'}
         <p class="hint u-pad-sm">ควรแก้ไขสาเหตุที่มีสัดส่วนสะสมถึงประมาณ 80% ก่อน เพื่อลดเวลาหยุดเครื่องได้มากที่สุด</p></section>
-    </div>`;
+    </div>
+    ${costSection()}`;
+}
+
+// ค่าใช้จ่ายรายเดือน: PM นับตามวันที่ปิดงาน งานซ่อมนับตามวันที่เปิดใบงาน
+function costSection() {
+  const y = state.costYear;
+  const inMonth = (t, mi) => { if (!t) return false; const d = new Date(t); return d.getFullYear() === y && d.getMonth() === mi; };
+  const now = new Date();
+  const cols = TH_MON.map((label, mi) => {
+    const pm = state.workOrders.filter((w) => w.type === 'pm' && w.status === 'done' && inMonth(w.endAt, mi)).reduce((t, w) => t + (Number(w.cost) || 0), 0);
+    const cm = state.workOrders.filter((w) => w.type !== 'pm' && inMonth(w.startAt, mi)).reduce((t, w) => t + (Number(w.cost) || 0), 0);
+    return { label, values: [pm, cm], on: y === now.getFullYear() && mi === now.getMonth() };
+  });
+  const total = cols.reduce((t, c) => t + c.values[0] + c.values[1], 0);
+  const top = state.workOrders.filter((w) => Number(w.cost) > 0 && new Date(w.type === 'pm' ? w.endAt || w.startAt : w.startAt).getFullYear() === y).sort((a, b) => b.cost - a.cost).slice(0, 5);
+  return `<section class="box" id="cost"><div class="bar"><h2>ค่าใช้จ่ายซ่อมบำรุง ปี ${y + 543} <span class="dim u-w400">รวม ${baht(total)} บาท</span></h2>
+      <span class="u-row"><button type="button" class="pbtn" data-act="cost-year" data-id="-1" aria-label="ปีก่อนหน้า">${icon('<path d="m15 6-6 6 6 6"/>')}</button><span class="mono">${y + 543}</span><button type="button" class="pbtn" data-act="cost-year" data-id="1" aria-label="ปีถัดไป" ${y >= now.getFullYear() ? 'disabled' : ''}>${icon('<path d="m9 6 6 6-6 6"/>')}</button></span></div>
+    <div class="pad">${total ? mbars(cols, [{ name: 'PM (บาท)' }, { name: 'งานซ่อม (บาท)' }], `ค่าใช้จ่ายรายเดือน ปี ${y + 543}`, (v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : baht(v))) : '<p class="empty">ยังไม่มีใบงานที่บันทึกค่าใช้จ่ายในปีนี้ บันทึกได้ที่ส่วน "ค่าใช้จ่าย" ในใบงาน</p>'}
+      <p class="hint">PM นับตามวันที่ปิดงาน งานซ่อมนับตามวันที่เปิดใบงาน ไม่รวมค่าอะไหล่จากคลัง</p></div>
+    ${top.length ? `<div class="scroll"><table style="min-width:520px"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">เลขที่ PR</th><th scope="col">รายละเอียด</th><th scope="col" class="num">บาท</th></tr></thead><tbody>${top.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="mono">${esc(w.id)}</td><td>${tag(w.asset)}</td><td class="mono">${esc(w.prNo || '—')}</td><td>${esc(w.costNote || w.title)}</td><td class="mono num">${baht(w.cost)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+  </section>`;
 }
 
 /* ---------- SH-08 ตั้งค่า ---------- */
@@ -1020,13 +1207,13 @@ const ROLE_LABEL = { admin: 'แอดมิน', tech: 'ช่างซ่อ�
 const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], document: ['Document', 'operator'], asst_manager: ['ASST. Manager', 'admin'], advisor: ['Advisor', 'admin'], admin_web: ['Admin Website', 'admin'] };
 const userLabel = (u) => (u.role === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[u.position]?.[0] || ROLE_LABEL[u.role] || 'ยังไม่มีสิทธิ์');
 const IMPORT_COLS = {
-  assets: ['id', 'name', 'line', 'cls', 'maker', 'model', 'year', 'wi'],
-  parts: ['id', 'name', 'bin', 'qty', 'min', 'max'],
+  assets: ['id', 'name', 'line', 'cls', 'category', 'use', 'maker', 'model', 'year', 'wi'],
+  parts: ['id', 'name', 'unit', 'bin', 'qty', 'min', 'max'],
   checklists: ['wi', 'machine_type', 'kind', 'part', 'check', 'freq_days', 'standard']
 };
 const IMPORT_SAMPLE = {
-  assets: [['MNT-103', 'เครื่องติดตั้งชิ้นส่วนความเร็วสูง', 'ไลน์ SMT 1', 'A', '', '', '2562']],
-  parts: [['NZL-1005', 'หัวดูด ขนาด 1005', 'A-02', '2', '6', '12']],
+  assets: [['MNT-103', 'เครื่องติดตั้งชิ้นส่วนความเร็วสูง', 'ไลน์ SMT 1', 'A', 'Machine SMT', 'In Use', '', '', '2562', '']],
+  parts: [['NZL-1005', 'หัวดูด ขนาด 1005', 'ชิ้น', 'A-02', '2', '6', '12']],
   checklists: [['WI-TPM-FR-001', 'BIAXIAL POLISHING MACHINE', 'จุดตรวจเช็ค', 'Motor', 'มีเสียงผิดปกติ สั่นสะเทือน', '30', 'ต้องไม่มีเสียงผิดปกติ ไม่สั่นสะเทือน']]
 };
 
@@ -1084,6 +1271,7 @@ function importRows(coll, text) {
     if (!o.name) { errors.push(`แถว ${i + 2}: ไม่มีชื่อ`); return; }
     if (coll === 'assets') o.cls = ['A', 'B', 'C'].includes((o.cls || '').toUpperCase()) ? o.cls.toUpperCase() : 'B';
     if (coll === 'assets' && 'wi' in o) o.wi = o.wi.toUpperCase();
+    if (coll === 'assets' && 'use' in o) o.use = normUse(o.use);
     if (coll === 'parts') ['qty', 'min', 'max'].forEach((k) => { o[k] = Math.max(0, Number(o[k]) || 0); });
     out.push(o);
   });
@@ -1315,7 +1503,7 @@ function listen() {
     refresh();
   }, (err) => {
     // ใบตรวจ TPM เป็นส่วนเสริม อ่านไม่ได้ (เช่น ยังไม่ได้เผยแพร่กฎใหม่) ก็ใช้งานส่วนอื่นต่อได้
-    if (c === 'checklists') { console.warn('อ่านใบตรวจ TPM ไม่ได้', err); state.checklists = []; refresh(); return; }
+    if (c === 'checklists' || c === 'stockMoves') { console.warn(`อ่าน ${c} ไม่ได้`, err); state[c] = []; refresh(); return; }
     console.error(err); state.loadError = explain(err); refresh();
   }));
   state.unsubs.push(usersUnsub);
@@ -1400,6 +1588,18 @@ const actions = {
       render();
     }, `บันทึกผลตรวจ ${results.length} จุดแล้ว${ng.length ? ` ไม่ผ่าน ${ng.length} จุด` : ''}`);
   },
+  'pm-year': (d) => { state.pmYear += Number(d); render(); },
+  'pm-view': (v) => { state.pmView = v; render(); },
+  'pm-month': (d) => {
+    const t = new Date(startOfToday());
+    const cur = state.pmMonth ? new Date(state.pmMonth) : new Date(t.getFullYear(), t.getMonth(), 1);
+    state.pmMonth = Number(d) === 0 ? null : new Date(cur.getFullYear(), cur.getMonth() + Number(d), 1).getTime();
+    state.pmDay = null; render();
+  },
+  'pm-day': (v) => { state.pmDay = v === '' || Number(v) === state.pmDay ? null : Number(v); render(); },
+  'cost-year': (d) => { state.costYear += Number(d); render(); },
+  'board-all': () => { state.boardAll = !state.boardAll; render(); },
+  'af-page': (d) => { state.af.page = Math.max(0, state.af.page + Number(d)); render(); document.querySelector('[aria-label="ทะเบียนเครื่องจักร"]')?.scrollIntoView({ block: 'nearest' }); },
   'tpm-ng-close': () => { state.tpmNg = null; render(); },
   'tpm-report': (id) => {
     const ng = state.tpmNg; if (!ng) return;
@@ -1504,6 +1704,8 @@ const actions = {
     }), `ปิด ${w.id} แล้ว`);
   },
   'pm-done': (id) => run(() => state.backend.completePM(id, state.user.name), 'บันทึกเรียบร้อย ระบบเลื่อนรอบถัดไปให้แล้ว'),
+  'stock-open': (v) => { const [id, dir] = v.split(':'); state.stock = { id, dir }; render(); window.scrollTo(0, 0); document.getElementById('s-qty')?.focus(); },
+  'stock-close': () => { state.stock = null; render(); },
   part: (id, el) => run(() => state.backend.adjustPart(id, Number(el.dataset.delta))),
   del: (id, el) => {
     if (el.dataset.confirm) return run(() => state.backend.remove(el.dataset.coll, id), 'ลบแล้ว');
@@ -1615,6 +1817,7 @@ document.addEventListener('keydown', (e) => {
 
 app.addEventListener('input', (e) => {
   if (e.target.id === 'q') { state.q = e.target.value; paintSearch(); return; }
+  if (e.target.id === 'af-q') { state.af.q = e.target.value; state.af.page = 0; const pos = e.target.selectionStart; render(); const el = document.getElementById('af-q'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; }
   if (e.target.id === 'wo-q') { state.woQ = e.target.value; state.woPage = 0; const b = document.getElementById('wo-body'); if (b) b.innerHTML = woTable(); return; }
   const qk = e.target.dataset.qr;
   if (qk && state.qr) {
@@ -1660,6 +1863,7 @@ app.addEventListener('change', (e) => {
     });
     return;
   }
+  if (e.target.dataset.af) { state.af[e.target.dataset.af] = e.target.value; state.af.page = 0; render(); return; }
   if (e.target.dataset.userRole) {
     const uid = e.target.dataset.userRole;
     const v = e.target.value;
@@ -1680,6 +1884,16 @@ app.addEventListener('change', (e) => {
     return;
   }
   if (e.target.dataset.close) { e.target.dispatchEvent(new Event('input', { bubbles: true })); return; }
+  if (e.target.dataset.cost) {
+    const w = state.workOrders.find((x) => x.id === state.selectedWo);
+    const k = e.target.dataset.cost;
+    const v = k === 'cost' ? (e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0)) : e.target.value.trim();
+    if (w && (w[k] ?? (k === 'cost' ? null : '')) !== v) {
+      const txt = k === 'cost' ? `บันทึกค่าใช้จ่าย ${v == null ? '—' : `${baht(v)} บาท`}` : k === 'prNo' ? `บันทึกเลขที่ PR ${v || '—'}` : 'แก้ไขรายละเอียดค่าใช้จ่าย';
+      run(() => state.backend.updateWorkOrder(w.id, { [k]: v, log: addLog(w, txt) }));
+    }
+    return;
+  }
   const key = e.target.dataset.save;
   if (!key) return;
   const w = state.workOrders.find((x) => x.id === state.selectedWo);
@@ -1784,6 +1998,15 @@ app.addEventListener('submit', (e) => {
     'edit-gauges': () => run(async () => {
       await state.backend.update('gauges', state.draft.id, { name: d.name.trim(), range: d.range.trim(), location: d.location.trim(), intervalDays: Number(d.intervalDays), dueDate: new Date(`${d.first}T00:00:00`).getTime() });
       done('บันทึกการแก้ไขแล้ว');
+    }),
+    stock: () => run(async () => {
+      const qty = Math.floor(Number(d.qty));
+      if (!(qty > 0)) throw new Error('จำนวนต้องมากกว่า 0');
+      const st = state.stock; if (!st) return;
+      const ref = (d.ref || '').trim(); if (!ref) throw new Error('กรุณาใส่เลขที่อ้างอิง');
+      await state.backend.moveStock({ part: st.id, dir: st.dir, qty, ref, note: (d.note || '').trim(), by: state.user.name });
+      state.stock = null; render();
+      toast(`${st.dir === 'in' ? 'รับเข้า' : 'เบิกออก'} ${st.id} จำนวน ${qty} แล้ว`);
     }),
     issue: () => run(async () => {
       const qty = Math.floor(Number(d.qty));

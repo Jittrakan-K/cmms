@@ -47,7 +47,7 @@ export function sampleData(now = Date.now()) {
       ['AOI-206', 'เครื่องตรวจด้วยภาพ', 'ไลน์ SMT 2', 'B'],
       ['CMP-901', 'ปั๊มลม', 'ห้องสาธารณูปโภค', 'A'],
       ['N2G-902', 'เครื่องผลิตไนโตรเจน', 'ห้องสาธารณูปโภค', 'B']
-    ].map(([id, name, line, cls]) => ({ id, name, line, cls, maker: '', model: '', year: '', wi: { MNT: 'WI-DEMO-MNT', RFL: 'WI-DEMO-RFL' }[id.slice(0, 3)] || '' })),
+    ].map(([id, name, line, cls]) => ({ id, name, line, cls, category: line.startsWith('ไลน์') ? 'Machine SMT' : 'Utility', use: id === 'AOI-206' ? 'standby' : 'inuse', maker: '', model: '', year: '', wi: { MNT: 'WI-DEMO-MNT', RFL: 'WI-DEMO-RFL' }[id.slice(0, 3)] || '' })),
     // ใบตรวจ TPM ตามแบบเครื่อง (เลขที่ WI) ความถี่เป็นจำนวนวัน
     checklists: [
       ['WI-DEMO-MNT', 'เครื่องติดตั้งชิ้นส่วน (ตัวอย่าง)', [
@@ -130,7 +130,7 @@ export function sampleData(now = Date.now()) {
       ['HTR-RF-1.5K', 'ฮีตเตอร์รีโฟลว์ 1.5 kW', 'B-12', 4, 4, 6],
       ['FLT-NZ-04', 'ไส้กรองหัวดูด', 'A-03', 16, 8, 24],
       ['CHN-RF-08', 'โซ่ลำเลียงรีโฟลว์', 'D-01', 1, 1, 2]
-    ].map(([id, name, bin, qty, min, max]) => ({ id, name, bin, qty, min, max })),
+    ].map(([id, name, bin, qty, min, max]) => ({ id, name, bin, qty, min, max, unit: /^(FLT|NZL)/.test(id) ? 'ชิ้น' : /^CHN/.test(id) ? 'เส้น' : 'ชิ้น' })),
     // เครื่องมือวัด (ISO 9001 ข้อ 7.1.5): status ok ใช้งานได้, hold ห้ามใช้
     gauges: [
       ['GAU-001', 'ไมโครมิเตอร์', '0–25 มม.', 'QC ไลน์ SMT 1', 365, 65, 'ok'],
@@ -146,6 +146,7 @@ export function sampleData(now = Date.now()) {
     })),
     tpmState: {},
     inspections: [],
+    stockMoves: [],
     seq: 52
   };
 }
@@ -184,6 +185,7 @@ class LocalBackend {
           saved.assets = saved.assets.map((x) => ({ ...x, wi: x.wi ?? fresh.assets.find((f) => f.id === x.id)?.wi ?? '' }));
         }
         saved.tpmState ||= {};
+        saved.stockMoves ||= [];
         saved.inspections ||= [];
         return saved;
       }
@@ -269,9 +271,20 @@ class LocalBackend {
     if (!part || !wo) throw new Error('ไม่พบอะไหล่หรือใบงาน');
     if (part.qty < qty) throw new Error(`คงเหลือ ${part.qty} ไม่เพียงพอสำหรับการเบิก ${qty}`);
     part.qty -= qty;
+    this.db.stockMoves = [{ id: `mv-${Date.now()}`, part: partId, dir: 'out', qty, ref: woId, note: 'เบิกเข้าใบงาน', by: text.split(' เบิก')[0], at: Date.now(), after: part.qty }, ...(this.db.stockMoves || [])].slice(0, 300);
     wo.partsUsed = mergeParts(wo.partsUsed, partId, qty);
     wo.log = [...(wo.log || []), { at: Date.now(), text }];
-    this.commit('parts', 'workOrders');
+    this.commit('parts', 'workOrders', 'stockMoves');
+  }
+
+  // รับเข้าหรือเบิกออกพร้อมเลขที่อ้างอิง และเก็บประวัติการเคลื่อนไหว
+  async moveStock({ part: id, dir, qty, ref, note, by }) {
+    const part = this.db.parts.find((p) => p.id === id);
+    if (!part) throw new Error('ไม่พบอะไหล่');
+    if (dir === 'out' && part.qty < qty) throw new Error(`คงเหลือ ${part.qty} ไม่เพียงพอสำหรับการเบิก ${qty}`);
+    part.qty += dir === 'in' ? qty : -qty;
+    this.db.stockMoves = [{ id: `mv-${Date.now()}`, part: id, dir, qty, ref, note, by, at: Date.now(), after: part.qty }, ...(this.db.stockMoves || [])].slice(0, 300);
+    this.commit('parts', 'stockMoves');
   }
 
   async completePM(id, doneBy) {
@@ -313,7 +326,7 @@ class LocalBackend {
   }
 }
 
-export const COLLECTIONS = ['assets', 'workOrders', 'pmPlans', 'parts', 'gauges', 'checklists'];
+export const COLLECTIONS = ['assets', 'workOrders', 'pmPlans', 'parts', 'gauges', 'checklists', 'stockMoves'];
 
 function mergeParts(list = [], id, qty) {
   const found = list.find((x) => x.id === id);
@@ -577,7 +590,8 @@ class FirebaseBackend {
     const { collection, query, orderBy, limit, onSnapshot } = this.fs;
     const ref = collection(this.db, coll);
     // จำกัดจำนวนใบงานที่ฟังแบบเรียลไทม์ เพื่อไม่ให้โควตาการอ่านโตตามอายุระบบ
-    const q = coll === 'workOrders' ? query(ref, orderBy('startAt', 'desc'), limit(300)) : ref;
+    const q = coll === 'workOrders' ? query(ref, orderBy('startAt', 'desc'), limit(300))
+      : coll === 'stockMoves' ? query(ref, orderBy('at', 'desc'), limit(100)) : ref;
     return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ ...d.data(), id: d.id }))), onError);
   }
 
@@ -620,8 +634,22 @@ class FirebaseBackend {
     return updateDoc(doc(this.db, coll, id), patch);
   }
 
+  async moveStock({ part: id, dir, qty, ref, note, by }) {
+    const { doc, collection, runTransaction } = this.fs;
+    await runTransaction(this.db, async (tx) => {
+      const pRef = doc(this.db, 'parts', id);
+      const p = await tx.get(pRef);
+      if (!p.exists()) throw new Error('ไม่พบอะไหล่');
+      const cur = p.data().qty;
+      if (dir === 'out' && cur < qty) throw new Error(`คงเหลือ ${cur} ไม่เพียงพอสำหรับการเบิก ${qty}`);
+      const after = dir === 'in' ? cur + qty : cur - qty;
+      tx.update(pRef, { qty: after });
+      tx.set(doc(collection(this.db, 'stockMoves')), { part: id, dir, qty, ref, note, by, at: Date.now(), after });
+    });
+  }
+
   async issuePart(woId, partId, qty, text) {
-    const { doc, runTransaction } = this.fs;
+    const { doc, collection, runTransaction } = this.fs;
     await runTransaction(this.db, async (tx) => {
       const pRef = doc(this.db, 'parts', partId);
       const wRef = doc(this.db, 'workOrders', woId);
@@ -630,6 +658,7 @@ class FirebaseBackend {
       if (p.data().qty < qty) throw new Error(`คงเหลือ ${p.data().qty} ไม่เพียงพอสำหรับการเบิก ${qty}`);
       tx.update(pRef, { qty: p.data().qty - qty });
       tx.update(wRef, { partsUsed: mergeParts(w.data().partsUsed, partId, qty), log: [...(w.data().log || []), { at: Date.now(), text }] });
+      tx.set(doc(collection(this.db, 'stockMoves')), { part: partId, dir: 'out', qty, ref: woId, note: 'เบิกเข้าใบงาน', by: text.split(' เบิก')[0], at: Date.now(), after: p.data().qty - qty });
     });
   }
 

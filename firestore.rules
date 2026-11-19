@@ -118,7 +118,7 @@ service cloud.firestore {
       // ช่างทำงานได้หลังหัวหน้าอนุมัติแล้วเท่านั้น
       allow update: if isTech()
         && resource.data.status != 'pending'
-        && changedOnly(['status', 'endAt', 'tech', 'log', 'cause', 'action', 'partsUsed', 'checks'])
+        && changedOnly(['status', 'endAt', 'tech', 'log', 'cause', 'action', 'partsUsed', 'checks', 'prNo', 'cost', 'costNote'])
         && request.resource.data.status != 'pending'
         && validStatus() && closesProperly();
       allow update: if isAdmin() && validStatus() && closesProperly();
@@ -147,6 +147,16 @@ service cloud.firestore {
       allow create, update: if isMember()
         && request.resource.data.keys().hasOnly(['last', 'lastAt', 'lastBy', 'ng']);
       allow delete: if isAdmin();
+    }
+
+    // ประวัติรับเข้า/เบิกออกอะไหล่: ช่างและแอดมินบันทึก แก้ไขหรือลบได้เฉพาะแอดมิน
+    match /stockMoves/{id} {
+      allow read: if isMember();
+      allow create: if isTech()
+        && request.resource.data.dir in ['in', 'out']
+        && request.resource.data.qty is number
+        && request.resource.data.qty > 0;
+      allow update, delete: if isAdmin();
     }
 
     match /pmPlans/{id} {
