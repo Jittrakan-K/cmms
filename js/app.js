@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611192259';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611192259';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611200908';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611200908';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -51,7 +51,7 @@ const REV = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const state = {
   backend: null, user: undefined, loadError: '', lastSync: null,
   assets: [], workOrders: [], pmPlans: [], parts: [], gauges: [], checklists: [], stockMoves: [], stock: null, tpm: {}, tpmSel: {}, tpmNg: null, af: { q: '', line: '', use: '', page: 0 }, boardAll: false, costYear: new Date().getFullYear(), pmYear: new Date().getFullYear(), pmView: 'list', pmMonth: null, pmDay: null,
-  page: 'board', pg: {}, ver: 0, fitRows: {}, maps: [], mapLine: loadPref('cmms.mapLine'), mapEdit: false, mapSel: null, mapQ: '', mapLabels: false, mapBusy: false, tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
+  page: 'board', pg: {}, ver: 0, fitRows: {}, maps: [], mapId: loadPref('cmms.mapId'), mapEdit: false, mapAdding: false, mapNewName: '', mapFilter: '', mapSel: null, mapQ: '', mapLabels: false, mapBusy: false, tv: false, ovRange: 0, ovSel: null, filter: 'active', scope: 'all', quick: false, showDone: false, collapsed: {}, woView: 'table', woQ: '', woStatus: 'all', woPage: 0, woOpen: {}, woFilter: false, selectedWo: null, selectedAsset: null, period: 30, q: '', panel: false, create: null, qr: null, users: [], setup: null, needSetup: false, issued: null, notice: '', importPreview: null,
   form: null, draft: {}, close: { cause: '', action: '' }, cancelWo: null, hideCancelled: loadHideCancelled(), toast: '', canSeed: false, unsubs: []
 };
 
@@ -256,52 +256,62 @@ function mbars(cols, series, label, fmtV = (v) => String(v)) {
 const baht = (v) => Math.round(v).toLocaleString('th-TH');
 const ago = (t) => { const ms = Date.now() - t; return ms < DAY ? `${hm(ms)} ชม.` : `${Math.floor(ms / DAY)} วัน`; };
 
-// ---------- แผนผังโรงงาน: รูปแผนผังของแต่ละโรงงาน + จุดตำแหน่งเครื่อง ----------
+// ---------- แผนผังโรงงาน: รูปแผนผังของแต่ละอาคาร/โรงงาน + จุดตำแหน่งเครื่อง ----------
+// แผนผังแต่ละรูปเป็นเอกสารใน maps ({name, img, w, h, order}) เครื่องเก็บ mapId + mapX/mapY (สัดส่วน 0–1 ของรูป)
 const lineOf = (a) => a.line || 'ไม่ระบุไลน์';
-const plantLines = () => {
-  const n = new Map();
-  state.assets.forEach((a) => n.set(lineOf(a), (n.get(lineOf(a)) || 0) + 1));
-  return [...n].sort((x, y) => y[1] - x[1]).map(([l]) => l);
-};
-// รหัสเอกสารรูปแผนผัง: ตัวอักษรอังกฤษจากชื่อโรงงาน + แฮชกันชื่อซ้ำ
-function mapDocId(line) {
-  let h = 0; for (const ch of String(line)) h = (h * 31 + ch.codePointAt(0)) >>> 0;
-  const slug = String(line).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+const LOOSE = '_loose';
+// รหัสเอกสารรูปแผนผัง: ตัวอักษรอังกฤษจากชื่อ + แฮชกันชื่อซ้ำ
+function mapDocId(name) {
+  let h = 0; for (const ch of String(name)) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
   return `map-${slug ? `${slug}-` : ''}${h.toString(36)}`;
 }
-const mapOf = (line) => state.maps.find((m) => m.line === line);
-const placed = (a) => typeof a.mapX === 'number' && typeof a.mapY === 'number';
-function curPlant() {
-  const ls = plantLines();
-  if (!ls.includes(state.mapLine)) state.mapLine = ls.find((l) => mapOf(l)) || ls[0] || '';
-  return state.mapLine;
+const mapName = (m) => m?.name || m?.line || '';
+const mapsSorted = () => [...state.maps].sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || mapName(a).localeCompare(mapName(b)));
+const mapById = (id) => state.maps.find((m) => m.id === id);
+const placed = (a) => !!a.mapId && typeof a.mapX === 'number' && typeof a.mapY === 'number' && !!mapById(a.mapId);
+const onMap = (id) => state.assets.filter((a) => a.mapId === id && placed(a));
+const looseAssets = () => state.assets.filter((a) => !placed(a));
+function curMap() {
+  const ms = mapsSorted();
+  const ok = state.mapId === LOOSE ? looseAssets().length > 0 || !ms.length : !!mapById(state.mapId);
+  if (!ok) state.mapId = (ms.map((m) => [m.id, onMap(m.id).length]).sort((p, q) => q[1] - p[1])[0] || [LOOSE])[0];
+  return state.mapId;
 }
-function plantTabs(cur, act = 'map-line') {
-  const ls = plantLines();
-  if (ls.length < 2) return '';
-  return `<div class="chips ptabs" role="group" aria-label="เลือกโรงงาน">${ls.map((l) => {
-    const n = state.assets.filter((a) => lineOf(a) === l);
-    const bad = n.filter((a) => ['stop', 'wait'].includes(machineState(a).k)).length;
-    return `<button type="button" data-act="${act}" data-id="${esc(l)}" aria-pressed="${l === cur}">${esc(l)} <span class="mono dim">${n.length}</span>${bad ? ` <span class="pt-bad mono" title="หยุดเสีย/รออะไหล่">${bad}</span>` : ''}</button>`;
-  }).join('')}</div>`;
+const isBad = (k) => ['stop', 'wait'].includes(k);
+function plantTabs(cur) {
+  const ms = mapsSorted();
+  const loose = looseAssets();
+  const tab = (id, label, list) => {
+    const bad = list.filter((a) => isBad(machineState(a).k)).length;
+    return `<button type="button" data-act="map-tab" data-id="${esc(id)}" aria-pressed="${id === cur}">${esc(label)} <span class="mono dim">${list.length}</span>${bad ? ` <span class="pt-bad mono" title="หยุดเสีย/รออะไหล่">${bad}</span>` : ''}</button>`;
+  };
+  const tabs = ms.map((m) => tab(m.id, mapName(m), onMap(m.id)));
+  if (loose.length) tabs.push(tab(LOOSE, ms.length ? 'ยังไม่ได้วางบนแผนผัง' : 'ทุกเครื่อง (ผังโซน)', loose));
+  return tabs.length > 1 ? `<div class="chips ptabs" role="group" aria-label="เลือกแผนผัง">${tabs.join('')}</div>` : '';
 }
-// โซนอัตโนมัติเมื่อยังไม่มีรูปแผนผัง: ตามกระบวนการ ถ้าไม่ระบุใช้ชื่อเครื่อง
+// โซนอัตโนมัติสำหรับเครื่องที่ยังไม่ได้วาง: แยกตามไลน์ แล้วตามกระบวนการ (ถ้าไม่ระบุใช้ชื่อเครื่อง)
 const zoneOf = (a) => (String(a.area || '').split('/')[0].trim() || String(a.name || 'ไม่ระบุ')).toUpperCase().replace(/\s+/g, ' ');
 const MAP_ORDER = ['stop', 'wait', 'pm', 'late', 'idle', 'run', 'off'];
-function plantMap(line, edit = false) {
-  const list = state.assets.filter((a) => lineOf(a) === line).map((a) => ({ a, k: machineState(a).k }));
-  const mp = mapOf(line);
+const byState = (p, q) => MAP_ORDER.indexOf(p.k) - MAP_ORDER.indexOf(q.k) || p.a.id.localeCompare(q.a.id);
+function zoneMap(list, edit = false) {
   const cell = (x) => `<button type="button" class="pm-cell k-${x.k}${edit && state.mapSel === x.a.id ? ' sel' : ''}" data-act="${edit ? 'map-pick' : 'open-asset'}" data-id="${esc(x.a.id)}" title="${esc(`${x.a.id} ${x.a.name} ${MSTATE[x.k][0]}`)}" aria-label="${esc(`${x.a.id} ${MSTATE[x.k][0]}`)}"></button>`;
-  if (!mp) {
+  const lines = new Map();
+  list.forEach((a) => { const l = lineOf(a); if (!lines.has(l)) lines.set(l, []); lines.get(l).push({ a, k: machineState(a).k }); });
+  return [...lines].sort((p, q) => q[1].length - p[1].length).map(([l, xs]) => {
     const zones = new Map();
-    list.forEach((x) => { const z = zoneOf(x.a); if (!zones.has(z)) zones.set(z, []); zones.get(z).push(x); });
-    const zs = [...zones].sort((p, q) => q[1].length - p[1].length);
-    return `<div class="zmap" role="group" aria-label="ผังโซน ${esc(line)}">${zs.map(([z, xs]) => {
-      const bad = xs.filter((x) => !['run', 'idle', 'off'].includes(x.k)).length;
-      return `<div class="zone${bad ? ' zbad' : ''}" style="flex-grow:${Math.min(xs.length, 40)}"><h4 title="${esc(z)}"><span class="zn">${esc(z)}</span><span class="mono">${xs.length}</span></h4><div class="zdots">${[...xs].sort((p, q) => MAP_ORDER.indexOf(p.k) - MAP_ORDER.indexOf(q.k) || p.a.id.localeCompare(q.a.id)).map(cell).join('')}</div></div>`;
-    }).join('')}</div>`;
-  }
-  const on = list.filter((x) => placed(x.a));
+    xs.forEach((x) => { const z = zoneOf(x.a); if (!zones.has(z)) zones.set(z, []); zones.get(z).push(x); });
+    return `<div class="zline" data-flow><h3>${esc(l)} <span class="dim mono">${xs.length}</span></h3><div class="zmap" role="group" aria-label="ผังโซน ${esc(l)}">${[...zones].sort((p, q) => q[1].length - p[1].length).map(([z, zs]) => {
+      const bad = zs.filter((x) => !['run', 'idle', 'off'].includes(x.k)).length;
+      return `<div class="zone${bad ? ' zbad' : ''}" style="flex-grow:${Math.min(zs.length, 40)}"><h4 title="${esc(z)}"><span class="zn">${esc(z)}</span><span class="mono">${zs.length}</span></h4><div class="zdots">${[...zs].sort(byState).map(cell).join('')}</div></div>`;
+    }).join('')}</div></div>`;
+  }).join('');
+}
+function plantMap(id, edit = false) {
+  if (id === LOOSE) return zoneMap(looseAssets(), edit);
+  const mp = mapById(id);
+  if (!mp) return '';
+  const on = onMap(id).map((a) => ({ a, k: machineState(a).k }));
   const pin = (x) => {
     const sel = edit && state.mapSel === x.a.id;
     const label = sel || state.mapLabels || !['run', 'idle', 'off'].includes(x.k);
@@ -309,56 +319,60 @@ function plantMap(line, edit = false) {
   };
   // เครื่องที่ต้องดูแลวาดทีหลังสุดให้อยู่บนสุด
   const pins = [...on].sort((p, q) => MAP_ORDER.indexOf(q.k) - MAP_ORDER.indexOf(p.k)).map(pin).join('');
-  return `<div class="fmapwrap"><div class="fmap${edit ? ' editing' : ''}" style="--ar:${mp.w || 4}/${mp.h || 3}" data-line="${esc(line)}">
-      <img src="${mp.img}" alt="แผนผัง ${esc(line)}" draggable="false"><div class="fmap-pins">${pins}</div></div></div>`;
+  return `<div class="fmapwrap"><div class="fmap${edit ? ' editing' : ''}" style="--ar:${mp.w || 4}/${mp.h || 3}" data-map="${esc(id)}">
+      <img src="${mp.img}" alt="แผนผัง ${esc(mapName(mp))}" draggable="false"><div class="fmap-pins">${pins}</div></div></div>`;
 }
-function looseList(line, edit = false) {
-  if (!mapOf(line)) return '';
-  const loose = state.assets.filter((a) => lineOf(a) === line && !placed(a)).map((a) => ({ a, k: machineState(a).k }));
-  if (!loose.length) return '';
-  return `<div class="loose"><p class="hint">ยังไม่ได้วางบนแผนผัง ${loose.length} เครื่อง${canAdmin() && !edit ? ' กด "จัดตำแหน่งเครื่อง" เพื่อวางจุด' : ''}</p>
-    <div class="pmap">${loose.sort((p, q) => MAP_ORDER.indexOf(p.k) - MAP_ORDER.indexOf(q.k)).map((x) => `<button type="button" class="pm-cell k-${x.k}${edit && state.mapSel === x.a.id ? ' sel' : ''}" data-act="${edit ? 'map-pick' : 'open-asset'}" data-id="${esc(x.a.id)}" title="${esc(`${x.a.id} ${x.a.name} ${MSTATE[x.k][0]}`)}" aria-label="${esc(x.a.id)}"></button>`).join('')}</div></div>`;
-}
-function mapLegend(line) {
-  const list = state.assets.filter((a) => lineOf(a) === line).map((a) => machineState(a).k);
-  return `<ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => list.includes(k) || ['stop', 'wait', 'run'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${list.filter((x) => x === k).length}</b></li>`).join('')}</ul>`;
+function mapLegend(list) {
+  const ks = list.map((a) => machineState(a).k);
+  return `<ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => ks.includes(k) || ['stop', 'wait', 'run'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${ks.filter((x) => x === k).length}</b></li>`).join('')}</ul>`;
 }
 
 function viewPlant() {
-  const line = curPlant();
-  if (!line) return '<p class="empty">ยังไม่มีเครื่องจักร นำเข้าทะเบียนเครื่องที่หน้าตั้งค่าก่อน</p>';
-  const mp = mapOf(line);
+  if (!state.assets.length && !state.maps.length) return '<p class="empty">ยังไม่มีเครื่องจักร นำเข้าทะเบียนเครื่องที่หน้าตั้งค่าก่อน</p>';
+  const id = curMap();
+  const mp = mapById(id);
   const edit = state.mapEdit && canAdmin() && !!mp;
-  const list = state.assets.filter((a) => lineOf(a) === line);
-  const nOn = list.filter(placed).length;
+  const list = mp ? onMap(id) : looseAssets();
+  const name = mp ? mapName(mp) : 'เครื่องที่ยังไม่ได้วางบนแผนผัง';
   const tools = canAdmin() ? `<div class="u-row u-wrap">
-      <label class="btn">${mp ? 'เปลี่ยนรูปแผนผัง' : 'อัปโหลดรูปแผนผัง'}<input type="file" id="map-file" accept="image/png,image/jpeg,image/webp,application/pdf" class="sr"></label>
       ${mp ? `<button type="button" class="btn ${edit ? 'solid' : ''}" data-act="map-edit">${edit ? 'เสร็จสิ้น' : 'จัดตำแหน่งเครื่อง'}</button>` : ''}
-      ${mp && !edit ? `<button type="button" class="btn" data-act="map-export">ส่งออกตำแหน่ง CSV</button><button type="button" class="btn danger" data-act="map-del">ลบรูปแผนผัง</button>` : ''}</div>` : '';
-  const head = `<div class="u-spread">${plantTabs(line)}${tools}</div>`;
-  const status = mp
-    ? `<p class="hint">${esc(line)}: วางบนแผนผังแล้ว ${nOn} จาก ${list.length} เครื่อง สีของจุดตามสถานะเครื่อง กดที่จุดเพื่อเปิดดูเครื่อง <button type="button" class="link" data-act="map-labels">${state.mapLabels ? 'ซ่อนรหัสเครื่องที่ปกติ' : 'แสดงรหัสทุกเครื่อง'}</button></p>`
-    : `<p class="hint">${esc(line)} ยังไม่มีรูปแผนผัง ระบบจัดเครื่องเป็นโซนตามกระบวนการ (ถ้าไม่ระบุกระบวนการใช้ชื่อเครื่อง)${canAdmin() ? ' อัปโหลดรูปแผนผังจริง (JPG, PNG หรือ PDF หน้าแรก) เพื่อวางจุดตามตำแหน่งจริงของเครื่อง' : ''}</p>`;
+      ${!edit ? `<button type="button" class="btn" data-act="map-add">เพิ่มแผนผัง</button>` : ''}
+      ${mp && !edit ? `<label class="btn">เปลี่ยนรูป<input type="file" id="map-file" accept="image/png,image/jpeg,image/webp,application/pdf" class="sr"></label>
+        <button type="button" class="btn" data-act="map-export">ส่งออกตำแหน่ง CSV</button><button type="button" class="btn danger" data-act="map-del">ลบแผนผังนี้</button>` : ''}</div>` : '';
+  const head = `<div class="u-spread">${plantTabs(id)}${tools}</div>`;
+  const add = state.mapAdding && canAdmin() ? `<section class="box"><div class="bar"><h2>เพิ่มแผนผัง</h2></div><div class="pad">
+      <div class="u-row u-wrap u-bottom"><div class="field"><label for="map-name">ชื่อแผนผัง (เช่น Fac A, Motor ชั้น 2)</label><input id="map-name" type="text" maxlength="40" value="${esc(state.mapNewName || '')}" autocomplete="off"></div>
+      <label class="btn solid">เลือกรูปแผนผัง<input type="file" id="map-file-new" accept="image/png,image/jpeg,image/webp,application/pdf" class="sr"></label>
+      <button type="button" class="btn" data-act="map-add">ยกเลิก</button></div>
+      <p class="hint">ไฟล์ JPG, PNG, WebP หรือ PDF (ใช้หน้าแรก) ระบบย่อรูปให้ไม่เกินประมาณ 1 MB</p></div></section>` : '';
   if (state.mapBusy) return `${head}<section class="box"><p class="empty">กำลังเตรียมรูปแผนผัง…</p></section>`;
   if (!edit) {
-    return `${head}
-      <section class="box pg-plant"><div class="bar"><h2>แผนผัง ${esc(line)}</h2>${mapLegend(line)}</div>
-        <div class="pad">${status}${plantMap(line)}${looseList(line)}</div></section>`;
+    const status = mp
+      ? `<p class="hint">${esc(name)}: ${list.length} เครื่อง สีของจุดตามสถานะเครื่อง กดที่จุดเพื่อเปิดดูเครื่อง <button type="button" class="link" data-act="map-labels">${state.mapLabels ? 'ซ่อนรหัสเครื่องที่ปกติ' : 'แสดงรหัสทุกเครื่อง'}</button></p>`
+      : `<p class="hint">${list.length} เครื่องยังไม่ได้วางบนแผนผัง แสดงเป็นโซนตามไลน์และกระบวนการ${canAdmin() ? (state.maps.length ? ' เลือกแผนผังแล้วกด "จัดตำแหน่งเครื่อง" เพื่อวางจุด' : ' กด "เพิ่มแผนผัง" เพื่ออัปโหลดรูป Layout ของแต่ละโรงงาน') : ''}</p>`;
+    return `${head}${add}
+      <section class="box pg-plant" data-flow><div class="bar"><h2>${esc(name)}</h2>${mapLegend(list)}</div>
+        <div class="pad">${status}${mp ? plantMap(id) : ''}</div>${mp ? '' : `<div class="pad">${zoneMap(list)}</div>`}</section>`;
   }
-  // โหมดจัดตำแหน่ง: แผนผังซ้าย รายชื่อเครื่องขวา
+  // โหมดจัดตำแหน่ง: แผนผังซ้าย รายชื่อเครื่องขวา (เลือกได้ทุกเครื่อง กรองตามไลน์)
   const q = (state.mapQ || '').trim().toLowerCase();
-  const rows = list.filter((a) => !q || `${a.id} ${a.name} ${a.area || ''}`.toLowerCase().includes(q))
-    .sort((a, b) => Number(placed(a)) - Number(placed(b)) || a.id.localeCompare(b.id));
+  const lines = [...new Set(state.assets.map(lineOf))].sort();
+  const fl = lines.includes(state.mapFilter) ? state.mapFilter : '';
+  const rows = state.assets.filter((a) => (!fl || lineOf(a) === fl) && (!q || `${a.id} ${a.name} ${a.area || ''}`.toLowerCase().includes(q)))
+    .sort((a, b) => Number(a.mapId === id && placed(a)) - Number(b.mapId === id && placed(b)) || Number(placed(a)) - Number(placed(b)) || a.id.localeCompare(b.id));
   const sel = assetOf(state.mapSel);
+  const where = (a) => (placed(a) ? (a.mapId === id ? '<span class="ok-t" aria-label="วางบนแผนผังนี้แล้ว">✓</span>' : `<span class="dim small">${esc(mapName(mapById(a.mapId)))}</span>`) : '');
   return `${head}
     <div class="mapedit">
-      <section class="box"><div class="bar"><h2>จัดตำแหน่งเครื่อง ${esc(line)}</h2><span class="dim">วางแล้ว ${nOn}/${list.length}</span></div>
-        <div class="pad"><p class="hint">${sel ? `คลิกบนแผนผังตรงตำแหน่งของ <b class="mono">${esc(sel.id)}</b> ${esc(sel.name)}${placed(sel) ? ' (ลากจุดเพื่อย้ายได้)' : ''}` : 'เลือกเครื่องจากรายการทางขวา แล้วคลิกบนแผนผังตรงตำแหน่งเครื่อง ลากจุดเพื่อย้าย'}</p>${plantMap(line, true)}</div></section>
-      <section class="box mapside"><div class="bar"><h2>เครื่องใน ${esc(line)}</h2></div>
+      <section class="box"><div class="bar"><h2>จัดตำแหน่งเครื่อง ${esc(name)}</h2><span class="dim">บนแผนผังนี้ ${list.length} เครื่อง</span></div>
+        <div class="pad"><p class="hint">${sel ? `คลิกบนแผนผังตรงตำแหน่งของ <b class="mono">${esc(sel.id)}</b> ${esc(sel.name)}${placed(sel) && sel.mapId === id ? ' (ลากจุดเพื่อย้ายได้)' : placed(sel) ? ` (ตอนนี้อยู่บน ${esc(mapName(mapById(sel.mapId)))} คลิกเพื่อย้ายมาแผนผังนี้)` : ''}` : 'เลือกเครื่องจากรายการทางขวา แล้วคลิกบนแผนผังตรงตำแหน่งเครื่อง ลากจุดเพื่อย้าย'}</p>${plantMap(id, true)}</div></section>
+      <section class="box mapside"><div class="bar"><h2>เลือกเครื่อง</h2></div>
         <div class="pad">
+          <div class="field"><label class="sr" for="map-filter">กรองตามไลน์</label><select id="map-filter"><option value="">ทุกไลน์</option>${lines.map((l) => `<option ${l === fl ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
           <div class="wosearch"><span class="sicon">${icon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}</span><label for="map-q" class="sr">ค้นหาเครื่อง</label><input id="map-q" type="search" placeholder="ค้นหารหัส ชื่อ กระบวนการ" value="${esc(state.mapQ || '')}" autocomplete="off"></div>
           ${sel && placed(sel) ? `<button type="button" class="btn small" data-act="map-unplace" data-id="${esc(sel.id)}">เอา ${esc(sel.id)} ออกจากแผนผัง</button>` : ''}
-          <ul class="mlist">${rows.slice(0, 400).map((a) => `<li><button type="button" class="${state.mapSel === a.id ? 'sel' : ''}" data-act="map-pick" data-id="${esc(a.id)}"><span class="pm-dot k-${machineState(a).k}" aria-hidden="true"></span><span class="mono">${esc(a.id)}</span><span class="dim ml-n">${esc(a.name)}</span>${placed(a) ? '<span class="ok-t" aria-label="วางแล้ว">✓</span>' : ''}</button></li>`).join('')}</ul>
+          <ul class="mlist">${rows.slice(0, 400).map((a) => `<li><button type="button" class="${state.mapSel === a.id ? 'sel' : ''}" data-act="map-pick" data-id="${esc(a.id)}"><span class="pm-dot k-${machineState(a).k}" aria-hidden="true"></span><span class="mono">${esc(a.id)}</span><span class="dim ml-n">${esc(a.name)}</span>${where(a)}</button></li>`).join('')}</ul>
+          ${rows.length > 400 ? `<p class="hint">แสดง 400 จาก ${rows.length} เครื่อง ค้นหาหรือกรองเพื่อหาเครื่องอื่น</p>` : ''}
         </div></section>
     </div>`;
 }
@@ -473,8 +487,8 @@ function viewBoard(m) {
 
   // ทะเบียนใหญ่หรือมีรูปแผนผัง: แสดงแผนผังทีละโรงงาน เครื่องที่ต้องดูแลเป็นการ์ดด้านล่าง
   const useMap = !state.boardAll && (big || state.maps.length > 0);
-  const plant = useMap ? curPlant() : '';
-  const careHere = useMap ? ms.filter((x) => lineOf(x.a) === plant && needsCare(x)) : [];
+  const plant = useMap ? curMap() : '';
+  const careHere = useMap ? ms.filter((x) => (plant === LOOSE ? !placed(x.a) : x.a.mapId === plant && placed(x.a)) && needsCare(x)) : [];
   const useCount = Object.keys(USE).map((k) => ({ k: `use-${k}`, label: `${USE[k][0]} (${USE[k][1]})`, n: state.assets.filter((a) => useOf(a) === k).length }));
   const headline = stopN
     ? `<span class="alarm">เครื่องหยุดเสีย ${stopN} เครื่อง</span> จาก ${activeN} เครื่องที่ใช้งาน`
@@ -547,8 +561,8 @@ function viewBoard(m) {
     <section class="box dash-machines" data-flow>
       <div class="bar"><h2>แผนผังเครื่องจักร</h2>
         <ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => countM(k) || !['idle', 'off'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
-      ${useMap ? `<div class="pad"><div class="u-spread">${plantTabs(plant)}<span class="u-row"><button type="button" class="link" data-act="nav" data-id="plant">เปิดหน้าแผนผังโรงงาน</button><button type="button" class="link" data-act="board-all">แสดงทุกเครื่องเป็นการ์ด</button></span></div>${plantMap(plant)}${looseList(plant)}</div>
-        ${careHere.length ? `<div class="pad" data-flow><h3>ต้องดูแลใน ${esc(plant)} ${careHere.length} เครื่อง</h3><div class="mgrid" data-flow>${careHere.map(tile).join('')}</div></div>` : ''}`
+      ${useMap ? `<div class="pad"><div class="u-spread">${plantTabs(plant)}<span class="u-row"><button type="button" class="link" data-act="nav" data-id="plant">เปิดหน้าแผนผังโรงงาน</button><button type="button" class="link" data-act="board-all">แสดงทุกเครื่องเป็นการ์ด</button></span></div>${plant === LOOSE ? '' : plantMap(plant)}</div>${plant === LOOSE ? `<div class="pad">${zoneMap(looseAssets())}</div>` : ''}
+        ${careHere.length ? `<div class="pad" data-flow><h3>ต้องดูแล${plant === LOOSE ? '' : `ใน ${esc(mapName(mapById(plant)))}`} ${careHere.length} เครื่อง</h3><div class="mgrid" data-flow>${careHere.map(tile).join('')}</div></div>` : ''}`
     : `${state.assets.length > 48 || state.maps.length ? `<p class="hint u-pad-sm">แสดงทุกเครื่องเป็นการ์ด <button type="button" class="link" data-act="board-all">กลับไปแบบแผนผัง</button></p>` : ''}
       ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}`}
     </section>
@@ -1491,7 +1505,7 @@ const ROLE_LABEL = { admin: 'แอดมิน', tech: 'ช่างซ่อ�
 const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], document: ['Document', 'operator'], asst_manager: ['ASST. Manager', 'admin'], advisor: ['Advisor', 'admin'], admin_web: ['Admin Website', 'admin'] };
 const userLabel = (u) => (u.role === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[u.position]?.[0] || ROLE_LABEL[u.role] || 'ยังไม่มีสิทธิ์');
 const IMPORT_COLS = {
-  assets: ['id', 'name', 'line', 'cls', 'category', 'use', 'maker', 'model', 'year', 'wi', 'serial', 'asset_no', 'installed', 'area', 'owner', 'doc_url', 'map_x', 'map_y'],
+  assets: ['id', 'name', 'line', 'cls', 'category', 'use', 'maker', 'model', 'year', 'wi', 'serial', 'asset_no', 'installed', 'area', 'owner', 'doc_url', 'map', 'map_x', 'map_y'],
   parts: ['id', 'name', 'unit', 'bin', 'qty', 'min', 'max', 'price'],
   pmPlans: ['id', 'asset', 'task', 'interval_days', 'due_date', 'source'],
   workOrders: ['ref', 'section', 'request_date', 'complete_date', 'condition', 'type', 'status', 'machine_code', 'machine_name', 'process', 'detail', 'action', 'action_by', 'cost', 'note', 'start_time', 'end_time', 'team', 'priority'],
@@ -1655,6 +1669,12 @@ function importRows(coll, text) {
         const x = Number(o.map_x), y = Number(o.map_y);
         if (o.map_x !== undefined && o.map_y !== undefined && x >= 0 && x <= 100 && y >= 0 && y <= 100) { o.mapX = Math.round(x * 100) / 10000; o.mapY = Math.round(y * 100) / 10000; }
         delete o.map_x; delete o.map_y;
+      }
+      if (o.map !== undefined) {
+        // ชื่อแผนผัง (ตรงกับชื่อที่เพิ่มในหน้าแผนผังโรงงาน) แผนผังที่ยังไม่มีจะผูกได้เมื่อเพิ่มชื่อเดียวกันภายหลัง
+        const m = state.maps.find((mm) => mapName(mm).toLowerCase() === String(o.map).trim().toLowerCase());
+        o.mapId = m ? m.id : mapDocId(String(o.map).trim());
+        delete o.map;
       }
     }
     out.push(o);
@@ -2237,21 +2257,22 @@ const actions = {
   'stock-open': (v) => { const [id, dir] = v.split(':'); state.stock = { id, dir }; render(); window.scrollTo(0, 0); document.getElementById('s-qty')?.focus(); },
   'stock-close': () => { state.stock = null; render(); },
   part: (id, el) => run(() => state.backend.adjustPart(id, Number(el.dataset.delta))),
-  'map-line': (id) => { state.mapLine = id; state.mapSel = null; state.mapQ = ''; savePref('cmms.mapLine', id); render(); },
+  'map-tab': (id) => { state.mapId = id; state.mapSel = null; state.mapEdit = state.mapEdit && id !== LOOSE; savePref('cmms.mapId', id); render(); },
+  'map-add': () => { state.mapAdding = !state.mapAdding; state.mapNewName = ''; render(); if (state.mapAdding) document.getElementById('map-name')?.focus(); },
   'map-edit': () => { state.mapEdit = !state.mapEdit; state.mapSel = null; state.mapQ = ''; render(); },
   'map-pick': (id) => { if (mapDragged) return; state.mapSel = state.mapSel === id ? null : id; render(); },
   'map-labels': () => { state.mapLabels = !state.mapLabels; render(); },
-  'map-unplace': (id) => { const a = assetOf(id); if (!a) return; Object.assign(a, { mapX: null, mapY: null }); state.ver++; run(() => state.backend.update('assets', id, { mapX: null, mapY: null }), `เอา ${id} ออกจากแผนผังแล้ว`); render(); },
+  'map-unplace': (id) => { const a = assetOf(id); if (!a) return; Object.assign(a, { mapId: null, mapX: null, mapY: null }); state.ver++; run(() => state.backend.update('assets', id, { mapId: null, mapX: null, mapY: null }), `เอา ${id} ออกจากแผนผังแล้ว`); render(); },
   'map-export': () => {
     const rows = [...state.assets].sort((a, b) => lineOf(a).localeCompare(lineOf(b)) || a.id.localeCompare(b.id))
-      .map((a) => [a.id, a.name, a.line || '', placed(a) ? (a.mapX * 100).toFixed(2) : '', placed(a) ? (a.mapY * 100).toFixed(2) : '']);
-    download(`cmms-map-positions-${isoDate(Date.now())}.csv`, csv([['id', 'name', 'line', 'map_x', 'map_y'], ...rows]));
+      .map((a) => [a.id, a.name, a.line || '', placed(a) ? mapName(mapById(a.mapId)) : '', placed(a) ? (a.mapX * 100).toFixed(2) : '', placed(a) ? (a.mapY * 100).toFixed(2) : '']);
+    download(`cmms-map-positions-${isoDate(Date.now())}.csv`, csv([['id', 'name', 'line', 'map', 'map_x', 'map_y'], ...rows]));
   },
   'map-del': (id, el) => {
-    const mp = mapOf(state.mapLine); if (!mp) return;
-    if (!el.dataset.confirm) { el.dataset.confirm = '1'; el.textContent = 'กดอีกครั้งเพื่อลบรูปแผนผัง'; return; }
+    const mp = mapById(state.mapId); if (!mp) return;
+    if (!el.dataset.confirm) { el.dataset.confirm = '1'; el.textContent = `กดอีกครั้งเพื่อลบแผนผัง ${mapName(mp)}`; return; }
     state.mapEdit = false;
-    run(() => state.backend.remove('maps', mp.id), 'ลบรูปแผนผังแล้ว ตำแหน่งเครื่องยังเก็บไว้ อัปโหลดรูปใหม่ขนาดสัดส่วนเดิมจะใช้ตำแหน่งเดิมได้');
+    run(() => state.backend.remove('maps', mp.id), 'ลบแผนผังแล้ว ตำแหน่งเครื่องยังเก็บไว้ เพิ่มแผนผังชื่อเดิมด้วยรูปสัดส่วนเดิมจะกลับมาแสดงตำแหน่งเดิม');
   },
   del: (id, el) => {
     if (el.dataset.confirm) return run(() => state.backend.remove(el.dataset.coll, id), 'ลบแล้ว');
@@ -2316,8 +2337,9 @@ const mapXY = (fm, e) => { const r = fm.getBoundingClientRect(); return [Math.mi
 function saveSpot(id, x, y) {
   const a = assetOf(id); if (!a) return;
   const mapX = Math.round(x * 10000) / 10000, mapY = Math.round(y * 10000) / 10000;
-  Object.assign(a, { mapX, mapY }); state.ver++;
-  run(() => state.backend.update('assets', id, { mapX, mapY }));
+  const mapId = state.mapId;
+  Object.assign(a, { mapId, mapX, mapY }); state.ver++;
+  run(() => state.backend.update('assets', id, { mapId, mapX, mapY }));
 }
 function mapPlace(fm, e) {
   if (!state.mapSel) { toast('เลือกเครื่องจากรายการทางขวาก่อน แล้วคลิกบนแผนผัง'); return; }
@@ -2327,7 +2349,8 @@ function mapPlace(fm, e) {
   // วางเครื่องใหม่แล้วเลือกเครื่องถัดไปที่ยังไม่ได้วางให้เลย จะได้คลิกต่อได้ทันที
   if (wasLoose) {
     const q = (state.mapQ || '').trim().toLowerCase();
-    const next = state.assets.filter((a) => lineOf(a) === state.mapLine && !placed(a) && (!q || `${a.id} ${a.name} ${a.area || ''}`.toLowerCase().includes(q))).sort((a, b) => a.id.localeCompare(b.id))[0];
+    const fl = state.mapFilter;
+    const next = state.assets.filter((a) => (!fl || lineOf(a) === fl) && !placed(a) && (!q || `${a.id} ${a.name} ${a.area || ''}`.toLowerCase().includes(q))).sort((a, b) => a.id.localeCompare(b.id))[0];
     state.mapSel = next ? next.id : null;
   }
   render();
@@ -2430,6 +2453,7 @@ app.addEventListener('input', (e) => {
     searchTimer = setTimeout(() => { const el0 = document.getElementById('af-q'); const pos = el0?.selectionStart ?? state.af.q.length; render(); const el = document.getElementById('af-q'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 200);
     return;
   }
+  if (e.target.id === 'map-name') { state.mapNewName = e.target.value; return; }
   if (e.target.id === 'map-q') {
     state.mapQ = e.target.value;
     clearTimeout(searchTimer);
@@ -2502,11 +2526,17 @@ app.addEventListener('change', (e) => {
     run(() => state.backend.updateUser(uid, patch), `เปลี่ยนตำแหน่งเป็น ${v === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[v][0]} แล้ว`);
     return;
   }
-  if (e.target.id === 'map-file' && e.target.files?.[0]) {
-    const file = e.target.files[0]; const line = state.mapLine;
-    state.mapBusy = true; render();
+  if (e.target.id === 'map-filter') { state.mapFilter = e.target.value; render(); return; }
+  if ((e.target.id === 'map-file' || e.target.id === 'map-file-new') && e.target.files?.[0]) {
+    const file = e.target.files[0];
+    const old = e.target.id === 'map-file' ? mapById(state.mapId) : null;
+    const name = old ? mapName(old) : (document.getElementById('map-name')?.value || '').trim() || file.name.replace(/\.[^.]+$/, '');
+    const id = old ? old.id : mapDocId(name);
+    if (!old && mapById(id)) { toast(`มีแผนผังชื่อ ${name} แล้ว เลือกแผนผังนั้นแล้วกด "เปลี่ยนรูป" แทน`); e.target.value = ''; return; }
+    const order = old ? old.order ?? 99 : state.maps.length;
+    state.mapBusy = true; state.mapAdding = false; render();
     floorImage(file)
-      .then(({ img, w, h }) => run(() => state.backend.put('maps', mapDocId(line), { line, img, w, h, updatedAt: Date.now(), by: state.user?.name || '' }), `บันทึกรูปแผนผัง ${line} แล้ว`))
+      .then(({ img, w, h }) => run(async () => { await state.backend.put('maps', id, { name, img, w, h, order, updatedAt: Date.now(), by: state.user?.name || '' }); state.mapId = id; savePref('cmms.mapId', id); }, `บันทึกแผนผัง ${name} แล้ว`))
       .catch((err) => { console.error(err); toast(err.message || 'อ่านไฟล์แผนผังไม่ได้'); })
       .finally(() => { state.mapBusy = false; render(); });
     return;

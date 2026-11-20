@@ -1201,3 +1201,8 @@ html.fit .pg-plant .fmap, html.fit .fmap.editing { --mapH: calc(100dvh - 330px);
 .pm-dot.k-late { background: var(--late); } .pm-dot.k-idle { background: var(--idle); } .pm-dot.k-off { background: var(--off); }
 @media (max-width: 60rem) { .mapedit { grid-template-columns: 1fr; } .mlist { max-height: 320px; } }
 .mapside .wosearch { flex: none; max-width: none; }
+
+.u-bottom { align-items: flex-end; }
+.zline + .zline { margin-top: var(--space-md); }
+.zline h3 { margin: 0 0 var(--space-xs); font-size: var(--text-sm); font-weight: 500; }
+.mlist .small { font-size: var(--text-xs); white-space: nowrap; }

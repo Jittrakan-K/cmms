@@ -119,7 +119,7 @@ service cloud.firestore {
       allow read: if isMember();
       allow delete: if isAdmin();
       allow create, update: if isAdmin()
-        && request.resource.data.line is string
+        && (request.resource.data.get('name', null) is string || request.resource.data.get('line', null) is string)
         && request.resource.data.img is string
         && request.resource.data.img.size() < 1040000;
     }
