@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611201551';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611201551';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611201555';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611201555';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -275,7 +275,8 @@ const onMap = (id) => state.assets.filter((a) => a.mapId === id && placed(a));
 const looseAssets = () => state.assets.filter((a) => !placed(a));
 function curMap() {
   const ms = mapsSorted();
-  const ok = state.mapId === LOOSE ? looseAssets().length > 0 || !ms.length : !!mapById(state.mapId);
+  // เปิดมาให้แสดงแผนผังจริง (แผนผังที่มีจุดมากที่สุด) แท็บ "ยังไม่ได้วาง" แสดงเฉพาะเมื่อกดเลือกเองในรอบนี้ หรือยังไม่มีแผนผังเลย
+  const ok = state.mapId === LOOSE ? !ms.length || (state.mapLooseChosen && looseAssets().length > 0) : !!mapById(state.mapId);
   if (!ok) state.mapId = (ms.map((m) => [m.id, onMap(m.id).length]).sort((p, q) => q[1] - p[1])[0] || [LOOSE])[0];
   return state.mapId;
 }
@@ -558,19 +559,10 @@ function viewBoard(m) {
   // PM ที่จะถึง
   const upcoming = [...state.pmPlans].sort((a, b) => a.dueDate - b.dueDate).slice(0, nList);
 
-  // แดชบอร์ดรวมภาพรวม (เลื่อนลงอ่าน): ตัวเลขสรุป → แผนผังเครื่องจักร (เห็นทันทีที่เปิด) → แผ่นข้อมูลแบ่งช่องด้วยเส้นบาง
+  // แดชบอร์ดรวมภาพรวม (เลื่อนลงอ่าน): ตัวเลขสรุป แล้วเป็นแผ่นเดียวแบ่งช่องด้วยเส้นบาง
   // แนวโน้มใบแจ้งซ่อม + สถานะใบงาน → เวลาหยุด + ความพร้อมเครื่อง → สุขภาพเครื่อง + PM + อะไหล่ → ใบงานที่เปิดอยู่
   const o = overviewParts(m, 8);
   return `${kpis}
-
-    <section class="box dash-machines" data-flow>
-      <div class="bar"><h2>แผนผังเครื่องจักร</h2>
-        <ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => countM(k) || !['idle', 'off'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
-      ${useMap ? `<div class="pad"><div class="u-spread">${plantTabs(plant)}<span class="u-row"><button type="button" class="link" data-act="nav" data-id="plant">เปิดหน้าแผนผังโรงงาน</button><button type="button" class="link" data-act="board-all">แสดงทุกเครื่องเป็นการ์ด</button></span></div>${plant === LOOSE ? '' : plantMap(plant)}</div>${plant === LOOSE ? `<div class="pad">${zoneMap(looseAssets())}</div>` : ''}
-        ${careHere.length ? `<div class="pad" data-flow><h3>ต้องดูแล${plant === LOOSE ? '' : `ใน ${esc(mapName(mapById(plant)))}`} ${careHere.length} เครื่อง</h3><div class="mgrid" data-flow>${careHere.map(tile).join('')}</div></div>` : ''}`
-    : `${state.assets.length > 48 || state.maps.length ? `<p class="hint u-pad-sm">แสดงทุกเครื่องเป็นการ์ด <button type="button" class="link" data-act="board-all">กลับไปแบบแผนผัง</button></p>` : ''}
-      ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}`}
-    </section>
 
     <div class="sheet">
       <div class="srow s21">
@@ -610,6 +602,15 @@ function viewBoard(m) {
         ${catList.length ? `<ul class="clist">${catList.map(([c, x]) => `<li><span class="c-ic" aria-hidden="true">${esc([...c.replace(/^Machine\s+/i, '')][0] || '?')}</span><span class="t">${esc(c)}${x.bad ? `<span class="alarm u-small"> ต้องดูแล ${x.bad}</span>` : ''}</span><b class="mono">${x.n.toLocaleString('th-TH')}</b></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีเครื่องจักร</p>'}</section>
       </div>
     </div>
+
+    <section class="box dash-machines" data-flow>
+      <div class="bar"><h2>แผนผังเครื่องจักร</h2>
+        <ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => countM(k) || !['idle', 'off'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
+      ${useMap ? `<div class="pad"><div class="u-spread">${plantTabs(plant)}<span class="u-row"><button type="button" class="link" data-act="nav" data-id="plant">เปิดหน้าแผนผังโรงงาน</button><button type="button" class="link" data-act="board-all">แสดงทุกเครื่องเป็นการ์ด</button></span></div>${plant === LOOSE ? '' : plantMap(plant)}</div>${plant === LOOSE ? `<div class="pad">${zoneMap(looseAssets())}</div>` : ''}
+        ${careHere.length ? `<div class="pad" data-flow><h3>ต้องดูแล${plant === LOOSE ? '' : `ใน ${esc(mapName(mapById(plant)))}`} ${careHere.length} เครื่อง</h3><div class="mgrid" data-flow>${careHere.map(tile).join('')}</div></div>` : ''}`
+    : `${state.assets.length > 48 || state.maps.length ? `<p class="hint u-pad-sm">แสดงทุกเครื่องเป็นการ์ด <button type="button" class="link" data-act="board-all">กลับไปแบบแผนผัง</button></p>` : ''}
+      ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}`}
+    </section>
 
     ${o.timeline}
 
@@ -2279,7 +2280,7 @@ const actions = {
   'stock-open': (v) => { const [id, dir] = v.split(':'); state.stock = { id, dir }; render(); window.scrollTo(0, 0); document.getElementById('s-qty')?.focus(); },
   'stock-close': () => { state.stock = null; render(); },
   part: (id, el) => run(() => state.backend.adjustPart(id, Number(el.dataset.delta))),
-  'map-tab': (id) => { state.mapId = id; state.mapSel = null; state.mapEdit = state.mapEdit && id !== LOOSE; savePref('cmms.mapId', id); render(); },
+  'map-tab': (id) => { state.mapId = id; state.mapLooseChosen = id === LOOSE; state.mapSel = null; state.mapEdit = state.mapEdit && id !== LOOSE; savePref('cmms.mapId', id); render(); },
   'map-add': () => { state.mapAdding = !state.mapAdding; state.mapNewName = ''; render(); if (state.mapAdding) document.getElementById('map-name')?.focus(); },
   'map-edit': () => { state.mapEdit = !state.mapEdit; state.mapSel = null; state.mapQ = ''; render(); },
   'map-pick': (id) => { if (mapDragged) return; state.mapSel = state.mapSel === id ? null : id; render(); },
