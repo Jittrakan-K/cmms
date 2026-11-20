@@ -1226,68 +1226,106 @@ html.fit .pg-plant .fmap, html.fit .fmap.editing { --mapH: calc(100dvh - 330px);
   .kpi-l, .kpi-s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 
-/* ---------- แดชบอร์ดรวมภาพรวม: จอแรกอ่านจากบนลงล่าง
-   ตัวเลขสรุป → ความพร้อมเครื่อง → แนวโน้ม (รายปี / เวลาหยุด) → สัดส่วนสถานะ + งานที่เปิดอยู่ ---------- */
-.dash-reli { gap: var(--space-sm); }
-.dash-reli .card { padding: var(--space-xs) var(--space-md) var(--space-sm); gap: 2px; }
-.dash-reli .clabel { font-size: var(--text-xs); }
-.dash-reli .cfig { font-size: 1.3rem; }
-.dash-reli .hl { margin-top: 0; font-size: var(--text-xs); }
-.dash-reli .pbar.big { height: 6px; }
-.dash-reli .minibars { height: 30px; gap: 3px; }
-.dash-reli .streak { grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; }
-.dash-reli .streak li { padding: 2px 0; gap: 0; font-size: 10px; }
-.dash-reli .streak li svg { width: 10px; height: 10px; }
-.dash-reli .rank { gap: 0; }
-.dash-reli .rk { min-height: 20px; font-size: var(--text-xs); }
-.dash-reli .hl { line-height: 1.35; }
-.dash-reli .minibars { margin-top: var(--space-2xs); }
-.dash-reli .streak { margin-top: var(--space-2xs); }
+/* ---------- แดชบอร์ดรวมภาพรวม: แผ่นขาวแผ่นเดียว แบ่งช่องด้วยเส้นบาง (ไม่ใช่การ์ดลอยหลายใบ)
+   แต่ละช่อง: ชื่อ + ปุ่มดูต่อ มุมขวา → ตัวเลขหลัก → เทียบช่วงก่อน → กราฟ/รายการ ---------- */
+.sheet { background: var(--card); border-radius: var(--radius-card); box-shadow: var(--edge-stock); overflow: hidden; }
+.srow { display: grid; }
+.srow + .srow { border-top: 1px solid var(--rule); }
+.srow.s21 { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.srow.s111 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.srow.s1 { grid-template-columns: minmax(0, 1fr); }
+.srow > * { min-width: 0; }
+.srow > * + * { border-left: 1px solid var(--rule); }
+.sheet .box, .sheet .card { background: transparent; box-shadow: none; border-radius: 0; overflow: visible; }
+.sheet .box { display: flex; flex-direction: column; }
+.sheet .box > .bar, .sheet .card > .bar { min-height: 0; padding: var(--space-lg) var(--space-lg) var(--space-xs); border-bottom: 0; }
+.sheet .bar h2, .sheet .chart h2 { font-size: var(--text-md); font-weight: 600; }
+/* ปุ่มดูต่อแบบขอบบาง มุมขวาบน */
+.sheet .bar > .link { min-height: 30px; padding: 0 var(--space-sm); border: 1px solid var(--color-accent-soft); border-radius: 8px; color: var(--accent); font-size: var(--text-xs); font-weight: 500; text-decoration: none; }
+.sheet .bar > .link:hover { background: var(--color-accent-wash); }
+.sheet .box > .pad { flex: 1; padding: var(--space-xs) var(--space-lg) var(--space-lg); }
 
-.bgrid.dash-r3 { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
-.bgrid.dash-r4 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2.2fr); }
-.dash-r3 > *, .dash-r4 > * { min-width: 0; }
-.dash-r3 .box > .bar, .dash-r4 .box > .bar, .dash-r4 .card > .bar { min-height: 48px; }
-.dash-r3 .box > .pad { padding-top: 0; }
-/* กราฟเวลาหยุด: หัวกราฟสองบรรทัด (ชื่อ + ตัวเลือกช่วง / ค่าเฉลี่ย + วันที่เลือก) ไม่ลอยทับกราฟ */
-.dash-r3 .chart { padding: var(--space-sm) var(--space-lg) var(--space-sm); gap: var(--space-xs); }
-.dash-r3 .chart-head { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-2xs) var(--space-sm); }
-.dash-r3 .chart-head > div:first-child { display: contents; }
-.dash-r3 .chart-head h2 { grid-row: 1; grid-column: 1 / 4; line-height: 32px; }
-.dash-r3 .chart-tools { grid-row: 1; grid-column: 4; align-self: center; }
-.dash-r3 .chart-head .clabel { grid-row: 2; grid-column: 1; }
-.dash-r3 .chart-head .cfig { grid-row: 2; grid-column: 2; }
-.dash-r3 .sel-read { grid-row: 2; grid-column: 3 / 5; margin-left: 0; }
-.dash-r3 .chart-head .clabel { margin-top: 0; font-size: var(--text-xs); }
-.dash-r3 .chart-head .cfig { font-size: 1.15rem; }
-.dash-r3 .chart-tools { flex-direction: row-reverse; align-items: center; gap: var(--space-md); }
-.dash-r3 .seg-ctl button { min-height: 28px; padding: 0 var(--space-sm); }
-.dash-r3 .plot { height: 150px; margin-top: var(--space-2xs); }
-html.fit .dash-r3 .plot { height: clamp(100px, calc(100dvh - 780px), 190px); margin-top: var(--space-2xs); }
-.dash-r3 .tip { display: none; }
-.sel-read { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs) var(--space-sm); margin-left: var(--space-sm); padding-left: var(--space-sm); border-left: 1px solid var(--rule); font-size: var(--text-xs); color: var(--ink-2); }
+.cell-fig { display: flex; align-items: baseline; gap: var(--space-xs); }
+.cell-fig b { font-size: 1.6rem; font-weight: 600; line-height: 1.1; color: var(--ink); }
+.cell-fig span { font-size: var(--text-sm); color: var(--muted); }
+.cell-sub { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs) var(--space-xs); margin: calc(-1 * var(--space-xs)) 0 0; font-size: var(--text-xs); color: var(--muted); }
+.cell-sub .chg svg { width: 12px; height: 12px; }
+.cell-chart .combo { width: 100%; height: auto; margin-top: var(--space-xs); }
+.combo .cb { fill: var(--accent); opacity: 1; }
+.combo .cb2 { fill: var(--color-paper-3); }
+.ckey2 { list-style: none; margin: 0; padding: 0; display: flex; gap: var(--space-lg); font-size: var(--text-xs); color: var(--ink-2); }
+.ckey2 li { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.ckey2 i { width: 8px; height: 8px; border-radius: 50%; }
+.ckey2 .k-cur { background: var(--accent); } .ckey2 .k-prev { background: var(--color-paper-3); }
+
+/* โดนัท: วงกลางช่อง คำอธิบายเป็นตารางใต้วง */
+.sheet .donut { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--space-md); }
+.sheet .donut svg { flex: none; align-self: center; width: 150px; height: 150px; }
+.sheet .dlist { flex: none; gap: 4px; }
+.sheet .dlist li { grid-template-columns: 8px minmax(0, 1fr) auto 40px; }
+.sheet .dlist i { width: 8px; height: 8px; border-radius: 50%; }
+
+/* ความพร้อมเครื่อง: ป้ายซ้าย ตัวเลขขวา คำอธิบายใต้ป้าย */
+.rel { display: flex; flex-direction: column; }
+.rel-list { flex: 1; display: flex; flex-direction: column; margin: 0; padding: 0 var(--space-lg) var(--space-md); }
+.rel-list > div { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l f" "s f"; align-content: center; column-gap: var(--space-md); row-gap: 2px; padding: var(--space-sm) 0; border-top: 1px solid var(--rule); }
+.rel-list > div:first-child { border-top: 0; }
+.rel-list dt { grid-area: l; font-size: var(--text-sm); color: var(--ink-2); font-weight: 500; }
+.rel-list .rel-fig { grid-area: f; align-self: center; margin: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 1.25rem; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rel-list .rel-fig small { font-size: var(--text-sm); font-weight: 500; color: var(--muted); }
+.rel-list .rel-fig .link { font-size: inherit; font-weight: inherit; }
+.rel-list .rel-sub { grid-area: s; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs) var(--space-sm); font-size: var(--text-xs); color: var(--muted); min-width: 0; }
+.rel-list .rel-sub .link { font-size: inherit; }
+.pmdots { list-style: none; margin: 0; padding: 0; display: flex; gap: 3px; }
+.pmdots li { width: 10px; height: 10px; border-radius: 2px; background: var(--ok); }
+.pmdots li.late { background: var(--stop); }
+
+/* กราฟเวลาหยุด: หัวกราฟสองบรรทัด ค่าวันที่เลือกอยู่ในหัว ไม่ลอยทับกราฟ */
+.sheet .chart { padding: var(--space-lg); gap: var(--space-sm); }
+.sheet .chart-head { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-2xs) var(--space-sm); }
+.sheet .chart-head > div:first-child { display: contents; }
+.sheet .chart-head h2 { grid-row: 1; grid-column: 1 / 4; line-height: 32px; }
+.sheet .chart-tools { grid-row: 1; grid-column: 4; align-self: center; flex-direction: row-reverse; align-items: center; gap: var(--space-md); }
+.sheet .chart-head .clabel { grid-row: 2; grid-column: 1; margin-top: 0; font-size: var(--text-xs); }
+.sheet .chart-head .cfig { grid-row: 2; grid-column: 2; font-size: 1.25rem; }
+.sheet .sel-read { grid-row: 2; grid-column: 3 / 5; }
+.sheet .seg-ctl button { min-height: 30px; padding: 0 var(--space-sm); }
+.sheet .plot { height: 230px; margin-top: var(--space-xs); }
+.sheet .tip { display: none; }
+.sheet .bars .b span { background: var(--color-accent-soft); }
+.sel-read { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs) var(--space-sm); padding-left: var(--space-sm); border-left: 1px solid var(--rule); font-size: var(--text-xs); color: var(--ink-2); }
 .sel-read b { color: var(--ink); font-weight: 600; }
 .sel-read span { display: inline-flex; align-items: center; gap: var(--space-2xs); }
-.dash-r3 .combo { max-height: clamp(130px, calc(100dvh - 730px), 240px); }
-/* โดนัท: วงซ้าย คำอธิบายขวา ให้แถวเตี้ย */
-.dash-r4 .donut { flex-wrap: nowrap; gap: var(--space-sm); }
-.dash-r4 .donut svg { flex: 0 0 96px; width: 96px; height: 96px; }
-.dash-r4 .dlist { flex: 1 1 auto; min-width: 0; font-size: var(--text-xs); gap: 2px; }
-.dash-r4 .dlist li { grid-template-columns: 10px minmax(0, 1fr) auto 34px; gap: var(--space-2xs); }
-.dash-r4 .dlist li > span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dash-r4 .box > .pad { padding-top: 0; }
+
+/* รายการในช่อง: ชิดขอบช่องเดียวกับหัว */
+.sheet .alist li, .sheet .plist li, .sheet .team li, .sheet .clist li { padding-inline: var(--space-lg); }
+.sheet .goal { padding-inline: var(--space-lg); }
+
+/* ใบงานที่เปิดอยู่ */
+.sheet .card.flush .bar { padding-bottom: var(--space-sm); }
 .dash-open td { padding-top: var(--space-xs); padding-bottom: var(--space-xs); }
-.dash-open td:nth-child(3) .u-nowrap { max-width: 10ch; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
-.dash-open .cellwo .title { max-width: 30ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; text-align: left; }
-@media (max-width: 75rem) {
-  .bgrid.dash-r3 { grid-template-columns: minmax(0, 1fr); }
-  .bgrid.dash-r4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dash-r4 > :last-child { grid-column: 1 / -1; }
-}
-@media (max-width: 60rem) {
-  .dash-reli { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .bgrid.dash-r4 { grid-template-columns: minmax(0, 1fr); }
-}
 .dash-open th, .dash-open td { padding-inline: var(--space-sm); }
 .dash-open th:first-child, .dash-open td:first-child { padding-left: var(--space-lg); }
 .dash-open th:last-child, .dash-open td:last-child { padding-right: var(--space-lg); white-space: nowrap; }
+.dash-open td:nth-child(3) .u-nowrap { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+.dash-open .cellwo .title { max-width: 60ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; text-align: left; }
+
+@media (max-width: 75rem) {
+  .srow.s21 { grid-template-columns: minmax(0, 1fr); }
+  .srow.s111 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .srow.s21 > * + *, .srow.s111 > :nth-child(3) { border-left: 0; border-top: 1px solid var(--rule); }
+  .srow.s111 > :nth-child(3) { grid-column: 1 / -1; }
+}
+@media (max-width: 48rem) {
+  .srow.s111 { grid-template-columns: minmax(0, 1fr); }
+  .srow > * + * { border-left: 0; border-top: 1px solid var(--rule); }
+  .sheet .chart-head { grid-template-columns: auto minmax(0, 1fr); }
+  .sheet .chart-head h2 { grid-column: 1 / -1; }
+  .sheet .chart-tools { grid-row: 2; grid-column: 1 / -1; justify-self: start; flex-direction: column; align-items: flex-start; }
+  .sheet .chart-head .clabel, .sheet .chart-head .cfig { grid-row: 3; }
+  .sheet .sel-read { grid-row: 4; grid-column: 1 / -1; padding-left: 0; border-left: 0; }
+  .sheet .plot { height: 180px; }
+}
+.sheet .team li { grid-template-columns: auto minmax(0, 1fr) auto 2ch; }
+.sheet .team li > .mono { text-align: right; }
+.zmap { align-items: flex-start; }
