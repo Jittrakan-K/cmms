@@ -1329,3 +1329,6 @@ html.fit .pg-plant .fmap, html.fit .fmap.editing { --mapH: calc(100dvh - 330px);
 .sheet .team li { grid-template-columns: auto minmax(0, 1fr) auto 2ch; }
 .sheet .team li > .mono { text-align: right; }
 .zmap { align-items: flex-start; }
+/* แผนผังเครื่องจักรอยู่ใต้ตัวเลขสรุป ให้เห็นทั้งรูปในจอแรกโดยไม่ต้องเลื่อน */
+.dash-machines .fmap { --mapH: max(280px, calc(100vh - 380px)); }
+.dash-machines > .pad:first-of-type { padding-bottom: var(--space-md); }
