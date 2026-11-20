@@ -1206,3 +1206,22 @@ html.fit .pg-plant .fmap, html.fit .fmap.editing { --mapH: calc(100dvh - 330px);
 .zline + .zline { margin-top: var(--space-md); }
 .zline h3 { margin: 0 0 var(--space-xs); font-size: var(--text-sm); font-weight: 500; }
 .mlist .small { font-size: var(--text-xs); white-space: nowrap; }
+
+/* การ์ดตัวเลขสรุปแบบกะทัดรัด: ไอคอนเล็ก ตัวเลขกับคำอธิบายอยู่บรรทัดเดียวกัน */
+.kpi-row { gap: var(--space-sm); }
+.kpi-card { gap: var(--space-sm); padding: var(--space-xs) var(--space-md); min-height: 0; }
+.kpi-ic { width: 32px; height: 32px; border-radius: 9px; }
+.kpi-t { gap: 0; flex: 1; }
+.kpi-l { font-size: var(--text-xs); line-height: 1.3; }
+.kpi-vs { display: flex; align-items: baseline; gap: var(--space-xs); min-width: 0; }
+.kpi-v { flex: none; font-size: 1.3rem; line-height: 1.2; }
+.kpi-s { min-width: 0; }
+@media (max-width: 40rem) {
+  .kpi-card { flex-direction: row; align-items: center; padding: var(--space-xs) var(--space-sm); }
+  .kpi-ic { width: 28px; height: 28px; }
+  .kpi-vs { flex-direction: column; align-items: flex-start; gap: 0; }
+}
+@media (min-width: 60.01rem) {
+  .kpi-row { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .kpi-l, .kpi-s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}

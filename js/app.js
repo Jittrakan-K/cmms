@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611200908';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611200908';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611200922';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611200922';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -503,8 +503,8 @@ function viewBoard(m) {
   const pmNext7 = state.pmPlans.filter((p) => p.dueDate <= t0 + 7 * DAY);
   const kpi = (k, label, value, sub, ic, act) => `<button type="button" class="kpi-card k-${k}" data-act="nav" data-id="${act}">
       <span class="kpi-ic" aria-hidden="true">${ic}</span>
-      <span class="kpi-t"><span class="kpi-l">${label}</span><span class="kpi-v mono">${value}</span><span class="kpi-s">${sub}</span></span></button>`;
-  const I = (d) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+      <span class="kpi-t"><span class="kpi-l">${label}</span><span class="kpi-vs"><span class="kpi-v mono">${value}</span><span class="kpi-s">${sub}</span></span></span></button>`;
+  const I = (d) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const kpis = `<section class="kpi-row" aria-label="ตัวเลขสรุป">
       ${kpi('asset', 'เครื่องจักรทั้งหมด', activeN.toLocaleString('th-TH'), `หยุดอยู่ ${stopN + countM('wait')} เครื่อง`, I('<rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 7V5h10v2M7 12h4M7 15h7"/>'), 'assets')}
       ${kpi('open', 'ใบงานที่ยังไม่ปิด', open.length, `รออนุมัติ ${open.filter((w) => w.status === 'pending').length} ใบ`, I('<path d="M9 4h6l1 2h3v14H5V6h3z"/><path d="M9 12h6M9 16h4"/>'), 'work')}
@@ -546,12 +546,26 @@ function viewBoard(m) {
   state.assets.forEach((a) => { const c = a.category || a.line || 'ไม่ระบุหมวด'; const x = cats.get(c) || { n: 0, bad: 0 }; x.n++; if (needsCare(ms.find((y) => y.a.id === a.id) || {})) x.bad++; cats.set(c, x); });
   const catList = [...cats].sort((a, b) => b[1].n - a[1].n).slice(0, 7);
   // ใบงานล่าสุด
-  const recent = liveWO().sort((a, b) => b.startAt - a.startAt).slice(0, 6);
+  // จำนวนแถวในรายการใต้การ์ดสรุป: พอดีจอแรกเมื่อจัดหนึ่งหน้าจอ (3–6 แถว ตามความสูงจอ)
+  const nList = fitOn() ? Math.max(3, Math.min(6, Math.floor((innerHeight - 420) / 62))) : 6;
+  const recent = liveWO().sort((a, b) => b.startAt - a.startAt).slice(0, nList);
   const prioChip = (w) => { const [l, bg, fg] = PRIO[priOf(w)]; return `<span class="schip" style="background:${bg};color:${fg}">${l}</span>`; };
   // PM ที่จะถึง
-  const upcoming = [...state.pmPlans].sort((a, b) => a.dueDate - b.dueDate).slice(0, 6);
+  const upcoming = [...state.pmPlans].sort((a, b) => a.dueDate - b.dueDate).slice(0, nList);
 
   return `${kpis}
+    <div class="bgrid g3b">
+      <section class="box"><div class="bar"><h2>ใบงานล่าสุด</h2>${seeAll('work', 'ดูทั้งหมด')}</div>
+        ${recent.length ? `<div class="scroll"><table class="btable"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">ความสำคัญ</th><th scope="col">สถานะ</th></tr></thead><tbody>
+          ${recent.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="bt-t"><b class="mono">${esc(w.id)}</b><small>${esc(w.title)}</small></td><td>${tag(w.asset)}</td><td>${prioChip(w)}</td><td>${statusChip(w.status)}</td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="empty">ยังไม่มีใบงาน</p>'}</section>
+      <section class="box"><div class="bar"><h2>PM ที่จะถึง</h2>${seeAll('pm', 'ดูแผน PM')}</div>
+        ${upcoming.length ? `<ul class="alist">${upcoming.map((p) => `<li class="pick" data-act="nav" data-id="pm"><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}<span class="s">${freqLabel(p.intervalDays)}</span></span><span class="u-nowrap mono ${p.dueDate < t0 ? 'alarm' : p.dueDate < t0 + DAY ? '' : 'dim'}">${p.dueDate < t0 + DAY && p.dueDate >= t0 ? 'วันนี้' : fmtDate(p.dueDate)}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีแผน PM</p>'}
+        <div class="pad goal"><p class="kpi">ทำ PM ทันกำหนด (30 วัน) <b class="mono">${comp.pct.toFixed(0)}%</b></p><div class="prog" role="img" aria-label="ทำ PM ทันกำหนด ${comp.pct.toFixed(0)} เปอร์เซ็นต์"><span style="width:${Math.min(100, comp.pct)}%"></span></div></div></section>
+      <section class="box"><div class="bar"><h2>คลังอะไหล่ <span class="dim u-w400">ต้องสั่ง ${reorder.length}</span></h2>${seeAll('parts', 'ดูคลัง')}</div>
+        ${state.parts.filter(tracked).length ? `<ul class="plist">${state.parts.filter(tracked).sort((a, b) => a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min)).slice(0, nList).map((p) => { const r = p.qty / Math.max(1, p.max || p.min * 2 || 1); const lv = partLevel(p); return `<li><span class="t"><b>${esc(p.name)}</b><span class="dim mono">${esc(p.id)} คงเหลือ ${p.qty}${p.unit ? ` ${esc(p.unit)}` : ''}</span></span><span class="schip ${lv === 'ok' ? 's-ok' : 's-wait'}">${lv === 'out' ? 'หมด' : lv === 'low' ? 'ต่ำ' : 'ปกติ'}</span><span class="pbar2"><span class="l-${lv}" style="width:${Math.min(100, Math.max(3, 100 * r)).toFixed(0)}%"></span></span></li>`; }).join('')}</ul>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
+    </div>
+
     <div class="bgrid g3">
       <section class="box"><div class="bar"><h2>ภาพรวมงานซ่อม ปี ${yNow + 543}</h2><ul class="mkey inline"><li><i class="ck-b" aria-hidden="true"></i>ใบแจ้งซ่อม</li><li><i class="ck-l" aria-hidden="true"></i>PM ที่ทำเสร็จ</li></ul></div><div class="pad">${combo}</div></section>
       <section class="box"><div class="bar"><h2>สถานะใบงาน</h2>${seeAll('work', 'ดูทั้งหมด')}</div><div class="pad">${donut(woParts, woTotal, 'ใบงาน', 'สัดส่วนใบงานตามสถานะ')}</div></section>
@@ -566,18 +580,6 @@ function viewBoard(m) {
     : `${state.assets.length > 48 || state.maps.length ? `<p class="hint u-pad-sm">แสดงทุกเครื่องเป็นการ์ด <button type="button" class="link" data-act="board-all">กลับไปแบบแผนผัง</button></p>` : ''}
       ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}`}
     </section>
-
-    <div class="bgrid g3b">
-      <section class="box"><div class="bar"><h2>ใบงานล่าสุด</h2>${seeAll('work', 'ดูทั้งหมด')}</div>
-        ${recent.length ? `<div class="scroll"><table class="btable"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">ความสำคัญ</th><th scope="col">สถานะ</th></tr></thead><tbody>
-          ${recent.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="bt-t"><b class="mono">${esc(w.id)}</b><small>${esc(w.title)}</small></td><td>${tag(w.asset)}</td><td>${prioChip(w)}</td><td>${statusChip(w.status)}</td></tr>`).join('')}
-        </tbody></table></div>` : '<p class="empty">ยังไม่มีใบงาน</p>'}</section>
-      <section class="box"><div class="bar"><h2>PM ที่จะถึง</h2>${seeAll('pm', 'ดูแผน PM')}</div>
-        ${upcoming.length ? `<ul class="alist">${upcoming.map((p) => `<li class="pick" data-act="nav" data-id="pm"><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}<span class="s">${freqLabel(p.intervalDays)}</span></span><span class="u-nowrap mono ${p.dueDate < t0 ? 'alarm' : p.dueDate < t0 + DAY ? '' : 'dim'}">${p.dueDate < t0 + DAY && p.dueDate >= t0 ? 'วันนี้' : fmtDate(p.dueDate)}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีแผน PM</p>'}
-        <div class="pad goal"><p class="kpi">ทำ PM ทันกำหนด (30 วัน) <b class="mono">${comp.pct.toFixed(0)}%</b></p><div class="prog" role="img" aria-label="ทำ PM ทันกำหนด ${comp.pct.toFixed(0)} เปอร์เซ็นต์"><span style="width:${Math.min(100, comp.pct)}%"></span></div></div></section>
-      <section class="box"><div class="bar"><h2>คลังอะไหล่ <span class="dim u-w400">ต้องสั่ง ${reorder.length}</span></h2>${seeAll('parts', 'ดูคลัง')}</div>
-        ${state.parts.filter(tracked).length ? `<ul class="plist">${state.parts.filter(tracked).sort((a, b) => a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min)).slice(0, 6).map((p) => { const r = p.qty / Math.max(1, p.max || p.min * 2 || 1); const lv = partLevel(p); return `<li><span class="t"><b>${esc(p.name)}</b><span class="dim mono">${esc(p.id)} คงเหลือ ${p.qty}${p.unit ? ` ${esc(p.unit)}` : ''}</span></span><span class="schip ${lv === 'ok' ? 's-ok' : 's-wait'}">${lv === 'out' ? 'หมด' : lv === 'low' ? 'ต่ำ' : 'ปกติ'}</span><span class="pbar2"><span class="l-${lv}" style="width:${Math.min(100, Math.max(3, 100 * r)).toFixed(0)}%"></span></span></li>`; }).join('')}</ul>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
-    </div>
 
     <div class="bgrid g3c">
       <section class="box"><div class="bar"><h2>หมวดเครื่องจักร</h2>${seeAll('assets', 'ดูทะเบียน')}</div>
