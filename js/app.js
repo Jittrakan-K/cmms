@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611200922';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611200922';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611200940';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611200940';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -33,8 +33,7 @@ const FILTERS = {
   done: ['ปิดแล้ว', (w) => w.status === 'done']
 };
 const PAGES = {
-  board: ['SH-09', 'แดชบอร์ด', 'แดชบอร์ดสถานะ'],
-  overview: ['SH-01', 'ภาพรวม', 'ภาพรวมโรงงาน'],
+  board: ['SH-09', 'แดชบอร์ด', 'แดชบอร์ดและภาพรวม'],
   plant: ['SH-10', 'แผนผังโรงงาน', 'แผนผังโรงงาน'],
   quick: ['SH-00', 'แจ้งซ่อมด่วน', 'แจ้งซ่อมด่วน'],
   work: ['SH-02', 'งานซ่อม', 'งานซ่อม'],
@@ -71,6 +70,9 @@ const canAdmin = () => state.user?.role === 'admin';
 const assetOf = (id) => state.assets.find((a) => a.id === id);
 const partOf = (id) => state.parts.find((p) => p.id === id);
 const isoDate = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const PRANK = { stop: 3, slow: 2, plan: 1 };
+// อายุใบงานแบบอ่านง่าย: ไม่ถึงวันแสดง ชม.:นาที เกินวันแสดงจำนวนวัน
+const ageText = (ms) => (ms < DAY ? `${Math.floor(ms / 3600000)}:${String(Math.floor((ms % 3600000) / 60000)).padStart(2, '0')} ชม.` : `${Math.floor(ms / DAY).toLocaleString('th-TH')} วัน`);
 const PRIO = { stop: ['สูง', 'var(--stop-bg)', 'var(--stop-fg)'], slow: ['กลาง', 'var(--wait-bg)', 'var(--wait-fg)'], plan: ['ต่ำ', 'var(--grey-bg)', 'var(--grey-fg)'] };
 const TYPE_STYLE = { breakdown: ['var(--stop)', 'var(--stop-bg)', 'var(--stop-fg)'], pm: ['var(--pm)', 'var(--pm-bg)', 'var(--pm-fg)'], inspect: ['var(--wait)', 'var(--grey-bg)', 'var(--grey-fg)'], improve: ['var(--ok)', 'var(--ok-bg)', 'var(--ok-fg)'] };
 const priOf = (w) => w.priority || { breakdown: 'stop', inspect: 'slow', pm: 'plan' }[w.type] || 'plan';
@@ -82,7 +84,6 @@ const relDate = (t) => { const d0 = startOfToday(); if (t >= d0) return 'วั�
 const NAV_ICON = {
   plant: '<path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20z"/><path d="M9 4v13.5M15 6.5V20"/>',
   quick: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
-  overview: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
   board: '<rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 17v4M7 13V9M11 13V7M15 13v-3"/>',
   work: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>',
   assets: '<path d="M3 21V10l6 4V10l6 4V4h6v17z"/>',
@@ -546,30 +547,39 @@ function viewBoard(m) {
   state.assets.forEach((a) => { const c = a.category || a.line || 'ไม่ระบุหมวด'; const x = cats.get(c) || { n: 0, bad: 0 }; x.n++; if (needsCare(ms.find((y) => y.a.id === a.id) || {})) x.bad++; cats.set(c, x); });
   const catList = [...cats].sort((a, b) => b[1].n - a[1].n).slice(0, 7);
   // ใบงานล่าสุด
-  // จำนวนแถวในรายการใต้การ์ดสรุป: พอดีจอแรกเมื่อจัดหนึ่งหน้าจอ (3–6 แถว ตามความสูงจอ)
-  const nList = fitOn() ? Math.max(3, Math.min(6, Math.floor((innerHeight - 420) / 62))) : 6;
+  const nList = 6;
   const recent = liveWO().sort((a, b) => b.startAt - a.startAt).slice(0, nList);
   const prioChip = (w) => { const [l, bg, fg] = PRIO[priOf(w)]; return `<span class="schip" style="background:${bg};color:${fg}">${l}</span>`; };
   // PM ที่จะถึง
   const upcoming = [...state.pmPlans].sort((a, b) => a.dueDate - b.dueDate).slice(0, nList);
 
+  // แดชบอร์ดรวมภาพรวม: จอแรกคือตัวเลขสรุป ความพร้อมเครื่อง กราฟรายปีกับกราฟเวลาหยุด สัดส่วนสถานะ และใบงานที่เปิดอยู่
+  const nOpen = fitOn() ? Math.max(2, Math.min(8, Math.floor((innerHeight - 730) / 52))) : 8;
+  const o = overviewParts(m, nOpen);
   return `${kpis}
-    <div class="bgrid g3b">
-      <section class="box"><div class="bar"><h2>ใบงานล่าสุด</h2>${seeAll('work', 'ดูทั้งหมด')}</div>
-        ${recent.length ? `<div class="scroll"><table class="btable"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">ความสำคัญ</th><th scope="col">สถานะ</th></tr></thead><tbody>
-          ${recent.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="bt-t"><b class="mono">${esc(w.id)}</b><small>${esc(w.title)}</small></td><td>${tag(w.asset)}</td><td>${prioChip(w)}</td><td>${statusChip(w.status)}</td></tr>`).join('')}
-        </tbody></table></div>` : '<p class="empty">ยังไม่มีใบงาน</p>'}</section>
+    ${o.reli.replace('<div class="cards4">', '<div class="cards4 dash-reli">')}
+
+    <div class="bgrid dash-r3">
+      <section class="box"><div class="bar"><h2>ภาพรวมงานซ่อม ปี ${yNow + 543}</h2><ul class="mkey inline"><li><i class="ck-b" aria-hidden="true"></i>ใบแจ้งซ่อม</li><li><i class="ck-l" aria-hidden="true"></i>PM ที่ทำเสร็จ</li></ul></div><div class="pad">${combo}</div></section>
+      ${o.trend}
+    </div>
+
+    <div class="bgrid dash-r4">
+      <section class="box"><div class="bar"><h2>สถานะใบงาน</h2>${seeAll('work', 'ดูทั้งหมด')}</div><div class="pad">${donut(woParts, woTotal, 'ใบงาน', 'สัดส่วนใบงานตามสถานะ')}</div></section>
+      <section class="box"><div class="bar"><h2>สุขภาพเครื่องจักร</h2>${seeAll('assets', 'ดูทะเบียน')}</div><div class="pad">${donut(healthParts, state.assets.length, 'เครื่อง', 'สัดส่วนเครื่องตามสถานะ')}</div></section>
+      ${o.open}
+    </div>
+
+    <div class="bgrid g3c">
       <section class="box"><div class="bar"><h2>PM ที่จะถึง</h2>${seeAll('pm', 'ดูแผน PM')}</div>
         ${upcoming.length ? `<ul class="alist">${upcoming.map((p) => `<li class="pick" data-act="nav" data-id="pm"><span class="tag">${esc(p.asset)}</span><span class="t">${esc(p.task)}<span class="s">${freqLabel(p.intervalDays)}</span></span><span class="u-nowrap mono ${p.dueDate < t0 ? 'alarm' : p.dueDate < t0 + DAY ? '' : 'dim'}">${p.dueDate < t0 + DAY && p.dueDate >= t0 ? 'วันนี้' : fmtDate(p.dueDate)}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีแผน PM</p>'}
         <div class="pad goal"><p class="kpi">ทำ PM ทันกำหนด (30 วัน) <b class="mono">${comp.pct.toFixed(0)}%</b></p><div class="prog" role="img" aria-label="ทำ PM ทันกำหนด ${comp.pct.toFixed(0)} เปอร์เซ็นต์"><span style="width:${Math.min(100, comp.pct)}%"></span></div></div></section>
       <section class="box"><div class="bar"><h2>คลังอะไหล่ <span class="dim u-w400">ต้องสั่ง ${reorder.length}</span></h2>${seeAll('parts', 'ดูคลัง')}</div>
         ${state.parts.filter(tracked).length ? `<ul class="plist">${state.parts.filter(tracked).sort((a, b) => a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min)).slice(0, nList).map((p) => { const r = p.qty / Math.max(1, p.max || p.min * 2 || 1); const lv = partLevel(p); return `<li><span class="t"><b>${esc(p.name)}</b><span class="dim mono">${esc(p.id)} คงเหลือ ${p.qty}${p.unit ? ` ${esc(p.unit)}` : ''}</span></span><span class="schip ${lv === 'ok' ? 's-ok' : 's-wait'}">${lv === 'out' ? 'หมด' : lv === 'low' ? 'ต่ำ' : 'ปกติ'}</span><span class="pbar2"><span class="l-${lv}" style="width:${Math.min(100, Math.max(3, 100 * r)).toFixed(0)}%"></span></span></li>`; }).join('')}</ul>` : '<p class="empty">ยังไม่มีอะไหล่</p>'}</section>
-    </div>
-
-    <div class="bgrid g3">
-      <section class="box"><div class="bar"><h2>ภาพรวมงานซ่อม ปี ${yNow + 543}</h2><ul class="mkey inline"><li><i class="ck-b" aria-hidden="true"></i>ใบแจ้งซ่อม</li><li><i class="ck-l" aria-hidden="true"></i>PM ที่ทำเสร็จ</li></ul></div><div class="pad">${combo}</div></section>
-      <section class="box"><div class="bar"><h2>สถานะใบงาน</h2>${seeAll('work', 'ดูทั้งหมด')}</div><div class="pad">${donut(woParts, woTotal, 'ใบงาน', 'สัดส่วนใบงานตามสถานะ')}</div></section>
-      <section class="box"><div class="bar"><h2>สุขภาพเครื่องจักร</h2>${seeAll('assets', 'ดูทะเบียน')}</div><div class="pad">${donut(healthParts, state.assets.length, 'เครื่อง', 'สัดส่วนเครื่องตามสถานะ')}</div></section>
+      <section class="box"><div class="bar"><h2>ทีมช่าง</h2><span class="dim u-small">ถืองาน / ปิด 7 วัน</span></div>
+        ${team.length ? `<ul class="team">${team.slice(0, 7).map((t) => `<li>${avatar(t.name)}<span class="t"><b>${esc(t.name)}</b><span>${t.holding.length ? `${t.holding.length} งาน: ${t.holding.slice(0, 2).map((w) => esc(w.asset)).join(', ')}` : 'พร้อมรับงาน'}</span></span><span class="schip ${t.holding.length ? 's-info' : 's-ok'}">${t.holding.length ? 'กำลังทำงาน' : 'ว่าง'}</span><span class="mono dim">${t.closed}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีข้อมูลช่างในระบบ</p>'}
+        ${team.length > 7 ? `<p class="hint u-pad-b">และช่างอีก ${team.length - 7} คน (เรียงตามงานที่ถืออยู่)</p>` : ''}
+        ${unassigned.length ? `<p class="hint u-pad-b">อนุมัติแล้วแต่ยังไม่มีผู้รับผิดชอบ ${unassigned.length} ใบ</p>` : ''}</section>
     </div>
 
     <section class="box dash-machines" data-flow>
@@ -581,14 +591,17 @@ function viewBoard(m) {
       ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}`}
     </section>
 
+    ${o.timeline}
+
     <div class="bgrid g3c">
       <section class="box"><div class="bar"><h2>หมวดเครื่องจักร</h2>${seeAll('assets', 'ดูทะเบียน')}</div>
         ${catList.length ? `<ul class="clist">${catList.map(([c, x]) => `<li><span class="c-ic" aria-hidden="true">${esc([...c.replace(/^Machine\s+/i, '')][0] || '?')}</span><span class="t">${esc(c)}${x.bad ? `<span class="alarm u-small"> ต้องดูแล ${x.bad}</span>` : ''}</span><b class="mono">${x.n.toLocaleString('th-TH')}</b></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีเครื่องจักร</p>'}</section>
-      <section class="box"><div class="bar"><h2>ทีมช่าง</h2><span class="dim u-small">ถืองาน / ปิด 7 วัน</span></div>
-        ${team.length ? `<ul class="team">${team.map((t) => `<li>${avatar(t.name)}<span class="t"><b>${esc(t.name)}</b><span>${t.holding.length ? `${t.holding.length} งาน: ${t.holding.slice(0, 2).map((w) => esc(w.asset)).join(', ')}` : 'พร้อมรับงาน'}</span></span><span class="schip ${t.holding.length ? 's-info' : 's-ok'}">${t.holding.length ? 'กำลังทำงาน' : 'ว่าง'}</span><span class="mono dim">${t.closed}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีข้อมูลช่างในระบบ</p>'}
-        ${unassigned.length ? `<p class="hint u-pad-b">อนุมัติแล้วแต่ยังไม่มีผู้รับผิดชอบ ${unassigned.length} ใบ</p>` : ''}</section>
       <section class="box"><div class="bar"><h2>เครื่องมือวัด <span class="dim u-w400">ใช้ได้ ${gN('ok')} จาก ${state.gauges.length}</span></h2>${seeAll('gauges', 'ดูทะเบียน')}</div>
         ${gAlert.length ? `<ul class="alist">${gAlert.slice(0, 5).map((x) => `<li><span class="tag">${esc(x.g.id)}</span><span class="t">${esc(x.g.name)}</span><span class="u-nowrap ${x.s[0] === 'soon' ? 'dim' : 'alarm'}">${x.s[1]}</span></li>`).join('')}</ul>` : '<p class="empty">ทุกเครื่องมืออยู่ในรอบสอบเทียบ</p>'}</section>
+      <section class="box"><div class="bar"><h2>ใบงานล่าสุด</h2>${seeAll('work', 'ดูทั้งหมด')}</div>
+        ${recent.length ? `<div class="scroll"><table class="btable"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">ความสำคัญ</th><th scope="col">สถานะ</th></tr></thead><tbody>
+          ${recent.map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}"><td class="bt-t"><b class="mono">${esc(w.id)}</b><small>${esc(w.title)}</small></td><td>${tag(w.asset)}</td><td>${prioChip(w)}</td><td>${statusChip(w.status)}</td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="empty">ยังไม่มีใบงาน</p>'}</section>
     </div>`;
 }
 
@@ -616,7 +629,8 @@ function downtimeBuckets(range) {
   });
 }
 
-function viewOverview(m) {
+// ส่วนของภาพรวม (เดิมคือหน้า SH-01) ประกอบอยู่ในแดชบอร์ด: การ์ดความพร้อมเครื่อง กราฟเวลาหยุด ใบงานที่เปิดอยู่ ไทม์ไลน์ 7 วัน
+function overviewParts(m, openLimit = Infinity) {
   const span = 7 * DAY;
   const pct = (t) => (((t - m.from) / span) * 100).toFixed(2);
   const days = Array.from({ length: 7 }, (_, i) => `<span>${fmtDate(m.from + i * DAY)}</span>`).join('');
@@ -671,18 +685,17 @@ function viewOverview(m) {
   const pts = bk.map((b, i) => `${((i + 0.5) / bk.length) * 100},${100 - (b.fails / maxF) * 86}`).join(' ');
   const STAGE = { pending: 15, open: 35, doing: 65, parts: 65 };
 
-  const openRows = m.open.map((w) => {
-    const pc = STAGE[w.status] ?? 0;
-    return `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}">
+  // งานจริงในระบบก่อนใบงานย้อนหลังที่นำเข้า แล้วเรียงตามความสำคัญ และงานที่แจ้งล่าสุดก่อน
+  const openList = [...m.open].sort((a, b) => Number(!!a.imported) - Number(!!b.imported) || (PRANK[b.priority] ?? 0) - (PRANK[a.priority] ?? 0) || b.startAt - a.startAt);
+  const openRows = openList.slice(0, openLimit).map((w) => `<tr class="pick" data-act="open-wo" data-id="${esc(w.id)}">
       <td><span class="cellwo">${andon(machineState(state.assets.find((a) => a.id === w.asset) || { id: w.asset }).k)}<span class="t"><button type="button" class="link title" data-act="open-wo" data-id="${esc(w.id)}">${esc(w.title)}</button><span class="sub"><span class="mono">${esc(w.id)}</span><span>${TYPE[w.type]}</span></span></span></span></td>
-      <td>${tag(w.asset)}</td>
-      <td>${w.tech ? `<span class="u-row">${avatar(w.tech.split(/,\s*/)[0])}<span class="u-nowrap">${esc(w.tech)}</span></span>` : '<span class="dim">ยังไม่ได้มอบหมาย</span>'}</td>
-      <td><span class="progress ${w.status === 'parts' ? 'warn' : ''}"><span class="pbar"><span style="width:${pc}%"></span></span><span class="mono">${pc}%</span></span></td>
+      <td>${w.asset ? tag(w.asset) : '<span class="dim">–</span>'}</td>
+      <td>${w.tech ? `<span class="u-row">${avatar(w.tech.split(/,\s*/)[0])}<span class="u-nowrap">${esc(w.tech)}</span></span>` : '<span class="dim u-nowrap">ยังไม่มอบหมาย</span>'}</td>
       <td>${lamp(w.status)}</td>
-      <td class="num mono">${hm(now - w.startAt)}</td></tr>`;
-  }).join('');
+      <td class="num mono" title="เปิดมาแล้ว">${ageText(now - w.startAt)}</td></tr>`).join('');
 
-  return `<div class="cards4">
+  return {
+    reli: `<div class="cards4">
       <section class="card">
         <h2 class="clabel">Availability 7 วัน</h2>
         <p class="cfig">${m.avail.toFixed(1)}%${delta(m.avail, prevAvail, true)}</p>
@@ -706,11 +719,10 @@ function viewOverview(m) {
         <p class="cfig">${rank.length ? `#1 ${esc(rank[0].a.id)}` : 'ไม่มีเครื่องหยุด'}</p>
         <ol class="rank">${rank.map((r) => `<li><button type="button" class="rk" data-act="open-asset" data-id="${esc(r.a.id)}">${andon(machineState(r.a).k)}<span class="nm">${esc(r.a.name)}</span><span class="mono">${hours(r.down)} ชม.</span></button></li>`).join('')}</ol>
       </section>
-    </div>
-
-    <section class="card chart">
+    </div>`,
+    trend: `    <section class="card chart">
       <div class="chart-head">
-        <div><h2>เวลาหยุดเครื่องและจำนวนครั้งที่ขัดข้อง</h2><p class="clabel">เฉลี่ยต่อวัน</p><p class="cfig">${hours(avgDay)} ชม.</p></div>
+        <div><h2>เวลาหยุดเครื่องและครั้งที่ขัดข้อง</h2><p class="clabel">เฉลี่ยต่อวัน</p><p class="cfig">${hours(avgDay)} ชม.</p><p class="sel-read"><b>${range === 90 ? `สัปดาห์ ${fmtDate(sel.b0)}` : fmtDate(sel.b0)}</b><span><i class="k-bar"></i>หยุด ${hours(sel.down)} ชม.</span><span><i class="k-line"></i>ขัดข้อง ${sel.fails} ครั้ง</span></p></div>
         <div class="chart-tools">
           <div class="seg-ctl" role="group" aria-label="ช่วงเวลา">${[[90, '90 วัน'], [30, '30 วัน'], [7, '7 วัน']].map(([v, l]) => `<button type="button" data-act="ov-range" data-id="${v}" aria-pressed="${range === v}">${l}</button>`).join('')}</div>
           <ul class="ckey"><li><i class="k-bar"></i>ชั่วโมงหยุด</li><li><i class="k-line"></i>ครั้งที่ขัดข้อง</li></ul>
@@ -723,14 +735,12 @@ function viewOverview(m) {
         <div class="tip" style="left:clamp(80px, ${((selI + 0.5) / bk.length) * 100}%, calc(100% - 80px))"><b>${range === 90 ? `สัปดาห์ ${fmtDate(sel.b0)}` : fmtDate(sel.b0)}</b><span><i class="k-bar"></i>หยุด ${hours(sel.down)} ชม.</span><span><i class="k-line"></i>ขัดข้อง ${sel.fails} ครั้ง</span></div>
       </div>
       <div class="xlab" style="--n:${bk.length}">${bk.map((b, i) => `<span class="${i === selI ? 'on' : ''}">${range === 30 && i % 3 && i !== selI ? '' : b.label}</span>`).join('')}</div>
-    </section>
-
-    <section class="card flush">
-      <div class="bar"><h2>ใบสั่งงานที่เปิดอยู่ <span class="dim u-w400">${m.open.length} ใบ</span></h2><button type="button" class="link" data-act="nav" data-id="work">ดูทั้งหมด</button></div>
-      ${openRows ? `<div class="scroll"><table class="wotable" style="min-width:860px"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">ผู้รับผิดชอบ</th><th scope="col">ความคืบหน้า</th><th scope="col">สถานะ</th><th scope="col" class="num">ระยะเวลา</th></tr></thead><tbody>${openRows}</tbody></table></div>` : '<p class="empty">ไม่มีงานค้าง</p>'}
-    </section>
-
-    <section class="card flush board">
+    </section>`,
+    open: `    <section class="card flush">
+      <div class="bar"><h2>ใบสั่งงานที่เปิดอยู่ <span class="dim u-w400">${m.open.length} ใบ${openList.length > openLimit ? ` · แสดง ${Math.min(openLimit, openList.length)} ใบที่สำคัญและใหม่ที่สุด` : ''}</span></h2><button type="button" class="link" data-act="nav" data-id="work">ดูทั้งหมด</button></div>
+      ${openRows ? `<div class="scroll"><table class="wotable dash-open"><thead><tr><th scope="col">ใบงาน</th><th scope="col">เครื่อง</th><th scope="col">ผู้รับผิดชอบ</th><th scope="col">สถานะ</th><th scope="col" class="num">เปิดมาแล้ว</th></tr></thead><tbody>${openRows}</tbody></table></div>` : '<p class="empty">ไม่มีงานค้าง</p>'}
+    </section>`,
+    timeline: `    <section class="card flush board">
       <div class="bar"><h2>สถานะเครื่อง 7 วัน</h2>
         <div class="legend"><span><i class="bar" style="--c:var(--run)"></i>เดินเครื่อง</span><span><i style="--c:var(--stop)"></i>หยุดเสีย</span><span><i style="--c:var(--wait)"></i>รออะไหล่</span><span><i style="--c:var(--card);--b:2px solid var(--pm)"></i>PM ตามแผน</span></div></div>
       <div class="scroll"><div class="tl">
@@ -739,7 +749,8 @@ function viewOverview(m) {
         ${rows && quiet ? `<p class="hint pad">เครื่องอื่นอีก ${quiet} เครื่องไม่มีเหตุการณ์ในช่วง 7 วัน</p>` : ''}
         <div class="tl-row foot"><span></span><span class="dim num tl-note">เส้นแนวตั้งแสดงเวลาปัจจุบัน ${fmtTime(m.now)}  MTBF ${hours(m.mtbf)} ชม.  MTTR ${hours(m.mttr)} ชม.</span><span class="tl-sum tl-total">${hours(m.down)}</span></div>
       </div></div>
-    </section>`;
+    </section>`,
+  };
 }
 
 /* ---------- SH-02 ใบสั่งงาน ---------- */
@@ -1824,7 +1835,7 @@ function render() {
   const m = metrics();
   const counts = { work: m.open.length, assets: state.assets.length, pm: m.pmSoon.length, parts: m.low.length, gauges: m.gaugeAlert.length || '' };
   const nav = Object.entries(PAGES).map(([k, [, label]]) => `<button type="button" data-act="nav" data-id="${k}" ${state.page === k ? 'aria-current="page"' : ''}>${icon(NAV_ICON[k])}<span>${label}</span><span class="n">${counts[k] ?? ''}</span></button>`).join('');
-  const views = { quick: viewQuick, overview: viewOverview, plant: viewPlant, board: viewBoard, work: viewWork, assets: viewAssets, pm: viewPm, parts: viewParts, gauges: viewGauges, report: viewReport, server: viewServer };
+  const views = { quick: viewQuick, plant: viewPlant, board: viewBoard, work: viewWork, assets: viewAssets, pm: viewPm, parts: viewParts, gauges: viewGauges, report: viewReport, server: viewServer };
   const noRole = !state.user.role;
   const [, , full] = PAGES[state.page];
   const add = canAdmin() && ADD_LABEL[state.page] ? `<button type="button" class="btn" data-act="add" data-id="${state.page}">${ADD_LABEL[state.page]}</button>` : '';
@@ -2039,7 +2050,7 @@ function go(page) {
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement && state.tv) { state.tv = false; document.documentElement.classList.remove('tv'); render(); }
 });
-window.addEventListener('hashchange', () => { const p = location.hash.slice(1); if (PAGES[p] && p !== state.page) go(p); });
+window.addEventListener('hashchange', () => { let p = location.hash.slice(1); if (p === 'overview') p = 'board'; if (PAGES[p] && p !== state.page) go(p); });
 
 function addLog(w, text) {
   return [...(w.log || []), { at: Date.now(), text }];
