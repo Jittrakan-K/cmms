@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611201555';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611201555';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611222330';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611222330';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -322,7 +322,8 @@ function plantMap(id, edit = false) {
   // เครื่องที่ต้องดูแลวาดทีหลังสุดให้อยู่บนสุด
   const pins = [...on].sort((p, q) => MAP_ORDER.indexOf(q.k) - MAP_ORDER.indexOf(p.k)).map(pin).join('');
   return `<div class="fmapwrap"><div class="fmap${edit ? ' editing' : ''}" style="--ar:${mp.w || 4}/${mp.h || 3}" data-map="${esc(id)}">
-      <img src="${mp.img}" alt="แผนผัง ${esc(mapName(mp))}" draggable="false"><div class="fmap-pins">${pins}</div></div></div>`;
+      <img src="${mp.img}" alt="" draggable="false" class="fmap-img"><div class="fmap-pins">${pins}</div>
+      <p class="fmap-miss" role="status">${/^https?:/.test(mp.img) ? `โหลดรูปแผนผัง ${esc(mapName(mp))} จากเซิร์ฟเวอร์ของบริษัทไม่ได้ เครื่องนี้อาจอยู่นอกเครือข่ายบริษัท${canAdmin() ? ' กด "เปลี่ยนรูป" ที่หน้าแผนผังโรงงานเพื่ออัปโหลดไฟล์รูปเก็บไว้ในระบบ แล้วทุกเครื่องจะเห็นรูป' : ' แจ้งแอดมินให้อัปโหลดไฟล์รูปเก็บไว้ในระบบ'}` : `โหลดรูปแผนผัง ${esc(mapName(mp))} ไม่ได้`} จุดเครื่องยังกดเปิดดูได้ตามปกติ</p></div></div>`;
 }
 function mapLegend(list) {
   const ks = list.map((a) => machineState(a).k);
@@ -350,7 +351,7 @@ function viewPlant() {
   if (state.mapBusy) return `${head}<section class="box"><p class="empty">กำลังเตรียมรูปแผนผัง…</p></section>`;
   if (!edit) {
     const status = mp
-      ? `<p class="hint">${esc(name)}: ${list.length} เครื่อง สีของจุดตามสถานะเครื่อง กดที่จุดเพื่อเปิดดูเครื่อง <button type="button" class="link" data-act="map-labels">${state.mapLabels ? 'ซ่อนรหัสเครื่องที่ปกติ' : 'แสดงรหัสทุกเครื่อง'}</button></p>`
+      ? `${/^https?:/.test(mp.img) && canAdmin() ? `<p class="notice">รูปแผนผังนี้ลิงก์ไปที่เซิร์ฟเวอร์ของบริษัท เครื่องที่อยู่นอกเครือข่ายบริษัทจะไม่เห็นรูป กด "เปลี่ยนรูป" แล้วเลือกไฟล์รูปเดียวกัน (ไม่ครอป ไม่หมุน) เพื่อเก็บรูปไว้ในระบบ จุดเครื่องจะอยู่ตำแหน่งเดิม</p>` : ''}<p class="hint">${esc(name)}: ${list.length} เครื่อง สีของจุดตามสถานะเครื่อง กดที่จุดเพื่อเปิดดูเครื่อง <button type="button" class="link" data-act="map-labels">${state.mapLabels ? 'ซ่อนรหัสเครื่องที่ปกติ' : 'แสดงรหัสทุกเครื่อง'}</button></p>`
       : `<p class="hint">${list.length} เครื่องยังไม่ได้วางบนแผนผัง แสดงเป็นโซนตามไลน์และกระบวนการ${canAdmin() ? (state.maps.length ? ' เลือกแผนผังแล้วกด "จัดตำแหน่งเครื่อง" เพื่อวางจุด' : ' กด "เพิ่มแผนผัง" เพื่ออัปโหลดรูป Layout ของแต่ละโรงงาน') : ''}</p>`;
     return `${head}${add}
       <section class="box pg-plant" data-flow><div class="bar"><h2>${esc(name)}</h2>${mapLegend(list)}</div>
@@ -2378,6 +2379,8 @@ function mapPlace(fm, e) {
   }
   render();
 }
+// รูปแผนผังโหลดไม่ได้ (เช่น ลิงก์ไปเซิร์ฟเวอร์บริษัทแต่เครื่องอยู่นอกเครือข่าย): แสดงข้อความแทนรูปเสีย
+app.addEventListener('error', (e) => { if (e.target.classList?.contains('fmap-img')) e.target.closest('.fmap')?.classList.add('broken'); }, true);
 app.addEventListener('pointerdown', (e) => {
   const p = e.target.closest('.fmap.editing .pin');
   if (!p || e.button !== 0) return;
