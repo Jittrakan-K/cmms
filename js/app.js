@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611222330';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611222330';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611231250';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611231250';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -1876,8 +1876,8 @@ function render() {
 }
 
 // หน้าจอเดียวต่อหน้า: ส่วนที่เกินจอแบ่งเป็นหน้าถัดไป (เฉพาะจอกว้าง จอมือถือยังเลื่อนลงตามปกติ)
-// แดชบอร์ดเลื่อนลงตามปกติ (จัดเป็นหน้าเฉพาะโหมดจอทีวี) หน้าอื่นจัดให้พอดีจอ
-const fitOn = () => fitWanted() && state.page !== 'quick' && (state.page !== 'board' || state.tv) && !!state.user;
+// แดชบอร์ดและแผนผังโรงงานเลื่อนลงตามปกติ (จัดเป็นหน้าเฉพาะโหมดจอทีวี) หน้าอื่นจัดให้พอดีจอ
+const fitOn = () => fitWanted() && state.page !== 'quick' && (!['board', 'plant'].includes(state.page) || state.tv) && !!state.user;
 let lastClick = null;
 let searchTimer = 0;
 function doFit() {
@@ -2562,7 +2562,12 @@ app.addEventListener('change', (e) => {
     const order = old ? old.order ?? 99 : state.maps.length;
     state.mapBusy = true; state.mapAdding = false; render();
     floorImage(file)
-      .then(({ img, w, h }) => run(async () => { await state.backend.put('maps', id, { name, img, w, h, order, updatedAt: Date.now(), by: state.user?.name || '' }); state.mapId = id; savePref('cmms.mapId', id); }, `บันทึกแผนผัง ${name} แล้ว`))
+      .then(({ img, w, h }) => {
+        // เปลี่ยนรูปแต่สัดส่วนต่างจากเดิม: จุดเครื่องเดิมจะคลาด เตือนให้ใช้รูปต้นฉบับ
+        const off = old && old.w && old.h ? Math.abs(w / h - old.w / old.h) / (old.w / old.h) : 0;
+        return run(async () => { await state.backend.put('maps', id, { name, img, w, h, order, updatedAt: Date.now(), by: state.user?.name || '' }); state.mapId = id; savePref('cmms.mapId', id); },
+          off > 0.02 ? `บันทึกแผนผัง ${name} แล้ว แต่สัดส่วนรูปต่างจากรูปเดิม ${Math.round(off * 100)}% จุดเครื่องอาจคลาดตำแหน่ง ควรใช้รูปต้นฉบับที่ไม่ได้ครอป` : `บันทึกแผนผัง ${name} แล้ว`);
+      })
       .catch((err) => { console.error(err); toast(err.message || 'อ่านไฟล์แผนผังไม่ได้'); })
       .finally(() => { state.mapBusy = false; render(); });
     return;

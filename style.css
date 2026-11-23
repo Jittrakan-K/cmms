@@ -1337,3 +1337,5 @@ html.fit .pg-plant .fmap, html.fit .fmap.editing { --mapH: calc(100dvh - 330px);
 .fmap.broken .fmap-img { visibility: hidden; }
 .fmap.broken .fmap-miss { display: block; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 7; max-width: min(520px, 90%); margin: 0; padding: var(--space-sm) var(--space-md); border: 1px solid var(--rule); border-radius: 10px; background: var(--card); box-shadow: var(--edge-stock); font-size: var(--text-sm); color: var(--ink-2); text-align: center; pointer-events: none; }
 html.fit .pg-plant .notice ~ .fmapwrap .fmap { --mapH: calc(100dvh - 470px); }
+/* หน้าแผนผังโรงงานเลื่อนลงตามปกติ ให้รูปสูงพอดีจอใต้แถบเครื่องมือ */
+.pg-plant .fmap, .mapedit .fmap { --mapH: max(320px, calc(100vh - 330px)); }
