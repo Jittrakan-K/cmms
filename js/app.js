@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611231250';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611231250';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611231319';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611231319';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -1525,7 +1525,7 @@ function costSection() {
 /* ---------- SH-08 ตั้งค่า ---------- */
 const ROLE_LABEL = { admin: 'แอดมิน', tech: 'ช่างซ่อมบำรุง', operator: 'ฝ่ายผลิต', disabled: 'ปิดใช้งาน' };
 // ตำแหน่งในแผนก ผูกกับสิทธิ์ในระบบ: admin อนุมัติและจัดการทุกอย่าง, tech ซ่อมและปิดงาน, operator แจ้งซ่อมและดูข้อมูล
-const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], document: ['Document', 'operator'], asst_manager: ['ASST. Manager', 'admin'], advisor: ['Advisor', 'admin'], admin_web: ['Admin Website', 'admin'] };
+const POSITIONS = { machine: ['Machine', 'tech'], design: ['Design', 'tech'], tooling: ['Tooling', 'tech'], document: ['Document', 'operator'], asst_manager: ['ASST. Manager', 'admin'], advisor: ['Advisor', 'admin'], admin_web: ['Admin Website', 'admin'] };
 const userLabel = (u) => (u.role === 'disabled' ? ROLE_LABEL.disabled : POSITIONS[u.position]?.[0] || ROLE_LABEL[u.role] || 'ยังไม่มีสิทธิ์');
 const IMPORT_COLS = {
   assets: ['id', 'name', 'line', 'cls', 'category', 'use', 'maker', 'model', 'year', 'wi', 'serial', 'asset_no', 'installed', 'area', 'owner', 'doc_url', 'map', 'map_x', 'map_y'],
