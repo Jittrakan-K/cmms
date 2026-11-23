@@ -1,7 +1,7 @@
 // ชั้นเชื่อมต่อข้อมูล: หน้าเว็บคุยกับไฟล์นี้เท่านั้น
 // ถ้าวันหน้าจะย้ายไป Supabase หรือ PocketBase ให้เขียนคลาสใหม่ที่มีเมธอดชุดเดียวกัน
 // แล้วแก้ createBackend() จุดเดียว ไม่ต้องแตะ app.js
-import { firebaseConfig as fileConfig } from './firebase-config.js?v=202611231319';
+import { firebaseConfig as fileConfig } from './firebase-config.js?v=202611231334';
 
 const SDK = 'https://www.gstatic.com/firebasejs/13.1.0';
 const CONFIG_KEY = 'cmms.firebaseConfig';
@@ -214,7 +214,7 @@ class LocalBackend {
   async deleteUser() { throw new Error('โหมดตัวอย่างไม่รองรับการลบบัญชี กรุณาเชื่อมต่อ Firebase ก่อน'); }
   async updateSetup() { throw new Error('โหมดตัวอย่างไม่รองรับการแก้ไขข้อมูลโรงงาน'); }
   subscribeUsers(cb) {
-    cb([['demo', 'อนันต์ ส.', 'admin', 'DEMO', 'asst_manager'], ['u2', 'วิชัย ร.', 'tech', 'M0112', 'machine'], ['u3', 'สมชาย ก.', 'tech', 'M0127', 'design'], ['u4', 'มาลี ท.', 'operator', 'P0451', 'document'], ['u5', 'ประเสริฐ บ.', 'admin', 'P0466', 'advisor']]
+    cb([['demo', 'อนันต์ ส.', 'admin', 'DEMO', 'admin_web'], ['u2', 'วิชัย ร.', 'tech', 'M0112', 'machine'], ['u3', 'สมชาย ก.', 'tech', 'M0127', 'design'], ['u4', 'มาลี ท.', 'operator', 'P0451', 'document'], ['u5', 'ประเสริฐ บ.', 'tech', 'P0466', 'advisor']]
       .map(([id, name, role, empId, position]) => ({ id, name, role, empId, position })));
     return () => {};
   }
