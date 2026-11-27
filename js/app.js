@@ -1,5 +1,5 @@
-import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611231334';
-import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611231334';
+import { fit, fitGoto, fitStep, fitActive, fitWanted, fitReveal, fitPref, setFitPref } from './fit.js?v=202611271540';
+import { createBackend, parseConfig, saveConfig, savedConfig, clearConfig, startOfToday, COLLECTIONS } from './backend.js?v=202611271540';
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -522,18 +522,20 @@ function viewBoard(m) {
   const thisY = monthCount(yNow), lastY = monthCount(yNow - 1);
   const ytd = thisY.slice(0, mNow + 1).reduce((a, b) => a + b, 0), ytdPrev = lastY.slice(0, mNow + 1).reduce((a, b) => a + b, 0);
   const ytdPct = ytdPrev ? ((ytd - ytdPrev) / ytdPrev) * 100 : 0;
-  const series = TH_MON.map((label, mi) => ({ label, cur: mi <= mNow ? thisY[mi] : null, prev: lastY[mi] }));
+  const seriesAll = TH_MON.map((label, mi) => ({ label, mi, cur: mi <= mNow ? thisY[mi] : null, prev: lastY[mi] }));
+  // จอแคบ (โทรศัพท์) แสดง 6 เดือนล่าสุด ตัวอักษรในกราฟจะได้ไม่เล็กจนอ่านไม่ออก
+  const series = innerWidth < 640 ? seriesAll.slice(Math.max(0, mNow - 5), Math.max(6, mNow + 1)) : seriesAll;
   const combo = (() => {
-    const W = 720, H = 240, L = 30, R = 6, T = 16, B = 26;
+    const narrow = innerWidth < 640; const W = narrow ? 360 : 720, H = narrow ? 200 : 240, L = 30, R = 6, T = 16, B = 26;
     const max = Math.max(4, ...series.flatMap((x) => [x.cur || 0, x.prev]));
     const top = Math.ceil(max / 4) * 4;
-    const n = series.length; const gw = (W - L - R) / n; const bw = Math.min(12, gw * 0.24);
+    const n = series.length; const gw = (W - L - R) / n; const bw = Math.min(narrow ? 14 : 12, gw * 0.24);
     const y = (v) => T + (H - T - B) * (1 - v / top);
     const grid = [0, 1, 2, 3, 4].map((i) => { const v = (top / 4) * i; return `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="cg"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" class="ct">${v}</text>`; }).join('');
     const bar = (x, v, cls) => (v ? `<rect x="${x}" y="${y(v)}" width="${bw}" height="${y(0) - y(v)}" rx="${bw / 2}" class="${cls}"/>` : '');
     const bars = series.map((x, i) => {
       const cx = L + i * gw + gw / 2;
-      return `<g><title>${x.label}: ปี ${yNow + 543} ${x.cur ?? '–'} ใบ / ปี ${yNow + 542} ${x.prev} ใบ</title>${bar(cx - bw - 2, x.cur, 'cb')}${bar(cx + 2, x.prev, 'cb2')}<text x="${cx}" y="${H - 8}" text-anchor="middle" class="ct${i === mNow ? ' on' : ''}">${x.label}</text></g>`;
+      return `<g><title>${x.label}: ปี ${yNow + 543} ${x.cur ?? '–'} ใบ / ปี ${yNow + 542} ${x.prev} ใบ</title>${bar(cx - bw - 2, x.cur, 'cb')}${bar(cx + 2, x.prev, 'cb2')}<text x="${cx}" y="${H - 8}" text-anchor="middle" class="ct${x.mi === mNow ? ' on' : ''}">${x.label}</text></g>`;
     }).join('');
     return `<svg viewBox="0 0 ${W} ${H}" class="combo" role="img" aria-label="ใบแจ้งซ่อมรายเดือน ปี ${yNow + 543} เทียบปี ${yNow + 542}">${grid}${bars}</svg>`;
   })();
@@ -608,7 +610,7 @@ function viewBoard(m) {
       <div class="bar"><h2>แผนผังเครื่องจักร</h2>
         <ul class="mkey inline">${Object.entries(MSTATE).filter(([k]) => countM(k) || !['idle', 'off'].includes(k)).map(([k, [label]]) => `<li>${andon(k)}${label}<b class="mono">${countM(k)}</b></li>`).join('')}</ul></div>
       ${useMap ? `<div class="pad"><div class="u-spread">${plantTabs(plant)}<span class="u-row"><button type="button" class="link" data-act="nav" data-id="plant">เปิดหน้าแผนผังโรงงาน</button><button type="button" class="link" data-act="board-all">แสดงทุกเครื่องเป็นการ์ด</button></span></div>${plant === LOOSE ? '' : plantMap(plant)}</div>${plant === LOOSE ? `<div class="pad">${zoneMap(looseAssets())}</div>` : ''}
-        ${careHere.length ? `<div class="pad" data-flow><h3>ต้องดูแล${plant === LOOSE ? '' : `ใน ${esc(mapName(mapById(plant)))}`} ${careHere.length} เครื่อง</h3><div class="mgrid" data-flow>${careHere.map(tile).join('')}</div></div>` : ''}`
+        ${careHere.length ? `<div class="pad" data-flow><h3>ต้องดูแล${plant === LOOSE ? '' : `ใน ${esc(mapName(mapById(plant)))}`} ${careHere.length} เครื่อง</h3><div class="mgrid" data-flow>${careHere.slice(0, 8).map(tile).join('')}</div>${careHere.length > 8 ? `<p class="hint">และอีก ${careHere.length - 8} เครื่อง <button type="button" class="link" data-act="nav" data-id="plant">ดูบนแผนผังโรงงาน</button></p>` : ''}</div>` : ''}`
     : `${state.assets.length > 48 || state.maps.length ? `<p class="hint u-pad-sm">แสดงทุกเครื่องเป็นการ์ด <button type="button" class="link" data-act="board-all">กลับไปแบบแผนผัง</button></p>` : ''}
       ${lines.map(lineBlock).join('') || '<p class="empty">ยังไม่มีเครื่องจักร</p>'}`}
     </section>
@@ -1880,6 +1882,47 @@ function render() {
 const fitOn = () => fitWanted() && state.page !== 'quick' && (!['board', 'plant'].includes(state.page) || state.tv) && !!state.user;
 let lastClick = null;
 let searchTimer = 0;
+// โทรศัพท์: ตารางกว้างแสดงเป็นการ์ดทีละแถว (คอลัมน์หลักเป็นหัวการ์ด คอลัมน์อื่นมีป้ายกำกับเล็ก)
+// และตารางที่ยาวมากแสดง 10 แถวแรกพร้อมปุ่ม "แสดงเพิ่ม" (จำไว้จนเปลี่ยนหน้า)
+const PHONE = '(max-width: 40rem)';
+const MAIN_COL = ['ใบงาน', 'ชื่อเครื่อง', 'งาน', 'รายการ', 'เครื่องมือ', 'ชื่อ', 'เครื่อง', 'สาเหตุ'];
+const BARE_COL = ['ขยาย', 'ลิงก์', 'คำสั่ง', 'สถานะ', 'รหัส'];
+state.mMore = state.mMore || new Set();
+function cardify() {
+  if (!matchMedia(PHONE).matches) return;
+  // เมนูเลื่อนข้างบนโทรศัพท์: เลื่อนให้เห็นเมนูของหน้าปัจจุบัน
+  const nav = document.querySelector('.nav'), cur = nav?.querySelector(`[data-act=nav][data-id="${state.page}"]`);
+  if (nav && cur) nav.scrollLeft = Math.max(0, cur.offsetLeft - (nav.clientWidth - cur.offsetWidth) / 2);
+  document.querySelectorAll('#pages .scroll > table').forEach((t, ti) => {
+    const ths = [...(t.tHead?.rows[0]?.cells || [])].map((th) => th.textContent.trim());
+    if (!ths.length) return;
+    t.classList.add('mcard');
+    const main = MAIN_COL.map((h) => ths.indexOf(h)).find((i) => i >= 0) ?? -1;
+    const body = t.tBodies[0]; if (!body) return;
+    const rows = [...body.rows];
+    rows.forEach((tr) => {
+      if (tr.cells.length === 1 || tr.cells[0]?.colSpan > 1) { tr.classList.add('m-full'); return; }
+      [...tr.cells].forEach((td, i) => {
+        const h = ths[i] || '';
+        if (i === main) td.classList.add('m-main');
+        else if (BARE_COL.includes(h) || !h) td.classList.add(h === 'คำสั่ง' || h === 'ลิงก์' ? 'm-act' : 'm-bare');
+        else if (td.textContent.trim()) td.dataset.label = h;
+        else td.classList.add('m-empty');
+      });
+    });
+    // ตารางยาว: ซ่อนแถวเกิน 10 จนกว่าจะกดแสดงเพิ่ม
+    const key = `${state.page}:${ti}`;
+    const data = rows.filter((r) => !r.classList.contains('m-full') && !r.classList.contains('band'));
+    const paged = !!t.closest('section, .box')?.querySelector('.pager');
+    if (data.length > 20 && !paged && !state.mMore.has(key) && !t.parentElement.nextElementSibling?.matches('.m-more')) {
+      data.slice(10).forEach((r) => r.classList.add('m-hide'));
+      const more = document.createElement('button');
+      more.type = 'button'; more.className = 'btn m-more'; more.dataset.act = 'm-more'; more.dataset.id = key;
+      more.textContent = `แสดงเพิ่ม (อีก ${data.length - 10} รายการ)`;
+      t.parentElement.after(more);
+    }
+  });
+}
 function doFit() {
   const box = document.getElementById('pages'), bar = document.getElementById('pgbar');
   if (!box || !bar) { document.documentElement.classList.remove('fit'); return; }
@@ -1891,6 +1934,7 @@ function doFit() {
   const key = state.page;
   fit(box, bar, { enabled: fitOn(), page: state.pg[key] || 0, keep, onPage: (p) => { state.pg[key] = p; } });
   tuneRows();
+  cardify();
 }
 
 // ตารางใหญ่ (งานซ่อม ทะเบียนเครื่อง) แบ่งหน้าเองตามจำนวนแถวที่พอดีจอ แทนการวาดทุกแถวแล้ววัดทีละแถว
@@ -2050,6 +2094,7 @@ function listen() {
 
 function go(page) {
   state.page = PAGES[page] ? page : 'board';
+  state.mMore.clear();
   state.pg[state.page] = 0;
   state.form = null;
   state.draft = {};
@@ -2160,7 +2205,7 @@ const actions = {
     render();
     document.getElementById('cp-title')?.focus();
   },
-  'open-asset': (id) => { state.selectedAsset = id; if (state.page !== 'assets') go('assets'); else render(); window.scrollTo(0, 0); fitReveal(document.querySelector('#pages .split')); },
+  'open-asset': (id) => { state.selectedAsset = id; if (state.page !== 'assets') go('assets'); else render(); window.scrollTo(0, 0); fitReveal(document.querySelector('#pages .split')); if (matchMedia(PHONE).matches) document.querySelector('#pages .split > :last-child')?.scrollIntoView({ block: 'start' }); },
   report: () => {
     if (state.page !== 'work') go('work');
     state.selectedWo = null;
@@ -2281,6 +2326,7 @@ const actions = {
   'stock-open': (v) => { const [id, dir] = v.split(':'); state.stock = { id, dir }; render(); window.scrollTo(0, 0); document.getElementById('s-qty')?.focus(); },
   'stock-close': () => { state.stock = null; render(); },
   part: (id, el) => run(() => state.backend.adjustPart(id, Number(el.dataset.delta))),
+  'm-more': (id) => { state.mMore.add(id); render(); },
   'map-tab': (id) => { state.mapId = id; state.mapLooseChosen = id === LOOSE; state.mapSel = null; state.mapEdit = state.mapEdit && id !== LOOSE; savePref('cmms.mapId', id); render(); },
   'map-add': () => { state.mapAdding = !state.mapAdding; state.mapNewName = ''; render(); if (state.mapAdding) document.getElementById('map-name')?.focus(); },
   'map-edit': () => { state.mapEdit = !state.mapEdit; state.mapSel = null; state.mapQ = ''; render(); },

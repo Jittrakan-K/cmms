@@ -1339,3 +1339,45 @@ html.fit .pg-plant .fmap, html.fit .fmap.editing { --mapH: calc(100dvh - 330px);
 html.fit .pg-plant .notice ~ .fmapwrap .fmap { --mapH: calc(100dvh - 470px); }
 /* หน้าแผนผังโรงงานเลื่อนลงตามปกติ ให้รูปสูงพอดีจอใต้แถบเครื่องมือ */
 .pg-plant .fmap, .mapedit .fmap { --mapH: max(320px, calc(100vh - 330px)); }
+
+/* ---------- โทรศัพท์: ตารางเป็นการ์ดทีละแถว ---------- */
+@media (max-width: 40rem) {
+  main .scroll:has(> table.mcard) { overflow: visible; }
+  table.mcard { width: 100%; min-width: 0 !important; border-collapse: separate; }
+  table.mcard thead { display: none; }
+  table.mcard tbody { display: block; }
+  table.mcard tr { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs) var(--space-sm); padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--rule); }
+  table.mcard tr:last-child { border-bottom: 0; }
+  table.mcard td, table.mcard th { display: block; padding: 0 !important; border: 0 !important; width: auto !important; max-width: 100%; min-width: 0; text-align: left !important; white-space: normal; font-size: var(--text-sm); }
+  table.mcard td.m-main { order: -1; flex: 1 1 100%; font-size: var(--text-md); font-weight: 500; color: var(--ink); }
+  table.mcard td.m-main * { white-space: normal !important; max-width: none !important; overflow: visible !important; }
+  table.mcard td.m-bare { order: -2; }
+  table.mcard td.m-act { margin-left: auto; }
+  table.mcard td.m-empty { display: none; }
+  table.mcard td[data-label]::before { content: attr(data-label); margin-right: 6px; font-size: 11px; color: var(--muted); font-weight: 400; }
+  table.mcard td[data-label] { padding-right: var(--space-sm) !important; }
+  table.mcard tr.m-full { display: block; padding: 0; }
+  table.mcard tr.m-full > td { display: block; }
+  table.mcard tr.m-hide { display: none; }
+  .m-more { display: block; width: calc(100% - 2 * var(--space-md)); margin: var(--space-xs) var(--space-md) var(--space-md); }
+  table.mcard .num { text-align: left !important; }
+  /* ตัวเลขสรุปบนโทรศัพท์: ให้คำอธิบายขึ้นบรรทัดใหม่ได้ ไม่ตัดคำ */
+  .kpi-l, .kpi-s { white-space: normal !important; overflow: visible !important; }
+  /* ผังโซน: สองโซนต่อแถว */
+  .zone { flex-basis: 120px; }
+}
+@media (max-width: 40rem) {
+  /* เมนูบนโทรศัพท์เลื่อนซ้ายขวาได้: ขอบขวาจางบอกว่ามีเมนูต่อ */
+  .nav { mask-image: linear-gradient(90deg, #000 85%, transparent); -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); scroll-padding-inline: var(--space-md); }
+  .nav [aria-current="page"] { scroll-margin-inline: var(--space-lg); }
+  .sheet .bar, .sheet .card > .bar { padding-inline: var(--space-md); }
+  .sheet .box > .pad { padding-inline: var(--space-md); }
+  .sheet .chart { padding: var(--space-md); }
+  .rel-list { padding-inline: var(--space-md); }
+}
+
+/* โทรศัพท์: รหัสเครื่อง/รหัสสาเหตุไม่ตัดกลางคำ */
+@media (max-width: 40rem) {
+  .bar h2 > .mono, #pages td.mono, #pages td > .mono { white-space: nowrap; }
+  .bar h2 { flex-wrap: wrap; row-gap: 2px; }
+}
